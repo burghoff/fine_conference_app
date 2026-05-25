@@ -48,8 +48,13 @@ What a run does, for the chosen subdirectory <sub>:
      Playwright). If skipping, reuse whatever is already in <sub>/data/.
   2. Verify (against data_requirements_<sub>.txt) that every required input file is
      now present in <sub>/data/. If any are missing, stop with an error.
-  3. Run <sub>/process_*  to produce <sub>/conference_data.json from the files
-     in <sub>/data/  (pure local processing; no browser).
+  3. Decide whether to process (see FORCE_PROCESS below). Processing is skipped
+     when the contents of <sub>/data/ are unchanged since the last run (verified
+     against a hash stored in <sub>/data/) and a <sub>/conference_data.json
+     already exists; otherwise run <sub>/process_* to produce
+     <sub>/conference_data.json from the files in <sub>/data/ (pure local
+     processing; no browser). Either way, the current data/ hash is (re)stored
+     in <sub>/data/ for next time.
   4. Copy that conference_data.json up to the ROOT directory, where the shared
      build_conference_app.py expects its input (the builder resolves
      conference_data.json and build_affiliation_map.py relative to its OWN
@@ -88,6 +93,20 @@ FORCE_DOWNLOAD:
   Override at the command line without editing this file:
       python make_app.py cleo2026 --no-force-download   -> FORCE_DOWNLOAD = False
       python make_app.py cleo2026 --force-download       -> FORCE_DOWNLOAD = True
+
+FORCE_PROCESS:
+  - False (default): before processing, hash the contents of <sub>/data/ and
+    compare against the hash stored there from the previous run. If they match
+    AND <sub>/conference_data.json already exists, SKIP the processor and reuse
+    that JSON. Otherwise (hash differs, no stored hash, or no JSON yet) run the
+    processor. The data/ hash is (re)written to <sub>/data/ in every case.
+  - True: ALWAYS run the processor, regardless of the stored hash.
+  The hash ignores the stored-hash file itself and the affiliation map the
+  builder later writes into data/, so neither perturbs the cache.
+
+  Override at the command line without editing this file:
+      python make_app.py cleo2026 --no-force-process    -> FORCE_PROCESS = False
+      python make_app.py cleo2026 --force-process        -> FORCE_PROCESS = True
 """
 
 from __future__ import annotations
@@ -95,6 +114,13 @@ from __future__ import annotations
 # Always re-run the downloader? See the module docstring. False = download only
 # when data_requirements_<sub>.txt reports something missing; True = always download.
 FORCE_DOWNLOAD = False
+
+# Always re-run the processor? When False (default), processing is skipped if the
+# data/ directory is unchanged since the last run (verified via a stored hash)
+# AND a conference_data.json already exists in the conference subdirectory. When
+# True, the processor always runs regardless of the cached hash. See the module
+# docstring (FORCE_PROCESS) and _hash_data_dir() / step 3 for details.
+FORCE_PROCESS = False
 
 import os
 import shutil
@@ -116,6 +142,12 @@ AFFILIATION_MAP_NAME = "affiliation_map.txt"
 # The requirements manifest is named per-subdirectory, e.g. cleo2026 ->
 # data_requirements_cleo2026.txt . _requirements_name() builds that name.
 DATA_DIRNAME = "data"
+# Cache marker: a hash of the data/ directory's contents, stored INSIDE data/.
+# Before processing we compare a freshly-computed hash of data/ against this; if
+# they match (and conference_data.json already exists) we skip the processor.
+# The hash deliberately ignores this file itself and the affiliation map (which
+# the builder later drops into data/), so neither perturbs the cache.
+DATA_HASH_NAME = ".data_hash"
 
 
 def _requirements_name(subdir_name: str) -> str:
@@ -131,30 +163,36 @@ def _die(msg: str, code: int = 1) -> "None":
 # -----------------------------------------------------------------------------
 # Command-line parsing: one positional subdirectory + optional flags.
 # -----------------------------------------------------------------------------
-def _parse_args() -> tuple[str, bool]:
-    """Return (subdir_name, force_download). Exits with usage on error."""
+def _parse_args() -> tuple[str, bool, bool]:
+    """Return (subdir_name, force_download, force_process). Exits with usage on error."""
     argv = sys.argv[1:]
     positionals = [a for a in argv if not a.startswith("-")]
     flags = [a for a in argv if a.startswith("-")]
 
     force = FORCE_DOWNLOAD
+    force_proc = FORCE_PROCESS
     for f in flags:
         if f in ("--force-download", "--force"):
             force = True
         elif f in ("--no-force-download", "--no-force"):
             force = False
+        elif f in ("--force-process",):
+            force_proc = True
+        elif f in ("--no-force-process",):
+            force_proc = False
         elif f in ("-h", "--help"):
             print(__doc__)
             raise SystemExit(0)
         else:
             _die(f"unknown option {f!r}. "
-                 "Use --force-download / --no-force-download.")
+                 "Use --force-download / --no-force-download / "
+                 "--force-process / --no-force-process.")
 
     if len(positionals) != 1:
         _die("expected exactly one conference subdirectory argument, e.g.\n"
              "    python make_app.py cleo2026\n"
              f"(got {positionals!r}).")
-    return positionals[0], force
+    return positionals[0], force, force_proc
 
 
 # -----------------------------------------------------------------------------
@@ -278,6 +316,64 @@ def _report_missing(missing: list[dict], data_dir: Path,
 
 
 # -----------------------------------------------------------------------------
+# Hashing the data/ directory, to decide whether processing can be skipped.
+# -----------------------------------------------------------------------------
+def _hash_data_dir(data_dir: Path) -> str:
+    """Return a hex digest summarizing the contents of `data_dir`.
+
+    Every regular file under data_dir (recursively) contributes its relative
+    path and its bytes to the digest, so adding, removing, renaming, or editing
+    any input file changes the result. Two files are deliberately excluded so
+    the cache isn't perturbed by our own bookkeeping:
+      - the stored hash file itself (DATA_HASH_NAME), and
+      - the affiliation map (AFFILIATION_MAP_NAME), which the builder writes
+        into data/ AFTER processing — it's an output, not a processor input.
+    Files are processed in sorted relative-path order for a stable digest."""
+    import hashlib
+
+    excluded = {DATA_HASH_NAME, AFFILIATION_MAP_NAME}
+    h = hashlib.sha256()
+    files = sorted(
+        (p for p in data_dir.rglob("*") if p.is_file()),
+        key=lambda p: p.relative_to(data_dir).as_posix(),
+    )
+    for p in files:
+        rel = p.relative_to(data_dir).as_posix()
+        # Exclude by relative path so e.g. data/affiliation_map.txt is ignored
+        # but a same-named file deeper in a subfolder would still count.
+        if rel in excluded:
+            continue
+        h.update(rel.encode("utf-8"))
+        h.update(b"\0")
+        with p.open("rb") as fh:
+            for chunk in iter(lambda: fh.read(1 << 20), b""):
+                h.update(chunk)
+        h.update(b"\0")
+    return h.hexdigest()
+
+
+def _read_stored_hash(data_dir: Path) -> str | None:
+    """Return the previously-stored data/ hash, or None if absent/unreadable."""
+    hp = data_dir / DATA_HASH_NAME
+    if not hp.is_file():
+        return None
+    try:
+        return hp.read_text(encoding="utf-8").strip() or None
+    except OSError:
+        return None
+
+
+def _write_stored_hash(data_dir: Path, digest: str) -> None:
+    """Persist `digest` into data/ as DATA_HASH_NAME (best-effort)."""
+    try:
+        data_dir.mkdir(parents=True, exist_ok=True)
+        (data_dir / DATA_HASH_NAME).write_text(digest + "\n", encoding="utf-8")
+    except OSError as e:
+        print(f"[make]   note: could not write data hash "
+              f"({DATA_HASH_NAME}): {e}", flush=True)
+
+
+# -----------------------------------------------------------------------------
 # Running a child script (downloader / processor) with live-streamed output.
 # -----------------------------------------------------------------------------
 def _run_script(path: Path, cwd: Path) -> None:
@@ -322,7 +418,11 @@ def _import_module(path: Path, mod_name: str):
 # Main
 # -----------------------------------------------------------------------------
 def main() -> "None":
-    subdir_name, force_download = _parse_args()
+    subdir_name, force_download, force_process = _parse_args()
+    # Let the (possibly CLI-overridden) value drive the step-3 cache check below,
+    # which reads the module-level FORCE_PROCESS.
+    global FORCE_PROCESS
+    FORCE_PROCESS = force_process
 
     subdir = (ROOT / subdir_name).resolve()
     if not subdir.is_dir():
@@ -362,7 +462,8 @@ def main() -> "None":
               flush=True)
 
     print(f"[make] === Building '{subdir.name}' "
-          f"(FORCE_DOWNLOAD={force_download}) ===", flush=True)
+          f"(FORCE_DOWNLOAD={force_download}, "
+          f"FORCE_PROCESS={force_process}) ===", flush=True)
 
     # ----------------------------------------------------------- 1. download?
     # Decide whether to download. With FORCE_DOWNLOAD on we always do. With it
@@ -415,11 +516,51 @@ def main() -> "None":
               flush=True)
 
     # ------------------------------------------------------------- 3. process
+    # Decide whether we can skip the processor. We can skip when: FORCE_PROCESS
+    # is off, a conference_data.json already exists in the subdirectory, a hash
+    # was stored on a previous run, and a fresh hash of data/ matches it (i.e.
+    # the inputs are byte-for-byte unchanged). Otherwise we run the processor.
+    # In ALL cases we (re)store the data/ hash afterwards so the next run can
+    # use it.
     print(f"[make] === Step 3/5: processing with {processor.name} ===",
           flush=True)
-    _run_script(processor, cwd=subdir)
-    if not processor_json.exists():
-        _die(f"processor finished but {processor_json} was not produced.")
+
+    current_hash = _hash_data_dir(data_dir)
+    stored_hash = _read_stored_hash(data_dir)
+
+    if FORCE_PROCESS:
+        do_process = True
+        print("[make] FORCE_PROCESS is on — processing.", flush=True)
+    elif not processor_json.exists():
+        do_process = True
+        print(f"[make] no existing {DATA_JSON_NAME} in {subdir.name}/ — "
+              "processing.", flush=True)
+    elif stored_hash is None:
+        do_process = True
+        print(f"[make] no stored data hash ({DATA_HASH_NAME}) — processing.",
+              flush=True)
+    elif stored_hash != current_hash:
+        do_process = True
+        print("[make] data/ has changed since the last run — processing.",
+              flush=True)
+    else:
+        do_process = False
+        print(f"[make] data/ unchanged and {DATA_JSON_NAME} present — "
+              "SKIPPING processing, reusing existing JSON.", flush=True)
+
+    if do_process:
+        _run_script(processor, cwd=subdir)
+        if not processor_json.exists():
+            _die(f"processor finished but {processor_json} was not produced.")
+        # The processor may have rewritten files in data/; recompute so the
+        # stored hash reflects the post-processing state of the inputs.
+        current_hash = _hash_data_dir(data_dir)
+
+    # Store the hash either way: after a real run it captures the current inputs;
+    # after a skip it (re-)affirms the cache (e.g. if the hash file was missing
+    # for some other reason it gets written, though a missing hash forces a run
+    # above — this mainly normalizes the stored value).
+    _write_stored_hash(data_dir, current_hash)
 
     # --------------------------------------------- 4. stage JSON + build
     print(f"[make] === Step 4/5: staging {DATA_JSON_NAME} into root and "

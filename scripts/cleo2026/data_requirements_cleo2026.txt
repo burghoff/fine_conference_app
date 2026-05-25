@@ -28,8 +28,7 @@ manual_steps_written: 2026-05-24
 required: yes
 produced_by: fetch
 description: Official "Program + Abstracts (PDF)" — full program with every
-  abstract; the processor parses it for abstract text, author/speaker
-  underlines, and full-address affiliation lines.
+  abstract.
 manual: Open the CLEO 2026 planner at
   https://cleo2026.abstractcentral.com/planner.jsp , wait for the program to
   load, and click the "Program + Abstracts (PDF)" download button (NOT the
@@ -39,37 +38,28 @@ manual: Open the CLEO 2026 planner at
 [file: CLEO2026_Program_Abstracts.csv]
 required: yes
 produced_by: fetch
-description: Official "Program + Abstracts (Excel)" export. The site's "Excel"
-  button actually serves a CSV; it is the per-session / per-abstract table the
-  processor walks to assemble sessions and talks.
+description: Official "Program + Abstracts (Excel)" export.
 manual: On the same planner page
   (https://cleo2026.abstractcentral.com/planner.jsp), click the
-  "Program + Abstracts (Excel)" download button. It downloads a CSV despite the
-  "Excel" label. Save it into data/ as exactly
+  "Program + Abstracts (Excel)" download button. Save it into data/ as exactly
   CLEO2026_Program_Abstracts.csv .
 
 [file: CLEO2026_planner_expanded.html]
 required: yes
 produced_by: fetch
 description: Full DOM snapshot (outerHTML) of the planner AFTER every day,
-  session, and "See More…" control has been expanded. The processor re-parses
-  this offline (with lxml) to recover the day -> session -> talk structure,
-  presiders, speakers, and the per-talk markup.
-manual: This one is tedious to produce by hand because the planner is a GWT app
-  that lazy-loads its content. Preferred: let the fetch script create it. If you
-  must do it manually, open
-  https://cleo2026.abstractcentral.com/planner.jsp , expand EVERY day row, every
-  session row (the "+" icons), and click every "See More…" link until nothing is
-  collapsed, then save the live DOM (e.g. via the browser console:
+  session, and "See More…" control has been expanded.
+manual: Preferred: let the fetch script create it. If you must do it manually,
+  open https://cleo2026.abstractcentral.com/planner.jsp , expand EVERY day row,
+  every session row (the "+" icons), and click every "See More…" link until
+  nothing is collapsed, then save the live DOM (e.g. via the browser console:
   copy(document.documentElement.outerHTML)) into data/ as exactly
   CLEO2026_planner_expanded.html , prefixed with a "<!DOCTYPE html>" line.
 
 [file: CLEO2026_short_courses.html]
 required: yes
 produced_by: fetch
-description: Raw HTML of the public CLEO 2026 short-courses page. The processor
-  parses its "SC####"-coded links to recover each short course's instructor and
-  affiliation (the planner itself does not expose these).
+description: Raw HTML of the public CLEO 2026 short-courses page.
 manual: Open https://cleoconference.org/2026-short-courses/ in a browser, let it
   finish loading, then save the page (Save As -> "Web Page, HTML only" or via the
   console: copy(document.documentElement.outerHTML)) into data/ as exactly
