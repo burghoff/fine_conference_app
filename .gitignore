@@ -1,0 +1,6 @@
+*/data/
+*.json
+*.html
+/__pycache__
+*/__pycache__/
+*/.chrome_profile/
