@@ -66,10 +66,6 @@ Because the builder and the app itself are not conference-dependent, no changes 
 - Python 3 for the build pipeline.
 - A modern web browser to open the built app. No runtime, server, or account is required.
 
-## License
+## License and Copyright
 
-MIT. See the license header in each source file.
-
-## A note on conference data
-
-This repository contains only code. The program material a downloader fetches is copyrighted by the conference and its publisher. Do not commit those files (or a built `conference_app.html`, which embeds them) to a public repository or otherwise redistribute them. If you plan to share a built app with attendees, make sure you have the right to distribute the underlying program data.
+The Fine Conference App is MIT-licensed. This repository contains only code, but the program material a downloader fetches may be copyrighted by the conference and its publisher. Do not commit those files (or a built `conference_app.html`, which embeds them) to a public repository or otherwise redistribute them. If you plan to share a built app with attendees, make sure you have the right to distribute the underlying program data.
