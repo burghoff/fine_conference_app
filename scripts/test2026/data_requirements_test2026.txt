@@ -1,0 +1,44 @@
+# data_requirements_test2026.txt — TEST 2026 (synthetic example)
+#
+# Structured manifest of the data files that the fetch (downloader) and process
+# scripts in this directory rely on. make_app.py reads this file to decide
+# whether a download can be skipped: when FORCE_DOWNLOAD is off, every file
+# marked "required = yes" below must already exist in data/ for the download to
+# be skipped; otherwise make_app runs the downloader.
+#
+# TEST 2026 is a SYNTHETIC example conference. It is NOT scraped from any live
+# website — its single source file is a fixed, synthetic abstract-book PDF that
+# ships WITH the repository, committed NEXT TO the scripts (the data/ directory
+# itself is git-ignored and starts empty on a fresh checkout). The downloader
+# (fetch_program_test2026.py) simply copies that committed PDF into data/, which
+# is where the processor reads it.
+#
+# Format (simple, line-oriented; '#' starts a comment, blank lines ignored):
+#   - Each file is a block introduced by a header line "[file: <pattern>]".
+#   - <pattern> is a filename or a glob resolved relative to the data/
+#     subdirectory of THIS conference folder.
+#   - Inside a block, "key: value" lines give metadata. Recognized keys:
+#       required     yes | no   (default yes) — whether the file must be present
+#       produced_by  which script normally creates it (fetch / process / manual)
+#       description  one-line human description
+#       manual       how to obtain the file by hand if the downloader can't
+#   - Continuation: a "manual" value may wrap onto following indented lines.
+#
+# manual_steps_written: 2026-05-25
+
+generated_for: test2026
+manual_steps_written: 2026-05-25
+
+[file: TEST2026_Program_Abstracts.pdf]
+required: yes
+produced_by: fetch
+description: The synthetic "Program Schedule and Abstract Book" PDF — the sole
+  source for TEST 2026. Contains program-schedule pages (session/talk skeleton,
+  times, presiders, Invited/Tutorial/Withdrawn status) followed by one abstract
+  page per non-withdrawn talk (title, full-name authors, superscript
+  affiliations, underlined speaker, numbered institutions, abstract body).
+manual: This file ships with the repository, committed NEXT TO the scripts as
+  TEST2026_Program_Abstracts.pdf (one level up from data/). The downloader
+  (fetch_program_test2026.py) copies it into data/ for you; on a fresh checkout
+  it runs automatically because data/ starts empty. If the committed copy next
+  to the scripts is itself missing, restore it from version control.
