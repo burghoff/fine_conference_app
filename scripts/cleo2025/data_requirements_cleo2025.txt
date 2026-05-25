@@ -20,8 +20,6 @@
 # manual_steps_written: 2026-05-24
 # These manual-download instructions were accurate as of the date above; the
 # conference website / planner layout can change, so re-verify if much later.
-# NOTE: CLEO 2025 is a PAST conference. The live short-courses page now shows a
-# later year, so the manifest points at an Internet Archive snapshot for it.
 
 generated_for: cleo2025
 manual_steps_written: 2026-05-24
@@ -30,38 +28,26 @@ manual_steps_written: 2026-05-24
 required: yes
 produced_by: fetch
 description: Official "Program + Abstracts (PDF)" — full program with every
-  abstract; the processor parses it for abstract text, author/speaker
-  underlines, and full-address affiliation lines.
+  abstract.
 manual: Open the CLEO 2025 planner at
   https://cleo2025.abstractcentral.com/planner.jsp , click the "Planner" link to
   reach the program, wait for it to load, and click the
   "Program + Abstracts (PDF)" download button (NOT "Program Only"). Save it into
-  this folder's data/ subdirectory as CLEO2025_Program_Abstracts.pdf . (The
-  processor will also accept a single differently-named *.pdf dropped into data/
-  via its autodetect fallback, but the fixed name is preferred.)
+  this folder's data/ subdirectory as CLEO2025_Program_Abstracts.pdf .
 
 [file: CLEO2025_Program_Abstracts.csv]
 required: yes
 produced_by: fetch
-description: Official "Program + Abstracts (Excel)" export. The site's "Excel"
-  button actually serves a CSV; it is the per-session / per-abstract table the
-  processor walks to assemble sessions and talks.
-manual: On the same planner program page, click "Program + Abstracts (Excel)";
-  it downloads a CSV despite the "Excel" label. Save it into data/ as
-  CLEO2025_Program_Abstracts.csv . (A single differently-named *.csv in data/ is
-  also accepted via autodetect, but the fixed name is preferred. Do not leave a
-  stray scraped-program CSV in data/ or autodetect may pick the wrong one.)
+description: Official "Program + Abstracts (Excel)" export.
+manual: On the same planner program page, click "Program + Abstracts (Excel)".
+  Save it into data/ as CLEO2025_Program_Abstracts.csv .
 
 [file: CLEO2025_planner_expanded.html]
 required: yes
 produced_by: fetch
 description: Full DOM snapshot (outerHTML) of the planner AFTER every day,
-  session, and "See More…" control has been expanded. The processor re-parses
-  this offline (with lxml) to recover the day -> session -> talk structure,
-  presiders, speakers, and the per-talk markup (including the bold-title
-  "Invited" convention CLEO 2025 uses).
-manual: Tedious by hand (the planner lazy-loads via a GWT app). Preferred: let
-  the fetch script create it. If doing it manually, open
+  session, and "See More…" control has been expanded.
+manual: Preferred: let the fetch script create it. If doing it manually, open
   https://cleo2025.abstractcentral.com/planner.jsp , click "Planner", expand
   EVERY day and session "+" and every "See More…" until nothing is collapsed,
   then save the live DOM (browser console: copy(document.documentElement
@@ -70,11 +56,8 @@ manual: Tedious by hand (the planner lazy-loads via a GWT app). Preferred: let
 [file: CLEO2025_short_courses.html]
 required: yes
 produced_by: fetch
-description: Raw HTML of the CLEO 2025 short-courses page. The page has no SC
-  codes; each course is an <h2> title, <h3> instructor, <h4> affiliation block.
-  The processor matches courses to planner sessions by normalized course title.
-manual: The live cleoconference.org short-courses page now shows a later year,
-  so use the archived 2025 snapshot:
+description: Raw HTML of the CLEO 2025 short-courses page.
+manual: Use the archived 2025 snapshot:
   https://web.archive.org/web/20250129233143/https://cleoconference.org/shortcourses/
   Open it, let it finish loading, and save the page (Save As -> "Web Page, HTML
   only", or console: copy(document.documentElement.outerHTML)) into data/ as

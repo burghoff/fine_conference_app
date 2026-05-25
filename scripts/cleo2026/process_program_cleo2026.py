@@ -365,6 +365,75 @@ def cluster_rows(words: list[dict], y_tol: float = 3.0) -> list[dict]:
     return rows
 
 
+def merge_inline_supersub(rows: list[dict]) -> list[dict]:
+    """Re-merge orphan superscript/subscript rows back into their host line.
+
+    `cluster_rows` deliberately splits glyphs that sit ≥~4 pt off the baseline
+    into their own row, so that the affiliation-marker superscripts (the lone
+    '1', '2,3' digits that trail an author's name) land on a separate row from
+    the names — the author-pair machinery depends on that. But the SAME vertical
+    offset is used by ordinary inline sup/subscripts that belong INSIDE running
+    text: the 'th' of '8th', the '2' of 'SO2', exponents like 'cm2'. Those get
+    orphaned too, and then leak into whichever field's row-slice happens to
+    border them (a stray 'th' on the front of a title, on the end of an
+    affiliation, or relocated to the end of an abstract as '^2').
+
+    This helper folds an orphan back into its host purely by geometry: a row
+    whose entire x-span sits *inside* a neighbouring (larger) row's x-span and
+    whose baseline is 2-9 pt away is an inline sup/sub of that neighbour. It is
+    glued at its true x-position (no separating space, since a sup/sub abuts the
+    character it modifies). Rows that are NOT horizontally contained — e.g. the
+    affiliation-marker digits, which trail past the end of the name row — are
+    left untouched, so this must only be applied to the title and
+    institution/abstract regions, never across the author band.
+    """
+    if not rows:
+        return rows
+    merged_into: dict[int, list[dict]] = {}
+    orphan: set[int] = set()
+    for ri, r in enumerate(rows):
+        rx0 = min(w["x0"] for w in r["words"])
+        rx1 = max(w["x1"] for w in r["words"])
+        best: int | None = None
+        best_dy = 1e9
+        for hj, host in enumerate(rows):
+            if hj == ri:
+                continue
+            dy = abs(r["top"] - host["top"])
+            if not (2 < dy < 9):
+                continue
+            hx0 = min(w["x0"] for w in host["words"])
+            hx1 = max(w["x1"] for w in host["words"])
+            # orphan must sit horizontally inside the host, and the host must be
+            # the "main" line (more words than the little sup/sub fragment).
+            if (rx0 >= hx0 - 1 and rx1 <= hx1 + 1
+                    and len(host["words"]) > len(r["words"])
+                    and dy < best_dy):
+                best = hj
+                best_dy = dy
+        if best is not None:
+            orphan.add(ri)
+            merged_into.setdefault(best, []).extend(r["words"])
+    out: list[dict] = []
+    for ri, r in enumerate(rows):
+        if ri in orphan:
+            continue
+        words = sorted(r["words"] + merged_into.get(ri, []), key=lambda w: w["x0"])
+        parts: list[str] = []
+        for k, w in enumerate(words):
+            # A sup/subscript abuts the character it modifies with a near-zero
+            # x-gap (the '8'|'th', 'SO'|'2' boundaries measure 0.00 pt), whereas
+            # ordinary inter-word gaps in this PDF are ~0.6 pt or more. Glue only
+            # across a near-zero gap; otherwise insert a normal space so tightly
+            # set titles/abstracts don't collapse into one run-on word.
+            if k > 0 and (w["x0"] - words[k - 1]["x1"]) <= 0.2:
+                parts.append(w["text"])          # abutting sup/sub: glue directly
+            else:
+                parts.append((" " if k > 0 else "") + w["text"])
+        out.append({"top": r["top"], "words": words, "text": "".join(parts).strip()})
+    return out
+
+
 def _join_text(rows: list[dict]) -> str:
     return " ".join(r["text"] for r in rows)
 
@@ -661,7 +730,10 @@ def parse_pdf_page(page) -> dict | None:
         i -= 2
     author_pairs.reverse()
 
-    title_rows = rows[1 : i + 1]
+    # Fold any inline sup/subscript orphan rows (e.g. the 'th' of '8th') back
+    # into the title line before joining, so they don't leak onto the front of
+    # the title as a stray fragment.
+    title_rows = merge_inline_supersub(rows[1 : i + 1])
     title = _join_text(title_rows).strip()
 
     # Affiliation superscripts TRAIL the name they belong to, so align them to
@@ -676,10 +748,25 @@ def parse_pdf_page(page) -> dict | None:
     # vs. the scraped author list.
     pairs = _merge_fragmented_pairs(pairs)
 
+    # The institution lines and the abstract body both carry inline
+    # sup/subscripts (e.g. the 'th' of '8th', the '2' of 'SO2', exponents like
+    # 'cm2'). cluster_rows orphans those onto their own rows, which then border
+    # — and leak into — the wrong field: a stray 'th' lands on the end of an
+    # affiliation (breaking the affiliation match) or gets relocated to the end
+    # of the abstract as '^2'. Merge the whole post-author region by geometry
+    # first, then recompute the Abstract boundary, so each orphan attaches to
+    # its true host regardless of which side of the boundary it sits on.
+    post_rows = merge_inline_supersub(rows[first_inst:])
+    post_abs_idx = next(
+        (k for k, r in enumerate(post_rows)
+         if r["text"].startswith("Abstract (35")),
+        len(post_rows),
+    )
+
     institutions: list[str] = []
     cur: list[str] = []
-    for j in range(first_inst, abs_idx):
-        t = rows[j]["text"]
+    for r in post_rows[:post_abs_idx]:
+        t = r["text"]
         if INST_RE.match(t):
             if cur:
                 institutions.append(" ".join(cur).strip())
@@ -690,18 +777,8 @@ def parse_pdf_page(page) -> dict | None:
         institutions.append(" ".join(cur).strip())
 
     abstract = ""
-    if abs_idx < len(rows):
-        chunks: list[str] = []
-        for r in rows[abs_idx:]:
-            t = r["text"]
-            if re.fullmatch(r"\d+", t):
-                if chunks:
-                    chunks[-1] = chunks[-1].rstrip() + "^" + t
-                else:
-                    chunks.append("^" + t)
-            else:
-                chunks.append(t)
-        full = " ".join(chunks).strip()
+    if post_abs_idx < len(post_rows):
+        full = " ".join(r["text"] for r in post_rows[post_abs_idx:]).strip()
         m2 = ABS_RE.match(full)
         abstract = m2.group(1).strip() if m2 else full
 
@@ -867,115 +944,14 @@ def extract_pdf_affiliations(pdf_path: Path) -> set[str]:
 # fully-processed data so the builder (build_conference_app.py) only does
 # affiliation shortening + HTML templating.
 #
-# The ONE thing deferred to the builder is affiliation SHORTENING (so
+# Two things are deferred to the builder. (1) Affiliation SHORTENING (so
 # build_affiliation_map.py stays as-is, run by the builder): author
 # affiliations and institutions are emitted as RAW strings, and presider
 # affiliations are left as scraped; the builder canonicalizes them and does
 # the institution de-dup + presider-affiliation backfill that depend on it.
+# (2) Abstract inline-LaTeX -> Unicode rendering: abstracts are emitted RAW
+# (still carrying any '$...$' math) and the builder converts them.
 # =============================================================================
-
-# =============================================================================
-# Inline-LaTeX -> Unicode for abstract bodies
-# -----------------------------------------------------------------------------
-# A few abstracts carry simple inline
-# LaTeX, e.g. "$10^{10}$-fold", "Si$_3$N$_4$", "$\alpha_c = 0.138$". We render
-# these as Unicode where a clean glyph exists and fall back to <sup>/<sub>
-# tags otherwise; the app's abstract renderer un-escapes those tags.
-# =============================================================================
-_LATEX_SYMBOLS: dict[str, str] = {
-    # lowercase Greek
-    "alpha": "\u03b1", "beta": "\u03b2", "gamma": "\u03b3", "delta": "\u03b4",
-    "epsilon": "\u03b5", "varepsilon": "\u03b5", "zeta": "\u03b6", "eta": "\u03b7",
-    "theta": "\u03b8", "vartheta": "\u03d1", "iota": "\u03b9", "kappa": "\u03ba",
-    "lambda": "\u03bb", "mu": "\u03bc", "nu": "\u03bd", "xi": "\u03be",
-    "pi": "\u03c0", "varpi": "\u03d6", "rho": "\u03c1", "varrho": "\u03f1",
-    "sigma": "\u03c3", "varsigma": "\u03c2", "tau": "\u03c4", "upsilon": "\u03c5",
-    "phi": "\u03c6", "varphi": "\u03d5", "chi": "\u03c7", "psi": "\u03c8",
-    "omega": "\u03c9",
-    # uppercase Greek
-    "Gamma": "\u0393", "Delta": "\u0394", "Theta": "\u0398", "Lambda": "\u039b",
-    "Xi": "\u039e", "Pi": "\u03a0", "Sigma": "\u03a3", "Upsilon": "\u03a5",
-    "Phi": "\u03a6", "Psi": "\u03a8", "Omega": "\u03a9",
-    # operators / relations
-    "times": "\u00d7", "cdot": "\u00b7", "div": "\u00f7", "pm": "\u00b1",
-    "mp": "\u2213", "approx": "\u2248", "sim": "\u223c", "simeq": "\u2243",
-    "propto": "\u221d", "neq": "\u2260", "ne": "\u2260", "leq": "\u2264",
-    "le": "\u2264", "geq": "\u2265", "ge": "\u2265", "ll": "\u226a",
-    "gg": "\u226b", "equiv": "\u2261", "infty": "\u221e", "partial": "\u2202",
-    "nabla": "\u2207", "deg": "\u00b0", "degree": "\u00b0", "ast": "\u2217",
-    "star": "\u2605", "circ": "\u2218", "bullet": "\u2022", "to": "\u2192",
-    "rightarrow": "\u2192", "leftarrow": "\u2190", "Rightarrow": "\u21d2",
-    "leftrightarrow": "\u2194", "langle": "\u27e8", "rangle": "\u27e9",
-    "hbar": "\u210f", "ell": "\u2113", "angle": "\u2220", "perp": "\u22a5",
-    "parallel": "\u2225", "sum": "\u2211", "prod": "\u220f", "int": "\u222b",
-    "sqrt": "\u221a", "forall": "\u2200", "exists": "\u2203", "in": "\u2208",
-    "notin": "\u2209", "subset": "\u2282", "supset": "\u2283", "cup": "\u222a",
-    "cap": "\u2229", "emptyset": "\u2205", "dagger": "\u2020",
-    "ddagger": "\u2021", "prime": "\u2032",
-}
-
-_LATEX_SPACING: dict[str, str] = {
-    ",": "\u2009",
-    ";": "\u2005", ":": "\u2005", " ": " ", "!": "", "quad": "\u2003",
-    "qquad": "\u2003\u2003",
-}
-
-_SUP_GLYPHS: dict[str, str] = {
-    "0": "\u2070", "1": "\u00b9", "2": "\u00b2", "3": "\u00b3", "4": "\u2074",
-    "5": "\u2075", "6": "\u2076", "7": "\u2077", "8": "\u2078", "9": "\u2079",
-    "+": "\u207a", "-": "\u207b", "=": "\u207c", "(": "\u207d", ")": "\u207e",
-    "n": "\u207f", "i": "\u2071",
-}
-_SUB_GLYPHS: dict[str, str] = {
-    "0": "\u2080", "1": "\u2081", "2": "\u2082", "3": "\u2083", "4": "\u2084",
-    "5": "\u2085", "6": "\u2086", "7": "\u2087", "8": "\u2088", "9": "\u2089",
-    "+": "\u208a", "-": "\u208b", "=": "\u208c", "(": "\u208d", ")": "\u208e",
-}
-
-
-def _script_run(body: str, kind: str) -> str:
-    table = _SUP_GLYPHS if kind == "sup" else _SUB_GLYPHS
-    if body and all(ch in table for ch in body):
-        return "".join(table[ch] for ch in body)
-    return f"<{kind}>{body}</{kind}>"
-
-
-def _convert_latex_commands(s: str) -> str:
-    s = re.sub(r"\\(?:mathrm|mathbf|mathit|text|mathsf|operatorname)\{([^{}]*)\}",
-               r"\1", s)
-    s = re.sub(r"\\(quad|qquad|[,;:! ])",
-               lambda m: _LATEX_SPACING.get(m.group(1), ""), s)
-    names = sorted(_LATEX_SYMBOLS, key=len, reverse=True)
-    pat = re.compile(r"\\(" + "|".join(map(re.escape, names)) + r")(?![a-zA-Z])")
-    return pat.sub(lambda m: _LATEX_SYMBOLS[m.group(1)], s)
-
-
-def _convert_latex_scripts(s: str) -> str:
-    s = re.sub(r"\^\{([^{}]*)\}", lambda m: _script_run(m.group(1), "sup"), s)
-    s = re.sub(r"_\{([^{}]*)\}", lambda m: _script_run(m.group(1), "sub"), s)
-    s = re.sub(r"\^(\\[a-zA-Z]+|[^\s{}])",
-               lambda m: _script_run(m.group(1), "sup"), s)
-    s = re.sub(r"_(\\[a-zA-Z]+|[^\s{}])",
-               lambda m: _script_run(m.group(1), "sub"), s)
-    return s
-
-
-def _convert_math_span(expr: str) -> str:
-    expr = _convert_latex_scripts(expr)
-    expr = _convert_latex_commands(expr)
-    expr = expr.replace("~", "\u00a0")
-    return expr.replace("{", "").replace("}", "")
-
-
-def latex_to_unicode(text: str) -> str:
-    """Convert simple inline LaTeX in ``text`` to Unicode / <sup> / <sub>."""
-    if not text or ("$" not in text and "\\" not in text):
-        return text
-    text = re.sub(r"\$([^$]*)\$", lambda m: _convert_math_span(m.group(1)), text)
-    if "\\" in text:
-        text = _convert_latex_scripts(text)
-        text = _convert_latex_commands(text)
-    return text
 
 
 # =============================================================================
@@ -1732,9 +1708,8 @@ def build_conference_data(conference_name: str,
             # True when the institution list has no per-author index structure
             # to protect, so the builder MAY collapse duplicates by short name.
             "institutions_may_dedup": institutions_may_dedup,
-            "abstract":      latex_to_unicode(
-                                 abstract_pdf
-                                 or (r.get("Abstract Body") or "").strip()),
+            "abstract":      (abstract_pdf
+                              or (r.get("Abstract Body") or "").strip()),
             "status":        status_tags,
             "withdrawn":     withdrawn,
             "first_author":  first_a,

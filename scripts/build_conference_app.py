@@ -407,6 +407,127 @@ def _strip_trailing_periods(title: str) -> str:
     return stripped[:-1]
 
 
+# =============================================================================
+# Inline-LaTeX -> Unicode for abstract bodies
+# -----------------------------------------------------------------------------
+# A few abstracts carry simple inline
+# LaTeX, e.g. "$10^{10}$-fold", "Si$_3$N$_4$", "$\alpha_c = 0.138$". We render
+# these as Unicode where a clean glyph exists and fall back to <sup>/<sub>
+# tags otherwise; the app's abstract renderer un-escapes those tags.
+# =============================================================================
+_LATEX_SYMBOLS: dict[str, str] = {
+    # lowercase Greek
+    "alpha": "\u03b1", "beta": "\u03b2", "gamma": "\u03b3", "delta": "\u03b4",
+    "epsilon": "\u03b5", "varepsilon": "\u03b5", "zeta": "\u03b6", "eta": "\u03b7",
+    "theta": "\u03b8", "vartheta": "\u03d1", "iota": "\u03b9", "kappa": "\u03ba",
+    "lambda": "\u03bb", "mu": "\u03bc", "nu": "\u03bd", "xi": "\u03be",
+    "pi": "\u03c0", "varpi": "\u03d6", "rho": "\u03c1", "varrho": "\u03f1",
+    "sigma": "\u03c3", "varsigma": "\u03c2", "tau": "\u03c4", "upsilon": "\u03c5",
+    "phi": "\u03c6", "varphi": "\u03d5", "chi": "\u03c7", "psi": "\u03c8",
+    "omega": "\u03c9",
+    # uppercase Greek
+    "Gamma": "\u0393", "Delta": "\u0394", "Theta": "\u0398", "Lambda": "\u039b",
+    "Xi": "\u039e", "Pi": "\u03a0", "Sigma": "\u03a3", "Upsilon": "\u03a5",
+    "Phi": "\u03a6", "Psi": "\u03a8", "Omega": "\u03a9",
+    # operators / relations
+    "times": "\u00d7", "cdot": "\u00b7", "div": "\u00f7", "pm": "\u00b1",
+    "mp": "\u2213", "approx": "\u2248", "sim": "\u223c", "simeq": "\u2243",
+    "propto": "\u221d", "neq": "\u2260", "ne": "\u2260", "leq": "\u2264",
+    "le": "\u2264", "geq": "\u2265", "ge": "\u2265", "ll": "\u226a",
+    "gg": "\u226b", "equiv": "\u2261", "infty": "\u221e", "partial": "\u2202",
+    "nabla": "\u2207", "deg": "\u00b0", "degree": "\u00b0", "ast": "\u2217",
+    "star": "\u2605", "circ": "\u2218", "bullet": "\u2022", "to": "\u2192",
+    "rightarrow": "\u2192", "leftarrow": "\u2190", "Rightarrow": "\u21d2",
+    "leftrightarrow": "\u2194", "langle": "\u27e8", "rangle": "\u27e9",
+    "hbar": "\u210f", "ell": "\u2113", "angle": "\u2220", "perp": "\u22a5",
+    "parallel": "\u2225", "sum": "\u2211", "prod": "\u220f", "int": "\u222b",
+    "sqrt": "\u221a", "forall": "\u2200", "exists": "\u2203", "in": "\u2208",
+    "notin": "\u2209", "subset": "\u2282", "supset": "\u2283", "cup": "\u222a",
+    "cap": "\u2229", "emptyset": "\u2205", "dagger": "\u2020",
+    "ddagger": "\u2021", "prime": "\u2032",
+}
+
+_LATEX_SPACING: dict[str, str] = {
+    ",": "\u2009",
+    ";": "\u2005", ":": "\u2005", " ": " ", "!": "", "quad": "\u2003",
+    "qquad": "\u2003\u2003",
+}
+
+# LaTeX backslash-escaped literals: "\%" -> "%", "\&" -> "&", etc. These are
+# characters that are special in LaTeX source and so get backslash-escaped to
+# appear verbatim; we restore the plain character. Braces are intentionally
+# NOT included here — inside math spans they're structural and stripped by
+# _convert_math_span, so restoring them would be undone anyway.
+_LATEX_ESCAPED_LITERALS = "%&#_$"
+
+_SUP_GLYPHS: dict[str, str] = {
+    "0": "\u2070", "1": "\u00b9", "2": "\u00b2", "3": "\u00b3", "4": "\u2074",
+    "5": "\u2075", "6": "\u2076", "7": "\u2077", "8": "\u2078", "9": "\u2079",
+    "+": "\u207a", "-": "\u207b", "=": "\u207c", "(": "\u207d", ")": "\u207e",
+    "n": "\u207f", "i": "\u2071",
+}
+_SUB_GLYPHS: dict[str, str] = {
+    "0": "\u2080", "1": "\u2081", "2": "\u2082", "3": "\u2083", "4": "\u2084",
+    "5": "\u2085", "6": "\u2086", "7": "\u2087", "8": "\u2088", "9": "\u2089",
+    "+": "\u208a", "-": "\u208b", "=": "\u208c", "(": "\u208d", ")": "\u208e",
+}
+
+
+def _script_run(body: str, kind: str) -> str:
+    table = _SUP_GLYPHS if kind == "sup" else _SUB_GLYPHS
+    if body and all(ch in table for ch in body):
+        return "".join(table[ch] for ch in body)
+    return f"<{kind}>{body}</{kind}>"
+
+
+def _unescape_latex_literals(s: str) -> str:
+    """Restore LaTeX backslash-escaped literals ("\\%" -> "%", "\\&" -> "&",
+    ...). Must run BEFORE script/command conversion so an escaped underscore
+    "\\_" isn't mistaken for a subscript operator."""
+    return re.sub(r"\\([" + re.escape(_LATEX_ESCAPED_LITERALS) + r"])",
+                  r"\1", s)
+
+
+def _convert_latex_commands(s: str) -> str:
+    s = re.sub(r"\\(?:mathrm|mathbf|mathit|text|mathsf|operatorname)\{([^{}]*)\}",
+               r"\1", s)
+    s = re.sub(r"\\(quad|qquad|[,;:! ])",
+               lambda m: _LATEX_SPACING.get(m.group(1), ""), s)
+    names = sorted(_LATEX_SYMBOLS, key=len, reverse=True)
+    pat = re.compile(r"\\(" + "|".join(map(re.escape, names)) + r")(?![a-zA-Z])")
+    return pat.sub(lambda m: _LATEX_SYMBOLS[m.group(1)], s)
+
+
+def _convert_latex_scripts(s: str) -> str:
+    s = re.sub(r"\^\{([^{}]*)\}", lambda m: _script_run(m.group(1), "sup"), s)
+    s = re.sub(r"_\{([^{}]*)\}", lambda m: _script_run(m.group(1), "sub"), s)
+    s = re.sub(r"\^(\\[a-zA-Z]+|[^\s{}])",
+               lambda m: _script_run(m.group(1), "sup"), s)
+    s = re.sub(r"_(\\[a-zA-Z]+|[^\s{}])",
+               lambda m: _script_run(m.group(1), "sub"), s)
+    return s
+
+
+def _convert_math_span(expr: str) -> str:
+    expr = _unescape_latex_literals(expr)
+    expr = _convert_latex_scripts(expr)
+    expr = _convert_latex_commands(expr)
+    expr = expr.replace("~", "\u00a0")
+    return expr.replace("{", "").replace("}", "")
+
+
+def latex_to_unicode(text: str) -> str:
+    """Convert simple inline LaTeX in ``text`` to Unicode / <sup> / <sub>."""
+    if not text or ("$" not in text and "\\" not in text):
+        return text
+    text = re.sub(r"\$([^$]*)\$", lambda m: _convert_math_span(m.group(1)), text)
+    if "\\" in text:
+        text = _unescape_latex_literals(text)
+        text = _convert_latex_scripts(text)
+        text = _convert_latex_commands(text)
+    return text
+
+
 def enrich_affiliations(data: dict) -> dict:
     sessions = data.get("sessions", [])
     talks = data.get("talks", [])
@@ -423,6 +544,13 @@ def enrich_affiliations(data: dict) -> dict:
     for t in talks:
         if t.get("title"):
             t["title"] = _strip_trailing_periods(t["title"])
+
+    # Render any inline LaTeX in abstract bodies to Unicode / <sup>/<sub>.
+    # The processors emit abstracts RAW; this is where that conversion now
+    # lives so a different conference's processor needn't reimplement it.
+    for t in talks:
+        if t.get("abstract"):
+            t["abstract"] = latex_to_unicode(t["abstract"])
 
     # 1. Talks: build inst_shorts (collapsing dup institutions by short name
     #    when allowed), speaker_aff, last_aff. `institutions` is the structured
@@ -561,6 +689,21 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <title>__CONFERENCE_NAME__</title>
 <style>
 :root {
+  --fs: 1;            /* text-size multiplier; every font-size is calc(px * var(--fs)) */
+  /* Space scale: tracks --fs when shrinking text, but never exceeds 1 when
+     enlarging — so small text tightens the vertical bubble spacing, while
+     large text keeps the default (compact) spacing since screen space is at
+     a premium. Applied to bubble vertical padding + inter-bubble gaps. */
+  --sp: min(var(--fs), 1);
+  /* One shared corner radius for all rounded box/card/control surfaces, so
+     they're consistent. --radius-base is the fixed value; --radius scales it
+     with --sp (shrinks with small text, capped at default for large) for
+     elements whose geometry scales. Fixed-size controls (the A−/A+ zoom
+     buttons) use --radius-base directly so their corners match without
+     scaling. Pills (999px), circles (50%), and tiny inline chips keep their
+     own radii. */
+  --radius-base: 10px;
+  --radius: calc(var(--radius-base) * var(--sp));
   --bg:        #f6f6f4;
   --surface:   #ffffff;
   --surface-2: #f0efeb;
@@ -571,10 +714,15 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   --accent-soft: rgba(214,84,28,.12);
   --accent-faint: rgba(214,84,28,.45);
   --tile-overlay: rgba(246,246,244,.65);
-  --tab-h:     58px;
-  --top-h:     48px;
-  --bot-h:     40px;
-  --ind-h:     28px;
+  /* Chrome-bar heights scale with the text-size multiplier so their labels
+     never clip as the text grows (and the bars tighten up as it shrinks).
+     All layout math references these via calc(), so scaling the definitions
+     here flows through to content padding and bottom offsets automatically.
+     Base values: tab 58, top 48, controls 40, indicator 28. */
+  --tab-h:     calc(58px * var(--fs));
+  --top-h:     calc(48px * var(--fs));
+  --bot-h:     calc(40px * var(--fs));
+  --ind-h:     calc(28px * var(--fs));
   --safe-top:    env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 
@@ -623,11 +771,45 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 }
 
 * { box-sizing: border-box; }
+
+/* Slim, subtle, theme-aware scrollbars. Firefox uses the standard
+   scrollbar-* properties; Chromium/WebKit use the ::-webkit-scrollbar
+   pseudo-elements, whose default is chunky and high-contrast. Styling both
+   keeps the two browsers looking the same. Colors come from the theme vars
+   so this tracks light/dark automatically. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--muted) transparent;
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--muted);
+  border-radius: 8px;
+  /* Transparent border + background-clip leaves breathing room around the
+     thumb so it reads as a thin pill rather than a full-width bar. */
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 html, body {
   margin: 0; padding: 0;
   background: var(--bg);
   color: var(--text);
-  font: 15px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", system-ui, sans-serif;
+  font: calc(15px * var(--fs))/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: contain;
@@ -669,16 +851,25 @@ button {
 }
 #back-btn {
   height: var(--top-h); padding: 0 14px;
-  font-size: 17px; color: var(--accent);
+  font-size: calc(17px * var(--fs)); color: var(--accent);
   display: flex; align-items: center; gap: 2px;
   justify-self: start;
 }
 #back-btn[hidden] { display: none; }
 #page-title {
   margin: 0; padding: 0 8px;
-  font-size: 16px; font-weight: 600; letter-spacing: .01em;
+  font-size: calc(16px * var(--fs)); font-weight: 600; letter-spacing: .01em;
   text-align: center;
   grid-column: 2;
+}
+/* Only the Me tab's top-level title ("My Schedule") is left-justified; the
+   other tabs (Sessions / Talks / Search) keep their centered titles. The
+   back-button-hidden check keeps drilled-in detail views (pushed from Me)
+   centered next to the back arrow. */
+body[data-active-tab="me"] #back-btn[hidden] ~ #page-title {
+  grid-column: 1 / 3;
+  text-align: left;
+  padding-left: 14px;
 }
 #topbar-extra {
   display: flex; align-items: center;
@@ -690,14 +881,14 @@ button {
    Mirrors the wide pane header's sync text. Truncates rather than
    wrapping so it never pushes the Copy/Paste buttons off-screen. */
 .topbar-sync {
-  font-size: 11px; color: var(--muted);
+  font-size: calc(11px * var(--fs)); color: var(--muted);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   max-width: 40vw; min-width: 0;
 }
 .icon-btn {
   height: 36px; min-width: 36px; padding: 0 8px;
-  border-radius: 9px;
-  font-size: 18px;
+  border-radius: var(--radius);
+  font-size: calc(18px * var(--fs));
   color: var(--accent);
   display: inline-flex; align-items: center; justify-content: center;
 }
@@ -706,7 +897,9 @@ button {
 /* ── Content ───────────────────────────────────────────────────────── */
 #content {
   position: relative;
-  padding: 8px 12px 24px;
+  /* Left/right gutter is whitespace — shrink it with small text (--sp),
+     capped at default for large text. Top/bottom stay fixed. */
+  padding: 8px calc(12px * var(--sp)) 24px;
   min-height: calc(100vh - var(--top-h) - var(--bot-h) - var(--tab-h));
 }
 
@@ -742,7 +935,7 @@ button {
 
 .date-header {
   margin: 14px 2px 4px;
-  font-size: 11px; font-weight: 700;
+  font-size: calc(11px * var(--fs)); font-weight: 700;
   letter-spacing: .14em; text-transform: uppercase;
   color: var(--muted);
 }
@@ -759,7 +952,7 @@ button {
 
 .time-header {
   margin: 4px 2px 2px;
-  font-size: 11px; font-weight: 600;
+  font-size: calc(11px * var(--fs)); font-weight: 600;
   color: var(--muted);
   display: flex; align-items: baseline; gap: 8px;
 }
@@ -798,11 +991,17 @@ body[data-active-view="session-detail"] .date-header,
 .bubble {
   position: relative;
   background: var(--c-neutral-bg);
-  border-left: 4px solid var(--c-neutral-fg);
-  border-radius: 8px;
-  margin: 5px 0;
-  padding: 7px 50px 7px 11px;
-  min-height: 44px;
+  border-left: calc(4px * var(--sp)) solid var(--c-neutral-fg);
+  border-radius: var(--radius);
+  /* All inner spacing and the inter-bubble gap scale with --sp (shrink with
+     small text, capped at default for large text). The RIGHT inset reserves
+     room for the +/− circle (which also shrink-scales). The LEFT inset and
+     the colored border BOTH scale by --sp so they shrink together — and
+     because session (6+11) and talk (3+14) left-edges each total 17px, they
+     stay aligned at every scale. */
+  margin: calc(5px * var(--sp)) 0;
+  padding: calc(7px * var(--sp)) calc(50px * var(--sp)) calc(7px * var(--sp)) calc(11px * var(--sp));
+  min-height: calc(44px * var(--sp));
   display: flex; flex-direction: column; justify-content: center;
   cursor: pointer;
   -webkit-user-select: none; user-select: none;
@@ -826,7 +1025,7 @@ body[data-active-view="session-detail"] .date-header,
 .bubble-loc {
   display: inline-block;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 10.5px; font-weight: 600;
+  font-size: calc(10.5px * var(--fs)); font-weight: 600;
   letter-spacing: .02em;
   color: var(--text);
   background: rgba(0,0,0,.08);
@@ -845,13 +1044,13 @@ body[data-active-view="session-detail"] .date-header,
    visible through it. Dimming just the title + subtitle keeps the look while
    the bubble's background stays fully opaque and cleanly hides the line. */
 .bubble-title {
-  font-size: 14px; line-height: 1.25; font-weight: 600;
+  font-size: calc(14px * var(--fs)); line-height: 1.25; font-weight: 600;
   overflow: hidden; text-overflow: ellipsis;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   opacity: .92;
 }
 .bubble-sub {
-  font-size: 12px; color: var(--muted);
+  font-size: calc(12px * var(--fs)); color: var(--muted);
   margin-top: 2px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   opacity: .92;
@@ -881,11 +1080,11 @@ body[data-active-view="session-detail"] .date-header,
    Sessions are the structurally bigger unit: a thicker 6px accent bar, a
    touch more vertical presence, and a slightly larger title. */
 .bubble[data-kind="session"] {
-  border-left-width: 6px;
-  padding-top: 9px; padding-bottom: 9px;
+  border-left-width: calc(6px * var(--sp));
+  padding-top: calc(9px * var(--sp)); padding-bottom: calc(9px * var(--sp));
 }
 .bubble[data-kind="session"] .bubble-title {
-  font-size: 14.5px;
+  font-size: calc(14.5px * var(--fs));
 }
 
 /* Talks are lighter: a thinner 3px accent bar. The extra 3px of left padding
@@ -893,8 +1092,8 @@ body[data-active-view="session-detail"] .date-header,
    text (border + padding = 6+11 = 3+14) — they share a left edge in mixed
    lists. (The slight opacity dim is on the base .bubble, shared by both.) */
 .bubble[data-kind="talk"] {
-  border-left-width: 3px;
-  padding-left: 14px;
+  border-left-width: calc(3px * var(--sp));
+  padding-left: calc(14px * var(--sp));
 }
 
 /* The ONE genuinely view-specific difference: indent talks so they nest
@@ -905,7 +1104,9 @@ body[data-active-view="session-detail"] .date-header,
 body[data-active-view="schedule"]       .bubble[data-kind="talk"],
 body[data-active-view="session-detail"] .bubble[data-kind="talk"],
 #me-content                              .bubble[data-kind="talk"] {
-  margin-left: 22px;
+  /* Nesting indent is whitespace, so it shrinks with small text (via --sp)
+     but never grows past its default — matching the vertical-margin rule. */
+  margin-left: calc(22px * var(--sp));
 }
 .bubble.added { box-shadow: inset 0 0 0 1.5px var(--accent); }
 
@@ -915,15 +1116,40 @@ body[data-active-view="session-detail"] .bubble[data-kind="talk"],
 .bubble.partial { box-shadow: inset 0 0 0 1px var(--accent-faint); }
 
 .schedule-btn {
-  position: absolute; top: 50%; right: 6px;
+  /* Shrinks with small text (via --sp), capped at default for large text —
+     matching the bubble margins. The glyph is drawn as two bars (::before
+     horizontal, ::after vertical) that are absolutely centered, so the +/-
+     is always dead-center regardless of font metrics. --sb-d is the circle
+     diameter; bars are sized from it. */
+  --sb-d: calc(36px * var(--sp));
+  position: absolute; top: 50%; right: calc(6px * var(--sp));
   transform: translateY(-50%);
-  width: 36px; height: 36px;
+  width: var(--sb-d); height: var(--sb-d);
   border-radius: 50%;
   background: rgba(255,255,255,.55);
   color: var(--text);
-  font-size: 22px; font-weight: 500; line-height: 1;
-  display: flex; align-items: center; justify-content: center;
+  display: block;          /* bars are positioned against this box */
 }
+/* Horizontal bar — present in BOTH states (it's the "−", and the crossbar of
+   the "+"). Vertical bar (::after) is added only when NOT scheduled, turning
+   the minus into a plus. Both centered via the 50%/50% + translate trick. */
+.schedule-btn::before,
+.schedule-btn::after {
+  content: "";
+  position: absolute; top: 50%; left: 50%;
+  background: currentColor;
+  border-radius: 1px;
+}
+.schedule-btn::before {              /* horizontal bar */
+  width: calc(var(--sb-d) * 0.42); height: calc(var(--sb-d) * 0.094);
+  transform: translate(-50%, -50%);
+}
+.schedule-btn::after {               /* vertical bar (plus only) */
+  width: calc(var(--sb-d) * 0.094); height: calc(var(--sb-d) * 0.42);
+  transform: translate(-50%, -50%);
+}
+/* Scheduled => minus: hide the vertical bar. */
+.bubble.added .schedule-btn::after { display: none; }
 @media (prefers-color-scheme: dark) {
   .schedule-btn { background: rgba(255,255,255,.12); }
 }
@@ -937,40 +1163,88 @@ body[data-active-view="session-detail"] .bubble[data-kind="talk"],
   padding: 60px 24px;
   text-align: center;
   color: var(--muted);
-  font-size: 14px;
+  font-size: calc(14px * var(--fs));
 }
 
-/* "Last sync: …" line at the top of the Me tab. Subtle — informational,
+/* Sync-status line at the top of the Me tab. Subtle — informational,
    not a CTA. */
 .sync-banner {
   margin: 0 0 12px;
   padding: 8px 12px;
   background: var(--surface-2);
-  border-radius: 8px;
+  border-radius: var(--radius);
   color: var(--muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--fs));
   text-align: center;
+}
+
+/* Settings section below Notes on the Me page. */
+.me-settings {
+  margin: 4px 0 24px;
+}
+/* About is the last block on the page — a little extra room beneath it. */
+.me-about { margin-bottom: 32px; }
+/* Text-size control row: magnifying-glass zoom-out / "130%" / zoom-in. The step buttons mirror
+   the pill styling of .copy-notes-btn; a button dims when its rail is
+   reached (disabled). The cluster is centered. */
+.fs-control {
+  display: flex; align-items: center; justify-content: center;
+  gap: 10px;
+}
+.fs-control .fs-btn {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  /* Height matches the .copy-notes-btn at default zoom (its 8px padding +
+     1px borders + ~17px text line ≈ 36px) so the two buttons read as the
+     same control family. Fixed (doesn't track --fs) — the zoom control
+     shouldn't resize itself as you zoom. */
+  height: 36px;
+  padding: 0 18px;
+  border-radius: var(--radius-base);
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  -webkit-tap-highlight-color: var(--accent-soft);
+}
+.fs-control .fs-btn svg { display: block; width: 20px; height: 20px; }
+.fs-control .fs-btn:active:not(:disabled) {
+  background: var(--accent-soft); border-color: var(--accent); color: var(--accent);
+}
+.fs-control .fs-btn:disabled { opacity: .4; cursor: default; }
+.fs-control .fs-pct {
+  flex: 0 0 auto;
+  min-width: 52px; text-align: center;
+  /* Fixed at the base size (no var(--fs)) so the readout itself doesn't
+     resize as you step — it stays a stable reference while everything
+     around it scales. */
+  font-size: 15px; font-variant-numeric: tabular-nums;
+  color: var(--muted);
 }
 
 .copy-notes-wrap { margin: 12px 0 20px; text-align: center; }
 .copy-notes-btn {
   display: inline-block;
   padding: 8px 16px;
-  border-radius: 999px;
+  border-radius: var(--radius);
   background: var(--surface-2);
   color: var(--text);
-  font-size: 13px; font-weight: 500;
+  font-size: calc(13px * var(--fs)); font-weight: 500;
   border: 1px solid var(--line);
   -webkit-tap-highlight-color: var(--accent-soft);
 }
 .copy-notes-btn:active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 
-/* Attribution line below the copy button on the Me page. */
+/* Attribution block, inside the About section on the Me page. Center-aligned
+   content (the section label above stays left). */
 .me-attribution {
   text-align: center;
   color: var(--muted);
-  font-size: 14px;
-  margin: 0 0 28px;
+  font-size: calc(14px * var(--fs));
+  margin: 0;
+}
+/* Split-rights notice, set slightly apart from the name above it. */
+.me-rights {
+  margin-top: 10px;
 }
 /* Subtle link — inherits the muted attribution color rather than the loud
    accent, with just a faint underline to signal it's tappable. */
@@ -993,10 +1267,10 @@ body[data-active-view="session-detail"] .bubble[data-kind="talk"],
   width: 100%;
   height: 40px;
   padding: 0 12px;
-  font-size: 15px;
+  font-size: calc(15px * var(--fs));
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius);
   color: var(--text);
   outline: none;
 }
@@ -1007,8 +1281,8 @@ body[data-active-view="session-detail"] .bubble[data-kind="talk"],
 /* ── Session / Talk detail views ───────────────────────────────────── */
 .detail-head {
   position: relative;
-  padding: 14px 56px 16px 16px;
-  border-radius: 12px;
+  padding: 14px calc(56px * var(--sp)) 16px 16px;
+  border-radius: var(--radius);
   background: var(--c-neutral-bg);
   border-left: 4px solid var(--c-neutral-fg);
   margin-bottom: 16px;
@@ -1028,7 +1302,7 @@ body[data-active-view="session-detail"] .bubble[data-kind="talk"],
 
 .dh-id {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 11px; font-weight: 700;
+  font-size: calc(11px * var(--fs)); font-weight: 700;
   letter-spacing: .04em; opacity: .85;
   margin-bottom: 4px;
 }
@@ -1037,7 +1311,7 @@ body[data-active-view="session-detail"] .bubble[data-kind="talk"],
    monospace chip so it still reads as an identifier label. */
 .dh-id-chip {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 11px; font-weight: 700;
+  font-size: calc(11px * var(--fs)); font-weight: 700;
   letter-spacing: .04em;
   color: var(--text);
   opacity: .9;
@@ -1045,29 +1319,49 @@ body[data-active-view="session-detail"] .bubble[data-kind="talk"],
 }
 .dh-title {
   margin: 0 0 6px;
-  font-size: 18px; line-height: 1.3; font-weight: 700;
+  font-size: calc(18px * var(--fs)); line-height: 1.3; font-weight: 700;
 }
 .dh-meta {
-  font-size: 12.5px; color: var(--muted);
+  font-size: calc(12.5px * var(--fs)); color: var(--muted);
   margin-top: 2px;
 }
 .dh-meta strong { color: var(--text); font-weight: 600; }
 .dh-add {
-  position: absolute; top: 12px; right: 12px;
-  width: 38px; height: 38px;
+  /* Detail-head add/remove circle. Same construction as .schedule-btn: a
+     bar-drawn +/- (perfectly centered, font-metric-independent) on a circle
+     that shrink-scales via --sp. --dh-d is the diameter; bars derive from it. */
+  --dh-d: calc(38px * var(--sp));
+  position: absolute; top: calc(12px * var(--sp)); right: calc(12px * var(--sp));
+  width: var(--dh-d); height: var(--dh-d);
   border-radius: 50%;
   background: rgba(255,255,255,.55);
   color: var(--text);
-  font-size: 22px; line-height: 1;
-  display: flex; align-items: center; justify-content: center;
+  display: block;
 }
+.dh-add::before,
+.dh-add::after {
+  content: "";
+  position: absolute; top: 50%; left: 50%;
+  background: currentColor;
+  border-radius: 1px;
+}
+.dh-add::before {                    /* horizontal bar (− and +'s crossbar) */
+  width: calc(var(--dh-d) * 0.42); height: calc(var(--dh-d) * 0.094);
+  transform: translate(-50%, -50%);
+}
+.dh-add::after {                     /* vertical bar (plus only) */
+  width: calc(var(--dh-d) * 0.094); height: calc(var(--dh-d) * 0.42);
+  transform: translate(-50%, -50%);
+}
+.dh-add.added::after { display: none; }   /* scheduled => minus */
 @media (prefers-color-scheme: dark) {
   .dh-add { background: rgba(255,255,255,.14); }
 }
 .dh-add.added { background: var(--accent); color: white; }
+.dh-add:active { transform: scale(.92); }
 
 .section-title {
-  font-size: 11px; font-weight: 700;
+  font-size: calc(11px * var(--fs)); font-weight: 700;
   letter-spacing: .14em; text-transform: uppercase;
   color: var(--muted);
   margin: 18px 2px 6px;
@@ -1092,17 +1386,17 @@ body[data-active-view="session-detail"] .detail-head {
    gutter the connector spine drops through) — talks must NOT also carry a
    margin-left or they'd be double-indented. */
 .session-expansion {
-  margin: 0 0 5px 0;
-  padding-left: 22px;
+  margin: 0 0 calc(5px * var(--sp)) 0;
+  padding-left: calc(22px * var(--sp));
   position: relative;
 }
 
 .author-line {
-  font-size: 14px; line-height: 1.55;
+  font-size: calc(14px * var(--fs)); line-height: 1.55;
   margin: 0 2px;
 }
 .author-line .aff {
-  font-size: 9.5px; font-weight: 600;
+  font-size: calc(9.5px * var(--fs)); font-weight: 600;
   color: var(--muted);
   margin-left: 1px;
   letter-spacing: .01em;
@@ -1151,7 +1445,7 @@ body[data-active-view="session-detail"] .detail-head {
   border-bottom: 1px solid var(--line);
 }
 .click-search-banner .csb-kind {
-  font-size: 11px;
+  font-size: calc(11px * var(--fs));
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: .04em;
@@ -1161,7 +1455,7 @@ body[data-active-view="session-detail"] .detail-head {
   border-radius: 999px;
 }
 .click-search-banner .csb-query {
-  font-size: 15px;
+  font-size: calc(15px * var(--fs));
   font-weight: 600;
   color: var(--text);
 }
@@ -1177,7 +1471,7 @@ body[data-active-view="session-detail"] .detail-head {
   list-style-position: outside;
 }
 .inst-list li {
-  font-size: 13px;
+  font-size: calc(13px * var(--fs));
   line-height: 1.45;
   color: var(--text);
   padding: 3px 0;
@@ -1197,7 +1491,7 @@ body[data-active-view="session-detail"] .detail-head {
 }
 .inst-list .inst-short {
   display: inline-block;
-  font-size: 11px;
+  font-size: calc(11px * var(--fs));
   font-weight: 600;
   letter-spacing: .02em;
   color: var(--accent);
@@ -1210,7 +1504,7 @@ body[data-active-view="session-detail"] .detail-head {
 }
 
 .abstract-body {
-  font-size: 14px; line-height: 1.5;
+  font-size: calc(14px * var(--fs)); line-height: 1.5;
   margin: 0;
   white-space: pre-wrap;
 }
@@ -1234,12 +1528,12 @@ body[data-active-view="session-detail"] .detail-head {
   min-height: 50px;
   padding: 10px 12px;
   font: inherit;
-  font-size: 14px;
+  font-size: calc(14px * var(--fs));
   line-height: 1.45;
   color: var(--text);
   background: var(--surface-2);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius);
   resize: none;            /* sized via JS to fit content */
   outline: none;
   -webkit-user-select: text; user-select: text;
@@ -1268,7 +1562,7 @@ body[data-active-view="session-detail"] .detail-head {
   background: var(--surface-2);
   border-bottom: 1px solid var(--line);
   /* Match .time-header so it reads as the same kind of label. */
-  font-size: 13px; font-weight: 600;
+  font-size: calc(13px * var(--fs)); font-weight: 600;
   color: var(--text);
   z-index: 28;
   -webkit-user-select: none; user-select: none;
@@ -1283,7 +1577,7 @@ body[data-active-view="session-detail"] .detail-head {
    crowd the date/time. */
 #scroll-indicator .ind-hint {
   margin-left: auto;
-  font-size: 11px; font-weight: 600;
+  font-size: calc(11px * var(--fs)); font-weight: 600;
   color: var(--muted);
   opacity: .8;
   white-space: nowrap;
@@ -1298,9 +1592,9 @@ body.has-indicator #scroll-indicator { display: flex; }
   display: inline-flex; align-items: center; gap: 6px;
   padding: 6px 10px;
   margin-left: 4px;
-  border-radius: 8px;
+  border-radius: var(--radius);
   color: var(--muted);
-  font-size: 13px;
+  font-size: calc(13px * var(--fs));
 }
 .types-toggle:active { background: var(--accent-soft); }
 
@@ -1311,9 +1605,9 @@ body.has-indicator #scroll-indicator { display: flex; }
   display: inline-flex; align-items: center; gap: 6px;
   padding: 6px 10px;
   margin-left: 4px;
-  border-radius: 8px;
+  border-radius: var(--radius);
   color: var(--muted);
-  font-size: 13px;
+  font-size: calc(13px * var(--fs));
   background: transparent;
 }
 .dr-toggle:active     { background: var(--accent-soft); }
@@ -1336,7 +1630,7 @@ body.has-indicator #scroll-indicator { display: flex; }
   gap: 2px;
   min-height: 56px;
   padding: 8px 6px;
-  border-radius: 10px;
+  border-radius: var(--radius);
   background: var(--surface-2);
   color: var(--text);
   border: 1px solid var(--line);
@@ -1350,14 +1644,14 @@ body.has-indicator #scroll-indicator { display: flex; }
   border-color: var(--accent);
 }
 .dr-day-dow {
-  font-size: 11px;
+  font-size: calc(11px * var(--fs));
   font-weight: 600;
   letter-spacing: .04em;
   text-transform: uppercase;
   opacity: .85;
 }
 .dr-day-num {
-  font-size: 14px;
+  font-size: calc(14px * var(--fs));
   font-weight: 500;
 }
 #types-panel {
@@ -1379,7 +1673,7 @@ body.has-indicator #scroll-indicator { display: flex; }
   display: flex; align-items: center; gap: 10px;
   padding: 9px 4px;
   border-bottom: 1px solid var(--line);
-  font-size: 14px;
+  font-size: calc(14px * var(--fs));
   cursor: pointer;
 }
 .types-row:last-child { border-bottom: none; }
@@ -1390,7 +1684,7 @@ body.has-indicator #scroll-indicator { display: flex; }
   border: 1px solid rgba(0,0,0,.1);
 }
 .types-row .label { flex: 1; }
-.types-row .count { color: var(--muted); font-size: 12px; }
+.types-row .count { color: var(--muted); font-size: calc(12px * var(--fs)); }
 .types-row input[type=checkbox] {
   width: 18px; height: 18px;
   accent-color: var(--accent);
@@ -1409,7 +1703,7 @@ body.has-indicator #scroll-indicator { display: flex; }
   -webkit-backdrop-filter: blur(14px);
   border-top: 1px solid var(--line);
   display: flex; align-items: center; justify-content: center;
-  font-size: 13px; color: var(--muted);
+  font-size: calc(13px * var(--fs)); color: var(--muted);
   z-index: 20;
 }
 @media (prefers-color-scheme: dark) {
@@ -1425,6 +1719,9 @@ body.has-indicator #scroll-indicator { display: flex; }
    prefix (a nod to the Show-Me State). A touch of right margin separates it
    from the box without doubling up on the label's own 8px gap. */
 #show-me-label { margin-right: 2px; white-space: nowrap; }
+/* When the bar overflows the screen (large text), fitBottomControls adds
+   .compact, which drops the "Show me:" prefix to reclaim width. */
+#bottom-controls.compact #show-me-label { display: none; }
 #bottom-controls input[type=checkbox] {
   width: 16px; height: 16px;
   accent-color: var(--accent);
@@ -1442,12 +1739,12 @@ body.has-indicator #scroll-indicator { display: flex; }
 .tab-btn {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 2px;
-  font-size: 11px;
+  font-size: calc(11px * var(--fs));
   color: var(--muted);
   height: 100%;
 }
 .tab-btn .glyph {
-  font-size: 19px; line-height: 1;
+  font-size: calc(19px * var(--fs)); line-height: 1;
 }
 .tab-btn.active { color: var(--accent); }
 .tab-btn:active { background: var(--accent-soft); }
@@ -1459,8 +1756,8 @@ body.has-indicator #scroll-indicator { display: flex; }
   background: var(--text);
   color: var(--bg);
   padding: 10px 16px;
-  border-radius: 10px;
-  font-size: 13px;
+  border-radius: var(--radius);
+  font-size: calc(13px * var(--fs));
   opacity: 0;
   transition: opacity .25s ease, transform .25s ease;
   z-index: 100;
@@ -1494,7 +1791,7 @@ body.has-indicator #scroll-indicator { display: flex; }
 }
 .sheet-card {
   background: var(--surface);
-  border-radius: 14px;
+  border-radius: var(--radius);
   padding: 16px;
   width: 100%;
   max-width: 420px;
@@ -1502,19 +1799,19 @@ body.has-indicator #scroll-indicator { display: flex; }
   animation: sheet-rise .18s ease;
 }
 .sheet-title {
-  font-size: 16px; font-weight: 700; margin: 0 0 4px;
+  font-size: calc(16px * var(--fs)); font-weight: 700; margin: 0 0 4px;
 }
 .sheet-hint {
-  font-size: 13px; color: var(--muted); margin: 0 0 10px;
+  font-size: calc(13px * var(--fs)); color: var(--muted); margin: 0 0 10px;
 }
 .sheet-textarea {
   width: 100%; min-height: 90px;
   padding: 10px 12px;
-  font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font: calc(12px * var(--fs))/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   background: var(--surface-2);
   color: var(--text);
   border: 1px solid var(--line);
-  border-radius: 9px;
+  border-radius: var(--radius);
   resize: none;
   -webkit-user-select: text; user-select: text;
   word-break: break-all;
@@ -1526,7 +1823,7 @@ body.has-indicator #scroll-indicator { display: flex; }
 }
 .sheet-btn {
   height: 38px; padding: 0 16px;
-  border-radius: 9px;
+  border-radius: var(--radius);
   font: 600 14px inherit;
   -webkit-tap-highlight-color: transparent;
 }
@@ -1674,7 +1971,7 @@ body.has-indicator #scroll-indicator { display: flex; }
   }
   #me-pane-header .me-pane-title {
     flex: 0 0 auto;
-    font-size: 16px; font-weight: 600; letter-spacing: .01em;
+    font-size: calc(16px * var(--fs)); font-weight: 600; letter-spacing: .01em;
   }
   /* "Last sync" text — pushed to the right, sitting just left of the
      Copy/Paste buttons. Truncates instead of wrapping if the pane is
@@ -1682,7 +1979,7 @@ body.has-indicator #scroll-indicator { display: flex; }
   #me-pane-header .me-pane-sync {
     flex: 1 1 auto;
     text-align: right;
-    font-size: 11px; color: var(--muted);
+    font-size: calc(11px * var(--fs)); color: var(--muted);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     min-width: 0;
   }
@@ -1704,7 +2001,7 @@ body.has-indicator #scroll-indicator { display: flex; }
     padding: 0 16px;
     background: var(--surface-2);
     border-bottom: 1px solid var(--line);
-    font-size: 13px; font-weight: 600;
+    font-size: calc(13px * var(--fs)); font-weight: 600;
     color: var(--text);
     -webkit-user-select: none; user-select: none;
   }
@@ -1828,6 +2125,14 @@ const DATA = __DATA__;
 
 const STORAGE_KEY = "conference.state.v1";
 
+// Text-size multiplier bounds and slider step. The Text size slider in the
+// Me page's Settings section sets state.fontScale within these bounds;
+// applyFontScale turns the value into the --fs CSS variable. Kept here (above
+// loadState) because the load-time validator clamps to this range at startup.
+const FS_MIN = 0.5;
+const FS_MAX = 2.0;
+const FS_STEP = 0.1;
+
 // Reserved key in state.notes for the page-level "general conference notes"
 // (not tied to any session or talk). It uses characters that can't appear in a
 // real session/talk id, so it never collides with item notes and is ignored by
@@ -1902,6 +2207,13 @@ function defaultState() {
     // preference travels with the schedule. Ignored entirely on narrow
     // screens (the pane is a normal bottom tab there).
     meWidth: null,
+    // Global text-size multiplier for readability. 1 = default; set by the
+    // Text size slider in the Me page's Settings section. Applied by writing
+    // --fs on the root, which every font-size reads via calc(px * var(--fs)),
+    // so it scales TEXT ONLY (see applyFontScale). Local-only — deliberately
+    // NOT in the sync payload, since comfortable text size is per-device (a
+    // phone and a desktop monitor want different sizes), not schedule data.
+    fontScale: 1,
   };
 }
 
@@ -1956,6 +2268,13 @@ function loadState() {
       }
     }
     if (!Array.isArray(s.expandedSessions)) s.expandedSessions = [];
+    // Validate the text-size multiplier: must be a finite number within the
+    // supported range; anything else falls back to 1 (default size).
+    if (typeof s.fontScale !== "number" || !isFinite(s.fontScale)) {
+      s.fontScale = 1;
+    } else {
+      s.fontScale = Math.max(FS_MIN, Math.min(FS_MAX, s.fontScale));
+    }
     return s;
   } catch (_) { return defaultState(); }
 }
@@ -2332,13 +2651,17 @@ function makeBubble(item, opts = {}) {
     },
   });
 
-  // Press-and-hold on an expandable session bubble opens the standalone
-  // Session detail view (a quick tap still expands it inline). We use pointer
-  // events so it works for both touch and mouse. A small move threshold means
-  // a scroll/drag doesn't count as a press. The "press to expand, hold for
-  // detail" affordance is shown once in the scroll indicator (see
+  // Press-and-hold opens a standalone detail view. For an expandable session
+  // bubble a quick tap expands it inline while a hold opens Session detail;
+  // for a talk both tap AND hold open Talk detail (the hold path mainly
+  // matters on touch, where it lets us suppress the OS callout/selection and
+  // navigate cleanly, matching how sessions behave). We use pointer events so
+  // it works for touch and mouse; a small move threshold means a scroll/drag
+  // doesn't count as a press. The "press to expand, hold for detail"
+  // affordance is shown once in the scroll indicator (see
   // updateScrollIndicatorIn), not per-bubble.
-  if (expandable) {
+  if (expandable || isTalk) {
+    const detailView = isTalk ? `talk:${item.id}` : `session:${item.id}`;
     let lpTimer = null, sx = 0, sy = 0;
     const LP_MS = 500, MOVE_TOL = 10;
 
@@ -2354,7 +2677,7 @@ function makeBubble(item, opts = {}) {
       lpTimer = setTimeout(() => {
         lpTimer = null;
         wrap._lpFired = true;        // suppress the click that follows
-        navigate(`session:${item.id}`);
+        navigate(detailView);
       }, LP_MS);
     });
     wrap.addEventListener("pointermove", (e) => {
@@ -2404,11 +2727,16 @@ function makeBubble(item, opts = {}) {
     wrap.appendChild(el("div", { class: "bubble-sub", html: subHTML }));
   }
 
+  // The +/- mark is drawn with CSS pseudo-element bars (see .schedule-btn),
+  // not a text glyph — text "+"/"−" don't sit on the same optical center in
+  // most fonts, so they look off-center in the circle. Bars center exactly
+  // and scale cleanly. The button carries no text; the bubble's `.added`
+  // class drives whether it shows a plus or a minus.
   wrap.appendChild(el("button", {
     class: "schedule-btn",
     "aria-label": added ? "Remove from schedule" : "Add to schedule",
     onclick: (e) => { e.stopPropagation(); toggleScheduled(item.id); },
-  }, added ? "−" : "+"));
+  }));
 
   return wrap;
 }
@@ -2957,7 +3285,7 @@ function buildSessionHead(s) {
     class: `dh-add${added ? " added" : ""}`,
     "aria-label": added ? "Remove from schedule" : "Add to schedule",
     onclick: (e) => { e.stopPropagation(); toggleScheduled(s.id); },
-  }, added ? "−" : "+"));
+  }));
   return head;
 }
 
@@ -3022,7 +3350,7 @@ function renderTalkDetail(c, tid) {
     class: `dh-add${added ? " added" : ""}`,
     "aria-label": added ? "Remove from schedule" : "Add to schedule",
     onclick: () => toggleScheduled(t.id),
-  }, added ? "−" : "+"));
+  }));
   c.appendChild(head);
 
   // Authors (one line, with superscript affiliation numbers; speaker
@@ -3568,10 +3896,15 @@ function renderMe(c) {
   btnWrap.appendChild(btn);
   c.appendChild(btnWrap);
 
-  // Attribution line below the copy button. The app name links to the
-  // project's GitHub repo; styled subtly (inherits the muted color, faint
-  // underline) so it reads as tappable without shouting "link".
-  c.appendChild(el("div", { class: "me-attribution" }, [
+  // Settings section (below Notes): a text-size stepper.
+  appendSettingsSection(c);
+
+  // About section at the bottom: app name (links to the GitHub repo, styled
+  // subtly so it reads as tappable without shouting "link"), author, and the
+  // split-rights note — the app is MIT-licensed; the program data belongs to
+  // the conference and its publishers, not to this project.
+  const about = el("div", { class: "me-settings me-about" });
+  about.appendChild(el("div", { class: "me-attribution" }, [
     el("a", {
       class: "me-attribution-link",
       href: "https://github.com/burghoff/fine_conference_app",
@@ -3580,7 +3913,13 @@ function renderMe(c) {
     }, "The Fine Conference App v0.1"),
     el("br"),
     "David Burghoff, UT Austin",
+    el("div", { class: "me-rights" }, [
+      "App MIT licensed",
+      el("br"),
+      "Data copyrighted by conference and its publishers",
+    ]),
   ]));
+  c.appendChild(about);
 }
 
 /* Plain-text export of the user's notes. Walks every scheduled talk
@@ -4338,22 +4677,24 @@ window.addEventListener("resize", () => {
    - same calendar day       → "today, 2:34 PM"
    - same calendar yesterday → "yesterday, 2:34 PM"
    - older                   → "Tue · May 19, 2:34 PM" */
+/* Compact sync label for the Me chrome. Returns the COMPLETE text (including
+   the "Synced" verb) or "" when there's been no sync yet — callers render it
+   verbatim with no prefix, so the header stays empty until the first sync.
+   Units are abbreviated (m/h) for tight chrome; once past a day we show a
+   short date instead of an ever-growing "Nd ago". */
 function formatLastSync(ts) {
-  if (!ts) return "never";
+  if (!ts) return "";
   const d   = new Date(ts);
   const now = new Date();
   const diff = (now - d) / 1000;
-  if (diff < 60)   return "just now";
-  if (diff < 3600) {
-    const m = Math.floor(diff / 60);
-    return `${m} minute${m === 1 ? "" : "s"} ago`;
-  }
-  const sameDay = d.toDateString() === now.toDateString();
+  if (diff < 60)   return "Synced just now";
+  if (diff < 3600) return `Synced ${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `Synced ${Math.floor(diff / 3600)}h ago`;
   const yest = new Date(now); yest.setDate(yest.getDate() - 1);
-  const sameYesterday = d.toDateString() === yest.toDateString();
-  if (sameDay)        return `today, ${timeLabel(d)}`;
-  if (sameYesterday)  return `yesterday, ${timeLabel(d)}`;
-  return `${dateLabel(d)}, ${timeLabel(d)}`;
+  if (d.toDateString() === yest.toDateString()) {
+    return `Synced yesterday, ${timeLabel(d)}`;
+  }
+  return `Synced ${dateLabel(d)}`;
 }
 
 /* =============================================================== */
@@ -4370,7 +4711,7 @@ function renderTopbarExtras(tab, top) {
     // small phone.
     slot.appendChild(el("span", {
       class: "topbar-sync",
-      html: `Last sync: ${esc(formatLastSync(state.lastSyncAt))}`,
+      html: esc(formatLastSync(state.lastSyncAt)),
     }));
     slot.appendChild(el("button", {
       class: "icon-btn",
@@ -4815,6 +5156,26 @@ function updateDateRangeLabel() {
   }
 }
 
+/* The bottom controls bar ("Show me: Concluded", Days, Types) is a single
+   non-wrapping centered row. As the text-size multiplier grows it can get
+   wider than the screen; when that happens we drop the "Show me:" prefix —
+   the lowest-value text there — to claw back width. We always restore it
+   first, then measure: the label is the narrowest element, so hiding it can
+   never re-trigger overflow, hence no flicker loop. Deferred via rAF so the
+   measurement runs against settled layout. */
+function fitBottomControls() {
+  const bar = $("#bottom-controls");
+  const lab = $("#show-me-label");
+  if (!bar || !lab) return;
+  requestAnimationFrame(() => {
+    if (bar.hidden) return;
+    bar.classList.remove("compact");          // measure with label shown
+    if (bar.scrollWidth > bar.clientWidth + 1) {
+      bar.classList.add("compact");           // overflowing -> drop "Show me:"
+    }
+  });
+}
+
 function showDateRangeSheet() {
   document.querySelectorAll(".sheet-overlay").forEach(o => o.remove());
 
@@ -4929,19 +5290,47 @@ function updateScrollIndicatorIn(ind, scope, bodyCls) {
   if (!curDate && dates.length) curDate = dates[0].textContent;
   if (!curTime && times.length) curTime = times[0].textContent;
 
-  const parts = [];
-  if (curDate) parts.push(`<span class="date">${esc(curDate)}</span>`);
-  if (curTime) parts.push(`<span class="time">${esc(curTime)}</span>`);
-  let html = parts.join('<span class="sep">·</span>');
-  // On the Sessions list, append a right-aligned usage hint explaining the
-  // tap/hold gesture (tap a session to expand it inline, hold to open its
-  // full detail). Only here — the Me pane's indicator and other lists don't
-  // have expandable session bubbles.
-  if (ind.id === "scroll-indicator"
-      && state.activeTab === "sessions" && currentTopView() === "list") {
-    html += `<span class="ind-hint">Hold for detail</span>`;
+  // Build the label, then guard against wrapping at high zoom: the bar is a
+  // fixed-height single-line strip, so if "Tue · May 19 · 1:00 PM" wraps we
+  // progressively shorten — first drop the weekday from the date ("May 19"),
+  // and if it STILL wraps, drop the date entirely and keep just the time.
+  const buildHtml = (dateText) => {
+    const p = [];
+    if (dateText) p.push(`<span class="date">${esc(dateText)}</span>`);
+    if (curTime)  p.push(`<span class="time">${esc(curTime)}</span>`);
+    let h = p.join('<span class="sep">·</span>');
+    if (ind.id === "scroll-indicator"
+        && state.activeTab === "sessions" && currentTopView() === "list") {
+      h += `<span class="ind-hint">Hold for detail</span>`;
+    }
+    return h;
+  };
+  const wraps = () => ind.scrollHeight > ind.clientHeight + 1;
+
+  ind.innerHTML = buildHtml(curDate);
+  if (curDate && wraps()) {
+    // Drop the weekday prefix: "Tue · May 19" -> "May 19".
+    const shorter = curDate.includes("·")
+      ? curDate.slice(curDate.lastIndexOf("·") + 1).trim()
+      : curDate;
+    ind.innerHTML = buildHtml(shorter);
+    if (wraps()) ind.innerHTML = buildHtml("");   // last resort: time only
   }
-  ind.innerHTML = html;
+}
+
+/* Set `el`'s text to `full`, but fall back to `short` if `full` can't fit on
+   a single line at the current width/zoom. Measured by temporarily forcing
+   nowrap and comparing scrollWidth to clientWidth — so "would this wrap?" is
+   answered without line-height math. Used so "My Schedule" collapses to "Me"
+   at high zoom (or narrow widths) instead of breaking onto two lines. */
+function fitTitle(el, full, short) {
+  if (!el) return;
+  el.textContent = full;
+  const prevWS = el.style.whiteSpace;
+  el.style.whiteSpace = "nowrap";
+  const overflows = el.scrollWidth > el.clientWidth + 1;
+  el.style.whiteSpace = prevWS;
+  if (overflows) el.textContent = short;
 }
 
 function updateScrollIndicator() {
@@ -5028,6 +5417,183 @@ function currentTopView() {
    pane content (the pane has no separate header; its only chrome is the
    bottom Me tab button). No-op on narrow screens, where the pane is
    display:none and Me is a normal bottom tab. */
+/* Apply the persisted text-size multiplier. state.fontScale is a plain
+   number (1 = default); we clamp it to [FS_MIN, FS_MAX] and write it to the
+   --fs CSS variable on the root. Every font-size in the stylesheet is
+   expressed as calc(<px> * var(--fs)), so this scales TEXT ONLY — box
+   geometry (padding, heights, gaps) and therefore the connector-tree and
+   scroll math are untouched. At --fs:1 the rendering is identical to the
+   unscaled design. Returns the clamped value actually applied. */
+function applyFontScale() {
+  let f = state.fontScale;
+  if (typeof f !== "number" || !isFinite(f)) f = 1;
+  f = Math.max(FS_MIN, Math.min(FS_MAX, f));
+  document.documentElement.style.setProperty("--fs", f);
+  return f;
+}
+
+/* Find the scrollable ancestor that actually moves `node`. On wide screens
+   the Me pane (#me-content) and left column (#content) are their own
+   overflow scrollers; on narrow screens neither scrolls internally and the
+   window scrolls instead. Rather than guess by id (which is layout-
+   dependent), we walk up and pick the first ancestor that is genuinely
+   scrollable right now — overflow-y auto/scroll AND content taller than the
+   box — falling back to the window. Returns read/scrollBy helpers so the
+   caller doesn't care which it is. */
+function scrollParentOf(node) {
+  let n = node ? node.parentElement : null;
+  while (n && n !== document.body && n !== document.documentElement) {
+    const oy = getComputedStyle(n).overflowY;
+    if ((oy === "auto" || oy === "scroll") && n.scrollHeight > n.clientHeight + 1) {
+      return { top: () => n.scrollTop, by: (dy) => { n.scrollTop += dy; } };
+    }
+    n = n.parentElement;
+  }
+  // Narrow layout / page flow: the window scrolls.
+  return {
+    top: () => window.scrollY || window.pageYOffset || 0,
+    by: (dy) => window.scrollBy(0, dy),
+  };
+}
+
+/* Redraw every connector overlay after a text-size change. --fs is pure CSS,
+   so the text reflows on its own; only the absolutely-positioned connector
+   SVGs (which are measured against live geometry) need repainting. We can't
+   draw synchronously here: the calc(px * var(--fs)) reflow — and any web-font
+   reflow it triggers — isn't settled in the same tick, so a synchronous draw
+   measures stale positions (the bug where connectors land in odd spots, or a
+   stale tall overlay leaves phantom empty space, until the 60s periodic
+   render() corrects it). Instead we draw on the SETTLED layout via the same
+   double-rAF the render path uses, then a short deferred catch for late
+   reflow.
+
+   We call ALL THREE left-context drawers (each is a no-op when its view
+   isn't showing) plus the wide-screen right pane — matching the render path
+   exactly. The earlier version only handled Me + session-detail, so the
+   Sessions-list inline-expansion elbows in the OTHER pane weren't redrawn on
+   a zoom change (the "other pane sometimes draws weird in two-pane mode"
+   bug). Calling all of them unconditionally fixes that. */
+function redrawAllConnectors() {
+  drawMeConnectors();              // Me schedule in #content (no-op unless active)
+  drawSessionDetailConnectors();   // session-detail elbows (self-guards)
+  drawSessionListConnectors();     // Sessions-list inline expansion (self-guards)
+  if (isWide()) { const p = $("#me-content"); if (p) drawMeConnectors(p); }  // right pane
+}
+function redrawConnectorsForFontScale() {
+  // Settled-layout draw (two frames, matching render()).
+  requestAnimationFrame(() => {
+    requestAnimationFrame(redrawAllConnectors);
+  });
+  // Catch any late reflow (web-font swap, scrollbar appearing) a beat later.
+  // drawMeConnectors clears its prior overlay first, so a redundant pass just
+  // repaints identical pixels — no flicker.
+  setTimeout(redrawAllConnectors, 220);
+}
+
+/* Nudge the text size by `dir` (+1 / -1) FS_STEP increments, clamped to
+   range, then keep the clicked button visually anchored: growing the text
+   pushes everything above the control taller, which would otherwise slide
+   the button out from under the pointer. We record the button's viewport
+   position before the change and scroll its container by the delta after, so
+   it stays put. `btn` is the element that was clicked (one of possibly two
+   copies of the control — left pane and right pane on wide screens). Rounded
+   to one decimal so repeated steps don't accumulate float drift. */
+function stepFontScale(dir, btn) {
+  const cur = (typeof state.fontScale === "number" && isFinite(state.fontScale))
+                ? state.fontScale : 1;
+  const next = Math.max(FS_MIN, Math.min(FS_MAX,
+                 Math.round((cur + dir * FS_STEP) * 10) / 10));
+  if (next === state.fontScale) return;   // already at the rail
+
+  // Anchor: where is the clicked button right now (viewport-relative)?
+  const anchor = btn || null;
+  const scroller = anchor ? scrollParentOf(anchor) : null;
+  const beforeTop = anchor ? anchor.getBoundingClientRect().top : 0;
+
+  state.fontScale = next;
+  applyFontScale();
+  saveState();
+  updateFontScaleControl();
+  redrawConnectorsForFontScale();
+  fitBottomControls();   // text width changed; the "Show me:" label may need to drop/return
+  // Re-evaluate the adaptive titles and the date/time bar at the new zoom:
+  // "My Schedule" may need to collapse to "Me", and the indicator date may
+  // need shortening if the bar now wraps.
+  if (state.activeTab === "me" && currentTopView() === "list") {
+    fitTitle($("#page-title"), "My Schedule", "Me");
+  }
+  fitTitle($(".me-pane-title"), "My Schedule", "Me");
+  updateScrollIndicator();
+
+  // Reading getBoundingClientRect forces a synchronous layout, so the new
+  // position reflects the reflowed text in this same tick — no rAF needed.
+  if (anchor && scroller) {
+    const afterTop = anchor.getBoundingClientRect().top;
+    const delta = afterTop - beforeTop;
+    if (delta) scroller.by(delta);
+  }
+}
+
+/* Reflect the current scale on EVERY copy of the control (the left pane and
+   the wide-screen right pane can each hold one): update the percentage
+   readout and disable whichever step button sits at its rail. No-op if no
+   control is in the DOM (it's rebuilt on each Me render). */
+function updateFontScaleControl() {
+  const f = (typeof state.fontScale === "number" && isFinite(state.fontScale))
+              ? state.fontScale : 1;
+  for (const wrap of document.querySelectorAll(".fs-control")) {
+    const pct = wrap.querySelector(".fs-pct");
+    if (pct) pct.textContent = Math.round(f * 100) + "%";
+    const dec = wrap.querySelector(".fs-dec");
+    const inc = wrap.querySelector(".fs-inc");
+    if (dec) dec.disabled = f <= FS_MIN + 1e-9;
+    if (inc) inc.disabled = f >= FS_MAX - 1e-9;
+  }
+}
+
+/* Build the Settings section shown below Notes on the Me page: a heading and
+   a text-size stepper — zoom-out / "130%" / zoom-in magnifier buttons. Lives inside the Me
+   content, so it renders identically on wide and narrow layouts. Each step
+   button passes itself to stepFontScale so the click can be scroll-anchored
+   to the control the user actually touched. */
+function appendSettingsSection(c) {
+  const sec = el("div", { class: "me-settings" });
+
+  // Magnifying-glass zoom icons (lens + handle, with − / + inside the lens).
+  // currentColor so they inherit the button's text color, including the
+  // active/disabled states.
+  const zoomIcon = (sign) => {
+    const bar = sign === "in"
+      ? `<line x1="9" y1="6.5" x2="9" y2="11.5"/><line x1="6.5" y1="9" x2="11.5" y2="9"/>`  // plus
+      : `<line x1="6.5" y1="9" x2="11.5" y2="9"/>`;                                          // minus
+    return `<svg viewBox="0 0 24 24" width="22" height="22" fill="none"
+       stroke="currentColor" stroke-width="2" stroke-linecap="round"
+       aria-hidden="true">
+      <circle cx="9" cy="9" r="6.5"/>
+      <line x1="14" y1="14" x2="20.5" y2="20.5"/>
+      ${bar}
+    </svg>`;
+  };
+
+  const row = el("div", { class: "fs-control" });
+  row.appendChild(el("button", {
+    class: "fs-btn fs-dec", type: "button",
+    "aria-label": "Decrease text size",
+    html: zoomIcon("out"),
+    onclick: (e) => stepFontScale(-1, e.currentTarget),
+  }));
+  row.appendChild(el("span", { class: "fs-pct", "aria-live": "polite" }, "100%"));
+  row.appendChild(el("button", {
+    class: "fs-btn fs-inc", type: "button",
+    "aria-label": "Increase text size",
+    html: zoomIcon("in"),
+    onclick: (e) => stepFontScale(1, e.currentTarget),
+  }));
+  sec.appendChild(row);
+  c.appendChild(sec);
+  updateFontScaleControl();
+}
+
 /* Apply the persisted Me-pane width to the layout. state.meWidth is a
    pixel value (or null = "use the default, one third of the viewport").
    We clamp to a sensible range so the pane can't be dragged to a useless
@@ -5134,7 +5700,10 @@ function renderMePane() {
   // so they stay wired after DOM swaps. Same handlers the Me tab's
   // top-bar extras use.
   const sync = $("#me-pane-sync");
-  if (sync) sync.textContent = `Last sync: ${formatLastSync(state.lastSyncAt)}`;
+  if (sync) sync.textContent = formatLastSync(state.lastSyncAt);
+  // Collapse the pane title to "Me" if "My Schedule" can't fit on one line
+  // (high zoom, or the pane dragged narrow) rather than wrapping.
+  fitTitle($(".me-pane-title"), "My Schedule", "Me");
   const extra = $("#me-pane-extra");
   if (extra) {
     extra.innerHTML = "";
@@ -5236,6 +5805,9 @@ function render() {
   const stack = state.tabStacks[tab];
   const top = stack[stack.length - 1];
 
+  // Set the top-bar title text. (The Me tab's "My Schedule" → "Me" collapse
+  // happens AFTER the active-tab/back-button attributes below are applied,
+  // since the title's available width depends on them — see fitTitle call.)
   $("#page-title").textContent = pageTitleFor(tab, top);
   // Back is meaningful whenever there's something to pop on this tab's
   // stack — which now includes temporary click-search results pushed on
@@ -5261,6 +5833,13 @@ function render() {
     :                                         "list";
   document.body.dataset.activeView = viewKind;
 
+  // Now that data-active-tab / data-active-view are set (they drive the
+  // title's grid placement and thus its available width), collapse the Me
+  // tab's "My Schedule" to "Me" if it can't fit on one line at this zoom.
+  if (tab === "me" && top.view === "list") {
+    fitTitle($("#page-title"), "My Schedule", "Me");
+  }
+
   // Show-past control + Days/Types: visible on top-level list views and
   // on the temporary click-search results view (which is itself a list).
   //
@@ -5276,6 +5855,7 @@ function render() {
   $("#bottom-controls").hidden = !showPastVisible;
   $("#show-past").checked = !!state.showPast;
   updateDateRangeLabel();
+  fitBottomControls();
   if (!showPastVisible && state.typesPanelOpen) {
     state.typesPanelOpen = false;
   }
@@ -5411,6 +5991,26 @@ function searchFor(query, mode) {
 /* events                                                           */
 /* =============================================================== */
 
+/* Keep the satisfying center-shrink on the +/- circles (.schedule-btn and
+   .dh-add) without losing taps. Those buttons scale down about their center
+   on :active, which slides their edges inward; a press that landed near an
+   edge can end up just OUTSIDE the shrunken button, so pointerup happens off
+   it and the browser fires no click — the tap is "missed".
+
+   The fix: the instant a press STARTS on one of these buttons, capture the
+   pointer to it. Pointer capture routes every subsequent pointer event — and
+   crucially the synthesized click — to that button regardless of where the
+   pointer actually is, so a press that began on the circle always counts even
+   if the shrink moves the circle out from under a stationary finger. The
+   capture is released automatically on pointerup/cancel, so nothing leaks.
+   Delegated here (one listener) so it covers every button instance without
+   touching the three creation sites. */
+document.addEventListener("pointerdown", (e) => {
+  const btn = e.target.closest(".schedule-btn, .dh-add");
+  if (!btn) return;
+  try { btn.setPointerCapture(e.pointerId); } catch (_) {}
+}, true);
+
 $("#back-btn").addEventListener("click", back);
 // Only the LEFT tab bar's buttons switch tabs. The right pane's Me button
 // is permanently active and inert (Me is always shown there on wide).
@@ -5465,12 +6065,23 @@ window.addEventListener("resize", () => {
     _wasWide = nowWide;
     applyMeWidth();                // re-clamp/apply pane width for new vw
     render();                      // full re-render across the breakpoint
+  } else {
+    // Width changed without crossing the breakpoint: re-evaluate the bits
+    // whose fit depends on width — the "Show me:" label, the "My Schedule"/
+    // "Me" titles, and the date/time indicator's date length.
+    fitBottomControls();
+    if (state.activeTab === "me" && currentTopView() === "list") {
+      fitTitle($("#page-title"), "My Schedule", "Me");
+    }
+    fitTitle($(".me-pane-title"), "My Schedule", "Me");
+    updateScrollIndicator();
   }
   // Width-dependent connector redraws are handled by the other (debounced)
   // resize listener above; nothing more to do here.
 }, { passive: true });
 
 applyMeWidth();
+applyFontScale();   // restore the saved text-size multiplier before first paint
 initMeResize();
 initMePaneScroll();
 render();
