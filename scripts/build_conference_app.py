@@ -699,19 +699,21 @@ button {
   min-height: calc(100vh - var(--top-h) - var(--bot-h) - var(--tab-h));
 }
 
-/* SVG overlay for the connector trees — both the Me-tab session→talk
-   tree (#me-connectors) and the Session-detail elbows
-   (#session-connectors). Sits BEHIND the bubbles and headers (z-index
-   0). Bubbles have solid backgrounds and paint above; time/date headers
-   are normal-flow so they also paint above. The .th-text chip below
-   dims+blurs the line where it passes behind a time indicator.
+/* SVG overlay for the connector trees — the Me-tab session→talk tree
+   (#me-connectors), the Session-detail elbows (#session-connectors), and
+   the Sessions-list inline-expansion elbows (#session-list-connectors).
+   Sits BEHIND the bubbles and headers (z-index 0). Bubbles have solid
+   backgrounds and paint above; time/date headers are normal-flow so they
+   also paint above. The .th-text chip below dims+blurs the line where it
+   passes behind a time indicator.
 
    CRITICAL: this MUST be position:absolute. The SVG is inserted as the
    first child of #content; without absolute positioning it would sit in
    normal flow and push the header + talks down below it, stranding the
    lines in the empty space at the top. */
 #me-connectors,
-#session-connectors {
+#session-connectors,
+#session-list-connectors {
   position: absolute;
   top: 0; left: 0;
   /* Do NOT use inset:0 / right:0 / bottom:0 here. The SVG carries explicit
@@ -741,7 +743,8 @@ button {
    geometry was measured, leaving every spine and fade-chip ~10px above its
    target. Keep the small top margin when the SVG precedes the header. */
 #me-connectors + .date-header,
-#session-connectors + .date-header { margin-top: 4px; }
+#session-connectors + .date-header,
+#session-list-connectors + .date-header { margin-top: 4px; }
 
 .time-header {
   margin: 4px 2px 2px;
@@ -809,14 +812,6 @@ body[data-active-view="session-detail"] .date-header,
 .bubble.clr-gold    { background: var(--c-gold-bg);    border-left-color: var(--c-gold-fg); }
 .bubble.clr-orange  { background: var(--c-orange-bg);  border-left-color: var(--c-orange-fg); }
 
-.bubble-id {
-  display: inline-block;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 12.5px; font-weight: 600;
-  letter-spacing: .02em;
-  opacity: .82;
-  margin-right: 6px;
-}
 .bubble-loc {
   display: inline-block;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -1017,6 +1012,17 @@ body[data-active-view="session-detail"] .bubble[data-kind="talk"],
   letter-spacing: .04em; opacity: .85;
   margin-bottom: 4px;
 }
+/* The session id now rides inline on the type/topic meta row (it no longer
+   gets its own line above the title in Session detail). Render it as a small
+   monospace chip so it still reads as an identifier label. */
+.dh-id-chip {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: .04em;
+  color: var(--text);
+  opacity: .9;
+  margin-right: 2px;
+}
 .dh-title {
   margin: 0 0 6px;
   font-size: 18px; line-height: 1.3; font-weight: 700;
@@ -1053,6 +1059,22 @@ body[data-active-view="session-detail"] .bubble[data-kind="talk"],
    first talk, so tighten it to bring the talks up under the header. */
 body[data-active-view="session-detail"] .detail-head {
   margin-bottom: 6px;
+}
+
+/* ── Sessions list: inline expansion ──────────────────────────────────
+   A session bubble in the Sessions list toggles open in place. The bubble
+   itself fills with the session's full detail (date, type/topic, presider,
+   details), and its talk bubbles render directly beneath it. No separate
+   indented header card. */
+
+/* The expansion container holds only the talk bubbles for one open session.
+   The left padding is the single source of the nesting indent (and the
+   gutter the connector spine drops through) — talks must NOT also carry a
+   margin-left or they'd be double-indented. */
+.session-expansion {
+  margin: 0 0 5px 0;
+  padding-left: 22px;
+  position: relative;
 }
 
 .author-line {
@@ -1234,6 +1256,20 @@ body[data-active-view="session-detail"] .detail-head {
 #scroll-indicator .sep {
   color: var(--muted);
   margin: 0 8px;
+}
+/* Right-aligned usage hint on the Sessions list indicator. Pushed to the far
+   right with margin-left:auto; faint and smaller so it reads as a quiet hint
+   next to the date/time label. Hidden on very narrow viewports where it would
+   crowd the date/time. */
+#scroll-indicator .ind-hint {
+  margin-left: auto;
+  font-size: 11px; font-weight: 600;
+  color: var(--muted);
+  opacity: .8;
+  white-space: nowrap;
+}
+@media (max-width: 360px) {
+  #scroll-indicator .ind-hint { display: none; }
 }
 body.has-indicator #scroll-indicator { display: flex; }
 
@@ -1834,6 +1870,12 @@ function defaultState() {
     lastSyncAt: null,         // epoch ms of last successful Paste (import)
     selectedDates: [],        // 'YYYY-MM-DD' filter; [] = show all days
     notes: {},                // {itemId: "free text"} — keyed by session OR talk id
+    // Sessions list: ids of sessions currently EXPANDED inline (their talks +
+    // full detail shown directly under the bubble, in place of navigating to a
+    // separate Session detail view). Local-only UI state — deliberately NOT
+    // part of the sync code (see buildSyncPayload), since it's a transient view
+    // preference, not schedule data. Multiple may be open at once.
+    expandedSessions: [],
     // Width of the wide-screen "Me" pane, in CSS pixels. null = use the
     // default (one third of the viewport). Set by dragging the divider;
     // persisted locally and included in the sync code so the layout
@@ -1893,6 +1935,7 @@ function loadState() {
         s.scheduleLog[id] = { op: "add", ts: base };
       }
     }
+    if (!Array.isArray(s.expandedSessions)) s.expandedSessions = [];
     return s;
   } catch (_) { return defaultState(); }
 }
@@ -2149,6 +2192,38 @@ function toggleScheduled(id) {
   render();
 }
 
+/* Sessions list: expand/collapse a session inline (show its full detail +
+   talks directly under the bubble instead of navigating to a separate
+   Session detail view). Multiple sessions may be open at once; the open set
+   persists locally (state.expandedSessions). */
+function isSessionExpanded(id) {
+  return (state.expandedSessions || []).includes(id);
+}
+function toggleSessionExpanded(id) {
+  // Capture the CURRENT scroll position before we re-render. render()
+  // restores state.tabStacks[...].scrollY after rebuilding the DOM; without
+  // this snapshot it would restore whatever the debounced scroll handler last
+  // persisted (up to 350 ms stale), which on a narrow/mobile layout — where
+  // the whole window scrolls a very tall list — yanks the view wildly to an
+  // old position. Snapshotting here pins the restore target to where the user
+  // actually is, so expanding/collapsing keeps the tapped session in place.
+  snapshotScroll();
+  const set = new Set(state.expandedSessions || []);
+  if (set.has(id)) set.delete(id); else set.add(id);
+  state.expandedSessions = [...set];
+  saveState();
+  // Drop the inline-expansion connector overlay SYNCHRONOUSLY, before the
+  // re-render reflows the bubbles. render() rebuilds the DOM immediately but
+  // only redraws connectors in a post-layout rAF; without this, a collapsing
+  // session's bubble shrinks first while the old (longer) spine is still
+  // painted, so its tail flashes in the empty space for a frame. Removing it
+  // up front means the line is simply gone until it's redrawn at the correct
+  // length.
+  const svg = document.querySelector("#session-list-connectors");
+  if (svg) svg.remove();
+  render();
+}
+
 /* =============================================================== */
 /* DOM helpers                                                      */
 /* =============================================================== */
@@ -2207,11 +2282,19 @@ function makeBubble(item, opts = {}) {
   // talks is in the schedule but the session itself isn't.
   const partial = !isTalk && !added && partialSessionIds().has(item.id);
 
+  // In the Sessions list, tapping a session expands it inline (full detail +
+  // talks under the bubble) rather than navigating to a separate Session
+  // detail view. `expandable` is set only by the Sessions list; talks are
+  // never expandable.
+  const expandable = !!opts.expandable && !isTalk;
+  const expanded   = expandable && isSessionExpanded(item.id);
+
   const cls = [
     "bubble",
     `clr-${item.color || "neutral"}`,
-    added   ? "added"   : "",
-    partial ? "partial" : "",
+    added    ? "added"    : "",
+    partial  ? "partial"  : "",
+    expanded ? "expanded" : "",
   ].filter(Boolean).join(" ");
 
   const wrap = el("article", {
@@ -2220,15 +2303,58 @@ function makeBubble(item, opts = {}) {
     "data-bubble-id":  item.id,
     "data-session-id": isTalk ? (item.session_id || "") : "",
     onclick: () => {
+      // A long-press (handled below) navigates to the standalone Session
+      // detail and sets this flag so the press doesn't ALSO toggle the
+      // inline expansion when the finger/mouse lifts.
+      if (wrap._lpFired) { wrap._lpFired = false; return; }
+      if (expandable) { toggleSessionExpanded(item.id); return; }
       navigate(isTalk ? `talk:${item.id}` : `session:${item.id}`);
     },
   });
 
-  // Title line: CHIP  ID  Title  (chip now comes BEFORE the id in every view)
-  //   * Normally the chip is the talk's location.
-  //   * In session-detail (opts.inlineTime) the chip becomes just the talk's
-  //     start time — the room is implied by the session, so we drop the
-  //     location — which also lets the between-bubble time-headers be dropped.
+  // Press-and-hold on an expandable session bubble opens the standalone
+  // Session detail view (a quick tap still expands it inline). We use pointer
+  // events so it works for both touch and mouse. A small move threshold means
+  // a scroll/drag doesn't count as a press. The "press to expand, hold for
+  // detail" affordance is shown once in the scroll indicator (see
+  // updateScrollIndicatorIn), not per-bubble.
+  if (expandable) {
+    let lpTimer = null, sx = 0, sy = 0;
+    const LP_MS = 500, MOVE_TOL = 10;
+
+    const cancel = () => {
+      if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; }
+    };
+    wrap.addEventListener("pointerdown", (e) => {
+      // Ignore the +/- schedule button (it has its own handler).
+      if (e.target.closest(".schedule-btn")) return;
+      sx = e.clientX; sy = e.clientY;
+      wrap._lpFired = false;
+      cancel();
+      lpTimer = setTimeout(() => {
+        lpTimer = null;
+        wrap._lpFired = true;        // suppress the click that follows
+        navigate(`session:${item.id}`);
+      }, LP_MS);
+    });
+    wrap.addEventListener("pointermove", (e) => {
+      if (lpTimer && (Math.abs(e.clientX - sx) > MOVE_TOL ||
+                      Math.abs(e.clientY - sy) > MOVE_TOL)) cancel();
+    });
+    wrap.addEventListener("pointerup", cancel);
+    wrap.addEventListener("pointercancel", cancel);
+    wrap.addEventListener("pointerleave", cancel);
+    // Long-press on touch often raises the OS context menu; suppress it so
+    // the press reads as our gesture instead.
+    wrap.addEventListener("contextmenu", (e) => {
+      if (wrap._lpFired) e.preventDefault();
+    });
+  }
+
+  // Title line: CHIP  Title. The chip is the talk's location, or in
+  // session-detail (opts.inlineTime) the talk's start time (room implied,
+  // which also lets the between-bubble time-headers be dropped). The
+  // session/talk number is no longer shown on bubbles — see below.
   let chipText;
   if (opts.inlineTime) {
     const sd = tsToDate(item.start_ts);
@@ -2239,11 +2365,20 @@ function makeBubble(item, opts = {}) {
   const locChip = chipText
     ? `<span class="bubble-loc">${esc(chipText)}</span>`
     : "";
+  // The session/talk number (item.id) is intentionally NOT shown on bubbles:
+  // it only adds clutter in the list/schedule/search/expansion views. The id
+  // still appears in the detail headers (see buildSessionHead / renderTalkDetail),
+  // which is where it's actually useful. The id remains on the element as the
+  // data-bubble-id attribute for connector lookups and click handling.
   const titleHTML =
-    `${locChip}<span class="bubble-id">${esc(item.id)}</span>${esc(item.title)}`;
+    `${locChip}${esc(item.title)}`;
   wrap.appendChild(el("div", { class: "bubble-title", html: titleHTML }));
 
-  // Subtitle (may contain <b>speaker</b>)
+  // Subtitle (may contain <b>speaker</b>). An expanded session bubble looks
+  // EXACTLY like its collapsed self — title + presider subtitle. Expanding
+  // only reveals the talk bubbles beneath it; the bubble's own appearance is
+  // unchanged. (The full session detail — date, type, id, etc. — lives in the
+  // standalone Session detail view, reached by press-and-hold.)
   const subHTML = subtitleFor(item);
   if (subHTML) {
     wrap.appendChild(el("div", { class: "bubble-sub", html: subHTML }));
@@ -2660,13 +2795,23 @@ function renderTimeGrouped(container, items, opts = {}) {
       frag.appendChild(th);
       curTime = tk;
     }
-    frag.appendChild(makeBubble(it, { inlineTime: !!opts.inlineTime }));
+    frag.appendChild(makeBubble(it, {
+      inlineTime: !!opts.inlineTime,
+      expandable: !!opts.expandable,
+    }));
+    // Sessions list inline expansion: when a session is open, render its
+    // talk bubbles in a wrapper right beneath it. The session's own detail
+    // shows inside the bubble itself; a talkless session adds nothing here.
+    if (opts.expandable && !it.session_id && isSessionExpanded(it.id)) {
+      const exp = buildSessionExpansion(it);
+      if (exp) frag.appendChild(exp);
+    }
   }
   container.appendChild(frag);
 }
 
 function renderSessionsList(c) {
-  renderTimeGrouped(c, DATA.sessions);
+  renderTimeGrouped(c, DATA.sessions, { expandable: true });
 }
 function renderTalksList(c) {
   renderTimeGrouped(c, DATA.talks);
@@ -2676,28 +2821,25 @@ function renderTalksList(c) {
 /* detail views                                                     */
 /* =============================================================== */
 
-function renderSessionDetail(c, sid) {
-  const s = sessionMap[sid];
-  if (!s) { c.appendChild(el("p", { class: "empty" }, "Session not found.")); return; }
-
-  const added = state.schedule.includes(s.id);
-  const head = el("section", { class: `detail-head clr-${s.color}` });
-  head.appendChild(el("div", { class: "dh-id" }, s.id));
-  head.appendChild(el("h2", { class: "dh-title" }, s.title || "(untitled)"));
-  const sd = tsToDate(s.start_ts);
-  if (sd) head.appendChild(el("div", { class: "dh-meta" },
-    `${dateLabel(sd)} · ${timeRange(s)}${s.location ? " · " + s.location : ""}`));
-  if (s.type)
-    head.appendChild(el("div", { class: "dh-meta" },
-      `${s.type}${s.topic ? " · " + s.topic : ""}`));
+/* Build the Session detail header card (the "detail-head" section with id,
+   title, date/time/location meta, type/topic, presider line, details, and
+   the add/remove button). Extracted so both the standalone Session detail
+   view and the inline expansion in the Sessions list render an identical
+   header. */
+/* Append the session's meta rows (date/time/location, id + type/topic,
+   presider, details) to `container`. Shared by the standalone detail head
+   and the in-bubble inline expansion so they stay identical.
+   `opts.idInline` prepends the session id to the type/topic row (used by the
+   detail head, where the id no longer gets its own wasteful line). */
+function appendSessionMetaLines(s, container, opts = {}) {
+  // Presider FIRST, so it sits on the line immediately after the title (in
+  // both the standalone detail head and the in-bubble inline expansion). The
+  // name(s) launch an initials-robust people search; the affiliation launches
+  // a plain text search (always the short form when we have one). Each piece
+  // is independently tappable.
+  //   * multiple presiders -> "Name1 · ShortAff1, Name2 · ShortAff2"
+  //   * single presider     -> "Name · ShortAff"  (the original bullet style)
   if (s.presider) {
-    // Presider line: the name(s) launch an initials-robust people search;
-    // the affiliation launches a plain text search (always using the short
-    // form when we have one). Each piece is independently tappable.
-    //
-    // Layout depends on how many presiders there are:
-    //   * multiple -> "Name1 (ShortAff1), Name2 (ShortAff2)"
-    //   * single   -> "Name · ShortAff"  (the original bullet style)
     const meta = el("div", { class: "dh-meta presider-meta" });
     meta.appendChild(el("strong", {}, "Presider:"));
     meta.appendChild(document.createTextNode(" "));
@@ -2711,22 +2853,18 @@ function renderSessionDetail(c, sid) {
       meta.appendChild(el("span", {
         class: "presider-name clickable",
         title: `Find sessions & talks by ${nm}`,
-        onclick: () => searchFor(nm, "name"),
+        onclick: (e) => { e.stopPropagation(); searchFor(nm, "name"); },
       }, nm));
     };
     const appendAff = (affText) => {
       meta.appendChild(el("span", {
         class: "presider-aff clickable",
         title: `Search for “${affText}”`,
-        onclick: () => searchFor(affText, "affil"),
+        onclick: (e) => { e.stopPropagation(); searchFor(affText, "affil"); },
       }, affText));
     };
 
     if (names.length > 1) {
-      // Multiple presiders: "Name1 · ShortAff1, Name2 · ShortAff2". Each name
-      // gets its own short affiliation after a bullet (the bullet + aff are
-      // omitted for any presider whose affiliation is unknown/malformed), and
-      // presiders are separated by commas.
       names.forEach((nm, idx) => {
         appendName(nm);
         const affText = (affList[idx] || "").trim();
@@ -2739,10 +2877,7 @@ function renderSessionDetail(c, sid) {
         }
       });
     } else {
-      // Single presider: keep the original "Name · ShortAff" bullet style.
       appendName(names[0] || s.presider);
-      // Prefer the canonical short affiliation; fall back to the per-presider
-      // list, then the raw form.
       const affDisplay = (s.presider_aff_short
         || (affList[0] || "")
         || s.presider_aff || "").trim();
@@ -2751,16 +2886,56 @@ function renderSessionDetail(c, sid) {
         appendAff(affDisplay);
       }
     }
-    head.appendChild(meta);
+    container.appendChild(meta);
   }
+
+  const sd = tsToDate(s.start_ts);
+  if (sd) container.appendChild(el("div", { class: "dh-meta" },
+    `${dateLabel(sd)} · ${timeRange(s)}${s.location ? " · " + s.location : ""}`));
+
+  // ID + type/topic on one line. The id is shown as a monospace chip so it
+  // reads as a label rather than part of the prose. When there's no type we
+  // still emit the id on its own line so it isn't lost.
+  const typeText = s.type
+    ? `${s.type}${s.topic ? " · " + s.topic : ""}`
+    : "";
+  if (opts.idInline) {
+    const row = el("div", { class: "dh-meta dh-idmeta" });
+    row.appendChild(el("span", { class: "dh-id-chip" }, s.id));
+    if (typeText) {
+      row.appendChild(document.createTextNode(" "));
+      row.appendChild(document.createTextNode(typeText));
+    }
+    container.appendChild(row);
+  } else if (typeText) {
+    container.appendChild(el("div", { class: "dh-meta" }, typeText));
+  }
+
   if (s.details)
-    head.appendChild(el("div", { class: "dh-meta" }, s.details));
+    container.appendChild(el("div", { class: "dh-meta" }, s.details));
+}
+
+function buildSessionHead(s) {
+  const added = state.schedule.includes(s.id);
+  const head = el("section", { class: `detail-head clr-${s.color}` });
+  // The session id used to sit on its own line above the title (wasteful).
+  // It now rides inline on the type/topic meta row instead — see
+  // appendSessionMetaLines({ idInline: true }).
+  head.appendChild(el("h2", { class: "dh-title" }, s.title || "(untitled)"));
+  appendSessionMetaLines(s, head, { idInline: true });
   head.appendChild(el("button", {
     class: `dh-add${added ? " added" : ""}`,
     "aria-label": added ? "Remove from schedule" : "Add to schedule",
-    onclick: () => toggleScheduled(s.id),
+    onclick: (e) => { e.stopPropagation(); toggleScheduled(s.id); },
   }, added ? "−" : "+"));
-  c.appendChild(head);
+  return head;
+}
+
+function renderSessionDetail(c, sid) {
+  const s = sessionMap[sid];
+  if (!s) { c.appendChild(el("p", { class: "empty" }, "Session not found.")); return; }
+
+  c.appendChild(buildSessionHead(s));
 
   if (!s.talk_ids || s.talk_ids.length === 0) {
     c.appendChild(el("p", { class: "empty" }, "No talks listed for this session."));
@@ -2773,6 +2948,30 @@ function renderSessionDetail(c, sid) {
   const talks = s.talk_ids.map(id => talkMap[id]).filter(Boolean)
                  .sort((a,b) => cmpTs(a.start_ts, b.start_ts));
   renderTimeGrouped(c, talks, { skipDateHeaders: true, alwaysAll: true, ignoreTypes: true, inlineTime: true });
+}
+
+/* Sessions list inline expansion: the talk bubbles rendered directly
+   beneath an expanded session bubble. The session's extra detail (date,
+   type/topic, presider, details) is shown INSIDE the session bubble itself
+   (see makeBubble), so this block holds only the talks — no separate header
+   card. Wrapped in a .session-expansion container scoped to one session so
+   the indent CSS and the connector drawer can target just this group.
+
+   Returns null when the session has no talks: the bubble already shows the
+   full detail, so there's nothing to append — no empty box, no "No talks"
+   placeholder, no wasted vertical space. */
+function buildSessionExpansion(s) {
+  const talks = (s.talk_ids || []).map(id => talkMap[id]).filter(Boolean)
+                 .sort((a,b) => cmpTs(a.start_ts, b.start_ts));
+  if (talks.length === 0) return null;
+  const box = el("div", {
+    class: `session-expansion clr-${s.color}`,
+    "data-expansion-for": s.id,
+  });
+  for (const t of talks) {
+    box.appendChild(makeBubble(t, { inlineTime: true }));
+  }
+  return box;
 }
 
 function renderTalkDetail(c, tid) {
@@ -3970,9 +4169,114 @@ function drawSessionDetailConnectors() {
   content.insertBefore(svg, content.firstChild);
 }
 
+/* ─────────────────────────────────────────────────────────────────
+   Sessions-list inline-expansion connectors: one elbow tree per OPEN
+   session. Structurally identical to the session-detail case (one head
+   + a contiguous block of child talks, no sibling interleaving), but
+   there can be several independent groups down the list — one per
+   expanded session — so we iterate the .session-expansion wrappers and
+   draw a separate spine for each. No-op unless we're on the Sessions
+   list with at least one expanded session that has talks.
+   ───────────────────────────────────────────────────────────────── */
+function drawSessionListConnectors() {
+  const content = $("#content");
+  if (!content) return;
+  const stale = content.querySelector("#session-list-connectors");
+  if (stale) stale.remove();
+
+  // Only on the flat Sessions list (the only place expansions render).
+  if (state.activeTab !== "sessions" || currentTopView() !== "list") return;
+
+  const groups = [...content.querySelectorAll(".session-expansion")];
+  if (groups.length === 0) return;
+
+  const cr = content.getBoundingClientRect();
+  const sx = content.scrollLeft || 0;
+  const sy = content.scrollTop  || 0;
+  const rectIn = (el) => {
+    const r = el.getBoundingClientRect();
+    return {
+      top:    r.top    - cr.top  + sy,
+      bottom: r.bottom - cr.top  + sy,
+      left:   r.left   - cr.left + sx,
+      right:  r.right  - cr.left + sx,
+    };
+  };
+
+  const svgW = content.clientWidth;
+  const svgH = content.scrollHeight;
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.id = "session-list-connectors";
+  svg.setAttribute("width",  svgW);
+  svg.setAttribute("height", svgH);
+  svg.setAttribute("viewBox", `0 0 ${svgW} ${svgH}`);
+  svg.style.width  = svgW + "px";
+  svg.style.height = svgH + "px";
+
+  // Map session id -> its bubble once, so we don't build dynamic selectors
+  // (session ids can contain characters that need CSS escaping).
+  const sessionBubbleById = {};
+  for (const b of content.querySelectorAll('.bubble[data-kind="session"]')) {
+    sessionBubbleById[b.getAttribute("data-bubble-id")] = b;
+  }
+
+  for (const box of groups) {
+    // The spine's parent is the session BUBBLE that this expansion belongs
+    // to (the bubble now holds the detail; the expansion holds only talks).
+    const sid = box.getAttribute("data-expansion-for");
+    const sBubble = sessionBubbleById[sid];
+    if (!sBubble) continue;
+    const talkBubbles = [...box.querySelectorAll('.bubble[data-kind="talk"]')];
+    if (talkBubbles.length === 0) continue;
+
+    const hr = rectIn(sBubble);
+    const kids = talkBubbles.map(tb => {
+      const r = rectIn(tb);
+      return { left: r.left, midY: (r.top + r.bottom) / 2 };
+    });
+    const xS     = hr.left + SPINE_INSET;
+    // Start the spine high inside the session bubble (near its top third) and
+    // also run a horizontal stub rightward to the bubble's horizontal midpoint.
+    // The bubble's fill is opaque and paints over the SVG, so this whole
+    // upper portion is hidden — but anchoring the line DEEP inside the bubble
+    // means that when the bubble briefly scales down on :active press (and its
+    // bottom edge lifts a hair), there's no spine tail exposed in the gap: the
+    // visible part of the line still starts below the (shrunk) bubble with the
+    // anchor safely buried. Without this, the spine began at the bubble's
+    // vertical middle and its lower stretch peeked out during the press.
+    const yTop   = hr.top + (hr.bottom - hr.top) * 0.33;
+    const xMid   = (hr.left + hr.right) / 2;
+    const yEnd   = kids[kids.length - 1].midY;
+    const color  = getComputedStyle(sBubble).borderLeftColor || "currentColor";
+
+    const path = document.createElementNS(SVG_NS, "path");
+    // Horizontal stub under the bubble (spine -> bubble midpoint), then the
+    // vertical spine from that anchor down to the last talk, then the elbows.
+    const parts = [
+      `M ${xS} ${yTop} L ${xMid} ${yTop}`,
+      `M ${xS} ${yTop} L ${xS} ${yEnd}`,
+    ];
+    for (const k of kids) {
+      const xC = k.left + 2;   // 2 px into the talk's colored strip
+      parts.push(`M ${xS} ${k.midY} L ${xC} ${k.midY}`);
+    }
+    path.setAttribute("d", parts.join(" "));
+    path.setAttribute("fill", "none");
+    path.setAttribute("stroke", color);
+    path.setAttribute("stroke-width", String(SPINE_W));
+    path.setAttribute("stroke-linecap", "round");
+    path.setAttribute("stroke-linejoin", "round");
+    svg.appendChild(path);
+  }
+
+  // No fade chips needed: there are no time-headers or section titles
+  // inside an expansion for the spine to cross.
+  content.insertBefore(svg, content.firstChild);
+}
+
 /* Window resize → bubble layouts may shift, so the SVG paths need to
-   rebuild. Debounced. Covers both the Me schedule's connector tree and
-   the session-detail elbows. */
+   rebuild. Debounced. Covers the Me schedule's connector tree, the
+   session-detail elbows, and the Sessions-list inline-expansion elbows. */
 let _meResizeTimer = null;
 window.addEventListener("resize", () => {
   if (_meResizeTimer) clearTimeout(_meResizeTimer);
@@ -3985,6 +4289,8 @@ window.addEventListener("resize", () => {
     if (isWide()) { const p = $("#me-content"); if (p) drawMeConnectors(p); }
     if (document.body.dataset.activeView === "session-detail")
       drawSessionDetailConnectors();
+    if (state.activeTab === "sessions" && currentTopView() === "list")
+      drawSessionListConnectors();
   }, 120);
 });
 
@@ -4589,7 +4895,16 @@ function updateScrollIndicatorIn(ind, scope, bodyCls) {
   const parts = [];
   if (curDate) parts.push(`<span class="date">${esc(curDate)}</span>`);
   if (curTime) parts.push(`<span class="time">${esc(curTime)}</span>`);
-  ind.innerHTML = parts.join('<span class="sep">·</span>');
+  let html = parts.join('<span class="sep">·</span>');
+  // On the Sessions list, append a right-aligned usage hint explaining the
+  // tap/hold gesture (tap a session to expand it inline, hold to open its
+  // full detail). Only here — the Me pane's indicator and other lists don't
+  // have expandable session bubbles.
+  if (ind.id === "scroll-indicator"
+      && state.activeTab === "sessions" && currentTopView() === "list") {
+    html += `<span class="ind-hint">Hold for session detail</span>`;
+  }
+  ind.innerHTML = html;
 }
 
 function updateScrollIndicator() {
@@ -4967,6 +5282,8 @@ function render() {
       drawMeConnectors();
       // Same elbow treatment for a Session detail view (no-op elsewhere).
       drawSessionDetailConnectors();
+      // Inline-expansion elbows on the Sessions list (no-op elsewhere).
+      drawSessionListConnectors();
     });
   });
 }
