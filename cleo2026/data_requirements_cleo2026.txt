@@ -1,0 +1,76 @@
+# data_requirements_cleo2026.txt — CLEO 2026
+#
+# Structured manifest of the data files that the fetch (downloader) and process
+# scripts in this directory rely on. make_app.py reads this file to decide
+# whether a download can be skipped: when FORCE_DOWNLOAD is off, every file
+# marked "required = yes" below must already exist in data/ for the download to
+# be skipped; otherwise make_app runs the downloader.
+#
+# Format (simple, line-oriented; '#' starts a comment, blank lines ignored):
+#   - Each file is a block introduced by a header line "[file: <pattern>]".
+#   - <pattern> is a filename or a glob (e.g. *_Program_Abstracts.pdf) resolved
+#     relative to the data/ subdirectory of THIS conference folder.
+#   - Inside a block, "key: value" lines give metadata. Recognized keys:
+#       required     yes | no   (default yes) — whether the file must be present
+#       produced_by  which script normally creates it (fetch / process / manual)
+#       description  one-line human description
+#       manual       how to obtain the file by hand if the downloader can't
+#   - Continuation: a "manual" value may wrap onto following indented lines.
+#
+# manual_steps_written: 2026-05-24
+# These manual-download instructions were accurate as of the date above; the
+# conference website / planner layout can change, so re-verify if much later.
+
+generated_for: cleo2026
+manual_steps_written: 2026-05-24
+
+[file: CLEO2026_Program_Abstracts.pdf]
+required: yes
+produced_by: fetch
+description: Official "Program + Abstracts (PDF)" — full program with every
+  abstract; the processor parses it for abstract text, author/speaker
+  underlines, and full-address affiliation lines.
+manual: Open the CLEO 2026 planner at
+  https://cleo2026.abstractcentral.com/planner.jsp , wait for the program to
+  load, and click the "Program + Abstracts (PDF)" download button (NOT the
+  "Program Only" one). Save the downloaded file into this folder's data/
+  subdirectory as exactly CLEO2026_Program_Abstracts.pdf .
+
+[file: CLEO2026_Program_Abstracts.csv]
+required: yes
+produced_by: fetch
+description: Official "Program + Abstracts (Excel)" export. The site's "Excel"
+  button actually serves a CSV; it is the per-session / per-abstract table the
+  processor walks to assemble sessions and talks.
+manual: On the same planner page
+  (https://cleo2026.abstractcentral.com/planner.jsp), click the
+  "Program + Abstracts (Excel)" download button. It downloads a CSV despite the
+  "Excel" label. Save it into data/ as exactly
+  CLEO2026_Program_Abstracts.csv .
+
+[file: CLEO2026_planner_expanded.html]
+required: yes
+produced_by: fetch
+description: Full DOM snapshot (outerHTML) of the planner AFTER every day,
+  session, and "See More…" control has been expanded. The processor re-parses
+  this offline (with lxml) to recover the day -> session -> talk structure,
+  presiders, speakers, and the per-talk markup.
+manual: This one is tedious to produce by hand because the planner is a GWT app
+  that lazy-loads its content. Preferred: let the fetch script create it. If you
+  must do it manually, open
+  https://cleo2026.abstractcentral.com/planner.jsp , expand EVERY day row, every
+  session row (the "+" icons), and click every "See More…" link until nothing is
+  collapsed, then save the live DOM (e.g. via the browser console:
+  copy(document.documentElement.outerHTML)) into data/ as exactly
+  CLEO2026_planner_expanded.html , prefixed with a "<!DOCTYPE html>" line.
+
+[file: CLEO2026_short_courses.html]
+required: yes
+produced_by: fetch
+description: Raw HTML of the public CLEO 2026 short-courses page. The processor
+  parses its "SC####"-coded links to recover each short course's instructor and
+  affiliation (the planner itself does not expose these).
+manual: Open https://cleoconference.org/2026-short-courses/ in a browser, let it
+  finish loading, then save the page (Save As -> "Web Page, HTML only" or via the
+  console: copy(document.documentElement.outerHTML)) into data/ as exactly
+  CLEO2026_short_courses.html .
