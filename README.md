@@ -38,7 +38,7 @@ That's all that's needed for any conference that's already set up. The command w
 
 Once built, `<conference_name>_app.html` is the whole app. Open it directly in a browser, host it anywhere as a static file, or (if you're an organizer) send it to attendees. There's nothing else to deploy.
 
-If your conference does **not** yet have a subdirectory, you'll need to set one up first — see [Adding a new conference](#adding-a-new-conference) below.
+If your conference does **not** yet have a subdirectory, you'll need to set one up first. See [Adding a new conference](#adding-a-new-conference) below.
 
 ## How it works
 
