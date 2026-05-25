@@ -653,7 +653,15 @@ button {
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--line);
-  display: flex; align-items: center;
+  /* Three columns with EQUAL side tracks so the centered title sits at the
+     true center of the bar regardless of what's in the side slots (the back
+     button on the left, sync/copy controls on the right). A plain flexbox
+     mis-centers the title whenever the two sides differ in width — e.g. on
+     the Sessions list where the left back-button is hidden but the right
+     slot still reserves space. */
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
   z-index: 30;
 }
 @media (prefers-color-scheme: dark) {
@@ -663,17 +671,20 @@ button {
   height: var(--top-h); padding: 0 14px;
   font-size: 17px; color: var(--accent);
   display: flex; align-items: center; gap: 2px;
+  justify-self: start;
 }
 #back-btn[hidden] { display: none; }
 #page-title {
-  flex: 1; margin: 0; padding: 0 8px;
+  margin: 0; padding: 0 8px;
   font-size: 16px; font-weight: 600; letter-spacing: .01em;
   text-align: center;
+  grid-column: 2;
 }
 #topbar-extra {
   display: flex; align-items: center;
-  padding-right: 8px; min-width: 60px;
-  justify-content: flex-end; gap: 4px;
+  padding-right: 8px;
+  justify-self: end;
+  gap: 4px;
 }
 /* Compact "Last sync" text in the Me top bar (narrow / one-pane mode).
    Mirrors the wide pane header's sync text. Truncates rather than
@@ -961,6 +972,15 @@ body[data-active-view="session-detail"] .bubble[data-kind="talk"],
   font-size: 14px;
   margin: 0 0 28px;
 }
+/* Subtle link — inherits the muted attribution color rather than the loud
+   accent, with just a faint underline to signal it's tappable. */
+.me-attribution-link {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--line);
+  text-underline-offset: 2px;
+}
+.me-attribution-link:active { color: var(--accent); }
 
 /* ── Search bar ────────────────────────────────────────────────────── */
 .search-controls {
@@ -2773,7 +2793,17 @@ function renderTimeGrouped(container, items, opts = {}) {
     frag.appendChild(th);
     curTime = "Now";
     for (const it of nowItems) {
-      frag.appendChild(makeBubble(it));
+      frag.appendChild(makeBubble(it, {
+        inlineTime: !!opts.inlineTime,
+        expandable: !!opts.expandable,
+      }));
+      // Inline expansion for an open session in the Now bucket — same as the
+      // main loop below. Without this, tapping a "Now" session bubble fell
+      // through to the non-expandable path and just opened Session detail.
+      if (opts.expandable && !it.session_id && isSessionExpanded(it.id)) {
+        const exp = buildSessionExpansion(it);
+        if (exp) frag.appendChild(exp);
+      }
     }
   }
 
@@ -3538,9 +3568,16 @@ function renderMe(c) {
   btnWrap.appendChild(btn);
   c.appendChild(btnWrap);
 
-  // Attribution line below the copy button.
+  // Attribution line below the copy button. The app name links to the
+  // project's GitHub repo; styled subtly (inherits the muted color, faint
+  // underline) so it reads as tappable without shouting "link".
   c.appendChild(el("div", { class: "me-attribution" }, [
-    "The Fine Conference App v0.1",
+    el("a", {
+      class: "me-attribution-link",
+      href: "https://github.com/burghoff/fine_conference_app",
+      target: "_blank",
+      rel: "noopener noreferrer",
+    }, "The Fine Conference App v0.1"),
     el("br"),
     "David Burghoff, UT Austin",
   ]));
@@ -4902,7 +4939,7 @@ function updateScrollIndicatorIn(ind, scope, bodyCls) {
   // have expandable session bubbles.
   if (ind.id === "scroll-indicator"
       && state.activeTab === "sessions" && currentTopView() === "list") {
-    html += `<span class="ind-hint">Hold for session detail</span>`;
+    html += `<span class="ind-hint">Hold for detail</span>`;
   }
   ind.innerHTML = html;
 }
