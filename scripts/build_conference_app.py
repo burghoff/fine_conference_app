@@ -812,7 +812,7 @@ body[data-active-view="session-detail"] .date-header,
 .bubble-id {
   display: inline-block;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 11px; font-weight: 600;
+  font-size: 12.5px; font-weight: 600;
   letter-spacing: .02em;
   opacity: .82;
   margin-right: 6px;
@@ -1046,11 +1046,11 @@ body[data-active-view="session-detail"] .bubble[data-kind="talk"],
   color: var(--muted);
   margin: 18px 2px 6px;
 }
-/* In a Session detail the header is immediately followed by the first
-   time-header + talk list (no "Talks" heading). The default 16px
+/* In a Session detail the header is immediately followed by the talk
+   list (no "Talks" heading, and — since each talk now carries its time
+   inline — no between-bubble time-headers either). The default 16px
    detail-head bottom margin leaves an awkwardly large gap above the
-   first time-header, so tighten it to bring the talks up under the
-   header. */
+   first talk, so tighten it to bring the talks up under the header. */
 body[data-active-view="session-detail"] .detail-head {
   margin-bottom: 6px;
 }
@@ -2200,7 +2200,7 @@ function partialSessionIds() {
   return out;
 }
 
-function makeBubble(item) {
+function makeBubble(item, opts = {}) {
   const isTalk = !!item.session_id;
   const added  = state.schedule.includes(item.id);
   // Sessions only: signal "interest" when one or more of the session's
@@ -2224,12 +2224,23 @@ function makeBubble(item) {
     },
   });
 
-  // Title line: ID  [LOC]  Title
-  const locChip = item.location
-    ? `<span class="bubble-loc">${esc(item.location)}</span>`
+  // Title line: CHIP  ID  Title  (chip now comes BEFORE the id in every view)
+  //   * Normally the chip is the talk's location.
+  //   * In session-detail (opts.inlineTime) the chip becomes just the talk's
+  //     start time — the room is implied by the session, so we drop the
+  //     location — which also lets the between-bubble time-headers be dropped.
+  let chipText;
+  if (opts.inlineTime) {
+    const sd = tsToDate(item.start_ts);
+    chipText = sd ? timeLabel(sd) : "";
+  } else {
+    chipText = item.location || "";
+  }
+  const locChip = chipText
+    ? `<span class="bubble-loc">${esc(chipText)}</span>`
     : "";
   const titleHTML =
-    `<span class="bubble-id">${esc(item.id)}</span>${locChip}${esc(item.title)}`;
+    `${locChip}<span class="bubble-id">${esc(item.id)}</span>${esc(item.title)}`;
   wrap.appendChild(el("div", { class: "bubble-title", html: titleHTML }));
 
   // Subtitle (may contain <b>speaker</b>)
@@ -2640,13 +2651,16 @@ function renderTimeGrouped(container, items, opts = {}) {
       frag.appendChild(el("h2", { class: "date-header" }, dk));
       curDate = dk; curTime = null;
     }
-    if (tk !== curTime) {
+    // When inlineTime is on (session-detail), the start time lives inside
+    // each bubble's location chip, so we suppress the between-bubble
+    // time-headers entirely and let the bubbles abut.
+    if (!opts.inlineTime && tk !== curTime) {
       const th = el("h3", { class: "time-header" });
       th.appendChild(el("span", { class: "th-text" }, tk));
       frag.appendChild(th);
       curTime = tk;
     }
-    frag.appendChild(makeBubble(it));
+    frag.appendChild(makeBubble(it, { inlineTime: !!opts.inlineTime }));
   }
   container.appendChild(frag);
 }
@@ -2753,11 +2767,12 @@ function renderSessionDetail(c, sid) {
     return;
   }
 
-  // No "Talks" heading — the header is followed directly by the first
-  // time-header and the talk bubbles.
+  // No "Talks" heading and no between-bubble time-headers — the header is
+  // followed directly by the talk bubbles, each carrying its start time
+  // inline in the chip (the room is implied by the session, so it's omitted).
   const talks = s.talk_ids.map(id => talkMap[id]).filter(Boolean)
                  .sort((a,b) => cmpTs(a.start_ts, b.start_ts));
-  renderTimeGrouped(c, talks, { skipDateHeaders: true, alwaysAll: true, ignoreTypes: true });
+  renderTimeGrouped(c, talks, { skipDateHeaders: true, alwaysAll: true, ignoreTypes: true, inlineTime: true });
 }
 
 function renderTalkDetail(c, tid) {
