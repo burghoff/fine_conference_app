@@ -151,7 +151,7 @@ Ordered list of author objects:
 ```json
 "authors": [
   { "name": "David Burghoff", "insts": [1] },
-  { "name": "Jerome",  "insts": [1, 2] },
+  { "name": "Ningren Han",  "insts": [1, 2] },
   { "name": "A. Hugi",        "insts": [] }
 ]
 ```
@@ -197,10 +197,10 @@ Numbered institution list:
   "speaker": "David Burghoff",
   "speaker_pos": 0,
   "first_author": "David Burghoff",
-  "last_author": "Jerome",
+  "last_author": "John Smith",
   "authors": [
     { "name": "David Burghoff", "insts": [1] },
-    { "name": "Jerome", "insts": [1] }
+    { "name": "John Smith", "insts": [1] }
   ],
   "institutions": [
     { "n": 1, "name": "Department of Electrical and Computer Engineering, The University of Texas at Austin, Austin, TX, USA" }
