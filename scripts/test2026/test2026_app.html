@@ -4862,7 +4862,10 @@ function syncAppHeight() {
     const vv = window.visualViewport;
 
     if (vv && Math.abs(vv.scale - 1) > 0.01) return;
-    const h = vv ? vv.height : window.innerHeight;
+
+    const layoutH = document.documentElement.clientHeight || 0;
+    const visualH = vv ? vv.height : window.innerHeight;
+    let h = layoutH > 0 ? Math.min(visualH, layoutH) : visualH;
     if (h > 0) document.documentElement.style.setProperty("--app-h", h + "px");
   });
 }
@@ -4887,19 +4890,19 @@ function updateDebugOverlay() {
   const appH = getComputedStyle(document.documentElement)
                  .getPropertyValue("--app-h").trim() || "(unset)";
   const innerH = window.innerHeight;
+  const layoutH = document.documentElement.clientHeight;
   const tabBottom = tabRect ? Math.round(tabRect.bottom) : "n/a";
 
-  const visibleBottom = vv ? vv.height : innerH;
-  const gap = tabRect ? Math.round(visibleBottom - tabRect.bottom) : "n/a";
+  const overflow = tabRect ? Math.round(tabRect.bottom - layoutH) : "n/a";
   _dbgEl.textContent =
     `visualViewport.h: ${vv ? Math.round(vv.height) : "n/a"}\n` +
     `visualViewport.offsetTop: ${vv ? Math.round(vv.offsetTop) : "n/a"}\n` +
     `window.innerHeight: ${innerH}\n` +
-    `documentElement.clientHeight: ${document.documentElement.clientHeight}\n` +
+    `documentElement.clientHeight: ${layoutH}\n` +
     `body height: ${Math.round(body.height)}\n` +
     `--app-h: ${appH}\n` +
     `tabbar.bottom: ${tabBottom}\n` +
-    `GAP below tabbar: ${gap}\n` +
+    `OVERFLOW below fold: ${overflow}\n` +
     `wide: ${isWide()}`;
 }
 function toggleDebugOverlay() {

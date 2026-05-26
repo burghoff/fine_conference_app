@@ -7276,7 +7276,18 @@ function syncAppHeight() {
     // jump. So while zoomed (scale !== 1), leave --app-h alone and let the
     // user zoom/pan normally; we re-sync once they return to scale 1.
     if (vv && Math.abs(vv.scale - 1) > 0.01) return;
-    const h = vv ? vv.height : window.innerHeight;
+    // Use the SMALLER of the visual-viewport height and the layout-viewport
+    // height (documentElement.clientHeight). These diverge during Firefox's
+    // toolbar dance: e.g. visualViewport.height=898 while clientHeight=833.
+    // The body is laid out in the LAYOUT viewport, so pinning it to the larger
+    // visual height (898) makes the shell 65px taller than its 833 layout box —
+    // it overflows below the visible fold into a band of empty space you can
+    // pinch-pan to, with the bottom bar pushed down into it. Taking the min is
+    // the largest height that fits within BOTH viewports, so the shell never
+    // overflows regardless of which way the two diverge.
+    const layoutH = document.documentElement.clientHeight || 0;
+    const visualH = vv ? vv.height : window.innerHeight;
+    let h = layoutH > 0 ? Math.min(visualH, layoutH) : visualH;
     if (h > 0) document.documentElement.style.setProperty("--app-h", h + "px");
   });
 }
@@ -7310,20 +7321,24 @@ function updateDebugOverlay() {
   const appH = getComputedStyle(document.documentElement)
                  .getPropertyValue("--app-h").trim() || "(unset)";
   const innerH = window.innerHeight;
+  const layoutH = document.documentElement.clientHeight;
   const tabBottom = tabRect ? Math.round(tabRect.bottom) : "n/a";
-  // Gap below the tab bar relative to the visible viewport bottom (vv.height
-  // if available, else innerHeight). Positive => empty space under the bar.
-  const visibleBottom = vv ? vv.height : innerH;
-  const gap = tabRect ? Math.round(visibleBottom - tabRect.bottom) : "n/a";
+  // The meaningful number is how far the bottom of the app shell (≈ body
+  // bottom / tabbar bottom) sits BELOW the layout-viewport fold. tabbar.bottom
+  // is in layout-viewport coords, so compare to layoutH (clientHeight), NOT
+  // visualViewport.height — those are different coordinate spaces and mixing
+  // them gave a misleading 0 before. Positive => shell overflows below the
+  // fold (the zoomable black band under the bar).
+  const overflow = tabRect ? Math.round(tabRect.bottom - layoutH) : "n/a";
   _dbgEl.textContent =
     `visualViewport.h: ${vv ? Math.round(vv.height) : "n/a"}\n` +
     `visualViewport.offsetTop: ${vv ? Math.round(vv.offsetTop) : "n/a"}\n` +
     `window.innerHeight: ${innerH}\n` +
-    `documentElement.clientHeight: ${document.documentElement.clientHeight}\n` +
+    `documentElement.clientHeight: ${layoutH}\n` +
     `body height: ${Math.round(body.height)}\n` +
     `--app-h: ${appH}\n` +
     `tabbar.bottom: ${tabBottom}\n` +
-    `GAP below tabbar: ${gap}\n` +
+    `OVERFLOW below fold: ${overflow}\n` +
     `wide: ${isWide()}`;
 }
 function toggleDebugOverlay() {
