@@ -13,6 +13,8 @@ The Fine Conference App is a lightweight planner built to replace the clunky app
   </tr>
 </table>
 
+An example of it in action can be found [here](https://htmlpreview.github.io/?https://github.com/burghoff/fine_conference_app/blob/main/scripts/test2026/test2026_app.html).
+
 ## Why
 
 Conference organizers often ship a large app that requires an install, an account, and a network connection just to browse a program you could read on a single modern page. The Fine Conference App takes the same program data and turns it into one self-contained HTML file. Open it in any browser, and you have the whole conference! If you are organizing a conference, you can just host the page yourself and give your attendees a clean user experience at no cost to you.
