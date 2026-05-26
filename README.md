@@ -13,7 +13,7 @@ The Fine Conference App is a lightweight planner built to replace the clunky app
   </tr>
 </table>
 
-An example of it in action can be found [here](https://htmlpreview.github.io/?https://github.com/burghoff/fine_conference_app/blob/main/scripts/test2026/test2026_app.html).
+See it in action [here](https://htmlpreview.github.io/?https://github.com/burghoff/fine_conference_app/blob/main/scripts/test2026/test2026_app.html)!
 
 ## Why
 
