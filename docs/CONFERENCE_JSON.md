@@ -151,8 +151,7 @@ Ordered list of author objects:
 ```json
 "authors": [
   { "name": "David Burghoff", "insts": [1] },
-  { "name": "Ningren Han",  "insts": [1, 2] },
-  { "name": "A. Hugi",        "insts": [] }
+  { "name": "Ningren Han",  "insts": [2] }
 ]
 ```
 
@@ -169,7 +168,7 @@ Numbered institution list:
 ```json
 "institutions": [
   { "n": 1, "name": "Department of Electrical and Computer Engineering, The University of Texas at Austin, Austin, TX, USA", "alt_names": ["UT Austin"] },
-  { "n": 2, "name": "Institute for Quantum Electronics, ETH Zurich, Zurich, Switzerland", "alt_names": ["ETH Zurich"] }
+  { "n": 2, "name": "Google Deepmind, Palo Alto, CA, USA", "alt_names": ["Google"] }
 ]
 ```
 
