@@ -7381,14 +7381,26 @@ function updateDebugOverlay() {
   // them gave a misleading 0 before. Positive => shell overflows below the
   // fold (the zoomable black band under the bar).
   const overflow = tabRect ? Math.round(tabRect.bottom - layoutH) : "n/a";
+  // Per-element vertical bands: top→bottom of each app-shell child. A gap shows
+  // up as a jump between one element's bottom and the next's top.
+  const band = (id) => {
+    const e = document.getElementById(id);
+    if (!e) return `${id}: (none)`;
+    const r = e.getBoundingClientRect();
+    const disp = getComputedStyle(e).display;
+    if (disp === "none" || r.height === 0) return `${id}: hidden`;
+    return `${id}: ${Math.round(r.top)}→${Math.round(r.bottom)} (h${Math.round(r.height)})`;
+  };
   _dbgEl.textContent =
     `visualViewport.h: ${vv ? Math.round(vv.height) : "n/a"}\n` +
-    `visualViewport.offsetTop: ${vv ? Math.round(vv.offsetTop) : "n/a"}\n` +
-    `window.innerHeight: ${innerH}\n` +
     `documentElement.clientHeight: ${layoutH}\n` +
-    `body height: ${Math.round(body.height)}\n` +
+    `body: ${Math.round(body.top)}→${Math.round(body.bottom)} (h${Math.round(body.height)})\n` +
     `--app-h: ${appH}\n` +
-    `tabbar.bottom: ${tabBottom}\n` +
+    `${band("topbar")}\n` +
+    `${band("scroll-indicator")}\n` +
+    `${band("content")}\n` +
+    `${band("bottom-controls")}\n` +
+    `${band("tabbar")}\n` +
     `OVERFLOW below fold: ${overflow}\n` +
     `wide: ${isWide()}`;
 }
