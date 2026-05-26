@@ -25,10 +25,16 @@
 
 This script lives in the ROOT directory (next to the shared
 build_conference_app.py / build_affiliation_map.py) and operates on a
-conference SUBDIRECTORY named on the command line:
+conference SUBDIRECTORY (or several) named on the command line:
 
     python make_app.py cleo2026
     python make_app.py cleo2025
+    python make_app.py cleo2026 cleo2025    # build several, in order
+
+When more than one subdirectory is given, the full build runs once per
+subdirectory in the order listed. A failure in one conference is reported but
+does not stop the others; the run ends with a summary and a non-zero exit code
+if any conference failed.
 
 Each conference subdirectory is expected to contain:
   - exactly one downloader script whose name starts with "fetch"  (e.g.
@@ -163,8 +169,11 @@ def _die(msg: str, code: int = 1) -> "None":
 # -----------------------------------------------------------------------------
 # Command-line parsing: one positional subdirectory + optional flags.
 # -----------------------------------------------------------------------------
-def _parse_args() -> tuple[str, bool, bool]:
-    """Return (subdir_name, force_download, force_process). Exits with usage on error."""
+def _parse_args() -> tuple[list[str], bool, bool]:
+    """Return (subdir_names, force_download, force_process). Exits with usage on error.
+
+    One or more conference subdirectories may be named; they are built in the
+    order given (see main(), which loops over them)."""
     argv = sys.argv[1:]
     positionals = [a for a in argv if not a.startswith("-")]
     flags = [a for a in argv if a.startswith("-")]
@@ -188,11 +197,12 @@ def _parse_args() -> tuple[str, bool, bool]:
                  "Use --force-download / --no-force-download / "
                  "--force-process / --no-force-process.")
 
-    if len(positionals) != 1:
-        _die("expected exactly one conference subdirectory argument, e.g.\n"
+    if len(positionals) < 1:
+        _die("expected at least one conference subdirectory argument, e.g.\n"
              "    python make_app.py cleo2026\n"
+             "    python make_app.py cleo2026 cleo2025\n"
              f"(got {positionals!r}).")
-    return positionals[0], force, force_proc
+    return positionals, force, force_proc
 
 
 # -----------------------------------------------------------------------------
@@ -417,8 +427,12 @@ def _import_module(path: Path, mod_name: str):
 # -----------------------------------------------------------------------------
 # Main
 # -----------------------------------------------------------------------------
-def main() -> "None":
-    subdir_name, force_download, force_process = _parse_args()
+def _build_one(subdir_name: str, force_download: bool, force_process: bool) -> "None":
+    """Build a single conference's app for the subdirectory `subdir_name`.
+
+    This is the per-conference body; main() calls it once per subdirectory named
+    on the command line. Step labels below remain "Step N/5" for each individual
+    conference's build."""
     # Let the (possibly CLI-overridden) value drive the step-3 cache check below,
     # which reads the module-level FORCE_PROCESS.
     global FORCE_PROCESS
@@ -431,10 +445,6 @@ def main() -> "None":
     # absolute path can't wander off).
     if ROOT not in subdir.parents and subdir != ROOT:
         _die(f"{subdir_name!r} does not resolve to a subdirectory of {ROOT}.")
-
-    if not BUILDER.exists():
-        _die(f"builder not found: {BUILDER} "
-             "(expected build_conference_app.py in the root directory)")
 
     data_dir = subdir / DATA_DIRNAME
     req_name = _requirements_name(subdir.name)
@@ -614,6 +624,44 @@ def main() -> "None":
             shutil.move(str(backup_json), str(root_json))
 
     print(f"[make] DONE -> {final_html}", flush=True)
+
+
+def main() -> "None":
+    subdir_names, force_download, force_process = _parse_args()
+
+    if not BUILDER.exists():
+        _die(f"builder not found: {BUILDER} "
+             "(expected build_conference_app.py in the root directory)")
+
+    if len(subdir_names) == 1:
+        _build_one(subdir_names[0], force_download, force_process)
+        return
+
+    # Multiple subdirectories: build each in turn. One conference's failure
+    # (via _die -> SystemExit) would abort the whole run, so catch SystemExit
+    # per conference, keep going, and report a summary at the end.
+    print(f"[make] ===== building {len(subdir_names)} conferences: "
+          f"{', '.join(subdir_names)} =====", flush=True)
+    failures: list[tuple[str, str]] = []
+    for i, name in enumerate(subdir_names, 1):
+        print(f"[make] ===== conference {i}/{len(subdir_names)}: "
+              f"{name} =====", flush=True)
+        try:
+            _build_one(name, force_download, force_process)
+        except SystemExit as e:
+            # _die() raises SystemExit after printing its own ERROR line.
+            failures.append((name, str(e.code)))
+            print(f"[make] ===== {name} FAILED — continuing with the rest "
+                  "=====", flush=True)
+        print(flush=True)
+
+    built = len(subdir_names) - len(failures)
+    print(f"[make] ===== summary: {built}/{len(subdir_names)} built "
+          "successfully =====", flush=True)
+    if failures:
+        for name, _code in failures:
+            print(f"[make]   FAILED: {name}", flush=True)
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
