@@ -125,11 +125,9 @@ html {
 body {
   
   position: fixed;
-  top: 0; left: 0; right: 0;
+  top: 0; left: 0; right: 0; bottom: 0;
   
-  height: 100vh;
-  height: 100dvh;
-  height: var(--app-h, 100dvh);
+  max-height: var(--app-h, 100dvh);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -2915,11 +2913,11 @@ function rebuildSearchResults() {
   wrap.innerHTML = "";
   const raw = (state.searchQuery || "").trim();
 
-  if (raw.toUpperCase() === "DEBUG") {
+  if (raw.toUpperCase() === "DEBUG TFCA") {
     const on = toggleDebugOverlay();
     wrap.appendChild(el("p", { class: "empty" },
       on ? "Debug overlay ON. It shows live viewport heights at the top-left. "
-         + "Type DEBUG again (or reload) to turn it off."
+         + "Type DEBUG TFCA again (or reload) to turn it off."
          : "Debug overlay OFF."));
     return;
   }
@@ -4882,6 +4880,8 @@ function syncAppHeight() {
     const layoutH = document.documentElement.clientHeight || 0;
     const visualH = vv ? vv.height : window.innerHeight;
     let h = layoutH > 0 ? Math.min(visualH, layoutH) : visualH;
+
+    h = Math.ceil(h);
     if (h > 0) document.documentElement.style.setProperty("--app-h", h + "px");
   });
 }
