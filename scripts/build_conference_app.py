@@ -1330,9 +1330,7 @@ button {
   position: fixed; top: 0; left: 0; right: 0;
   height: calc(var(--top-h) + var(--safe-top));
   padding-top: var(--safe-top);
-  background: rgba(246,246,244,.92);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: rgb(246,246,244);
   border-bottom: 1px solid var(--line);
   /* Three columns with EQUAL side tracks so the centered title sits at the
      true center of the bar regardless of what's in the side slots (the back
@@ -1346,7 +1344,7 @@ button {
   z-index: 30;
 }
 @media (prefers-color-scheme: dark) {
-  #topbar { background: rgba(17,17,17,.92); }
+  #topbar { background: rgb(17,17,17); }
 }
 #back-btn {
   height: var(--top-h); padding: 0 14px;
@@ -1399,7 +1397,17 @@ body[data-active-tab="me"] #back-btn[hidden] ~ #page-title {
   /* Left/right gutter is whitespace — shrink it with small text (--sp),
      capped at default for large text. Top/bottom stay fixed. */
   padding: 8px calc(12px * var(--sp)) 24px;
+  /* min-height fills the viewport below the chrome. The vh line is a fallback
+     for browsers without dynamic-viewport units; the dvh line (which they then
+     override with) tracks the CURRENT viewport as a mobile browser's address
+     bar shows/hides. Without dvh, vh resolves to the LARGE (toolbar-hidden)
+     height, so while the toolbar is visible #content is over-tall and the
+     fixed bottom bars can momentarily anchor to a transient viewport bottom
+     during Firefox's toolbar animation — the "bar floats up until you scroll"
+     glitch. dvh keeps #content and the fixed bars resolving against the same
+     settled frame. */
   min-height: calc(100vh - var(--top-h) - var(--bot-h) - var(--tab-h));
+  min-height: calc(100dvh - var(--top-h) - var(--bot-h) - var(--tab-h));
 }
 
 /* SVG overlay for the connector trees — the Me-tab session→talk tree
@@ -1862,15 +1870,10 @@ body[data-active-view="session-detail"] .bubble[data-kind="talk"],
 .detail-head.clr-gold    { background: var(--c-gold-bg);    border-left-color: var(--c-gold-fg); }
 .detail-head.clr-orange  { background: var(--c-orange-bg);  border-left-color: var(--c-orange-fg); }
 
-.dh-id {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: calc(11px * var(--fs)); font-weight: 700;
-  letter-spacing: .04em; opacity: .85;
-  margin-bottom: 4px;
-}
-/* The session id now rides inline on the type/topic meta row (it no longer
-   gets its own line above the title in Session detail). Render it as a small
-   monospace chip so it still reads as an identifier label. */
+/* The session/talk id rides inline on the meta row (it no longer gets its own
+   line above the title in either detail header — see buildSessionHead and
+   renderTalkDetail). Render it as a small monospace chip so it still reads as
+   an identifier label. */
 .dh-id-chip {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: calc(11px * var(--fs)); font-weight: 700;
@@ -2260,16 +2263,14 @@ body.has-indicator #scroll-indicator { display: flex; }
   bottom: calc(var(--tab-h) + var(--safe-bottom));
   left: 0; right: 0;
   height: var(--bot-h);
-  background: rgba(246,246,244,.92);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: rgb(246,246,244);
   border-top: 1px solid var(--line);
   display: flex; align-items: center; justify-content: center;
   font-size: calc(13px * var(--fs)); color: var(--muted);
   z-index: 20;
 }
 @media (prefers-color-scheme: dark) {
-  #bottom-controls { background: rgba(17,17,17,.92); }
+  #bottom-controls { background: rgb(17,17,17); }
 }
 #bottom-controls[hidden] { display: none !important; }
 #bottom-controls label {
@@ -2526,9 +2527,7 @@ body.has-indicator #scroll-indicator { display: flex; }
     padding-top: var(--safe-top);
     padding-left: 14px; padding-right: 8px;
     display: flex; align-items: center; gap: 8px;
-    background: rgba(246,246,244,.92);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
+    background: rgb(246,246,244);
     border-bottom: 1px solid var(--line);
   }
   #me-pane-header .me-pane-title {
@@ -2621,7 +2620,7 @@ body.has-indicator #scroll-indicator { display: flex; }
   }
 }
 @media (prefers-color-scheme: dark) and __WIDE_QUERY__ {
-  #me-pane-header { background: rgba(17,17,17,.92); }
+  #me-pane-header { background: rgb(17,17,17); }
 }
 /* On narrow screens neither the Me pane nor its resizer/tab bar
    participate in layout — Me is a normal bottom tab there. */
@@ -3952,8 +3951,15 @@ function renderTalkDetail(c, tid) {
   const added = state.schedule.includes(t.id);
 
   const head = el("section", { class: `detail-head clr-${t.color}` });
-  head.appendChild(el("div", { class: "dh-id" }, t.id));
+  // Title first, then the talk id riding inline on a meta row as a chip —
+  // mirroring Session detail (see buildSessionHead / appendSessionMetaLines
+  // idInline), where the id sits on the meta row after the title rather than
+  // on its own line above it. Reuses the same dh-idmeta / dh-id-chip classes
+  // so the two detail headers read consistently.
   head.appendChild(el("h2", { class: "dh-title" }, displayTitle(t) || "(untitled)"));
+  const idRow = el("div", { class: "dh-meta dh-idmeta" });
+  idRow.appendChild(el("span", { class: "dh-id-chip" }, t.id));
+  head.appendChild(idRow);
   const sd = tsToDate(t.start_ts);
   if (sd) head.appendChild(el("div", { class: "dh-meta" },
     `${dateLabel(sd)} · ${timeRange(t)}${t.location ? " · " + t.location : ""}`));
