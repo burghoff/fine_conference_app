@@ -1348,6 +1348,12 @@ button {
 /* ── Top bar ───────────────────────────────────────────────────────── */
 #topbar {
   flex: 0 0 auto;
+  /* No built-in touch gestures on the chrome bars. They're just buttons; a
+     touch-drag starting on a non-scrollable bar would otherwise fall through
+     to the browser as a page pan and toggle Firefox-Android's address bar
+     (the "drag from the tab/search bar makes it move" symptom). touch-action:
+     none disables drag/pan interpretation here; taps/clicks are unaffected. */
+  touch-action: none;
   height: calc(var(--top-h) + var(--safe-top));
   padding-top: var(--safe-top);
   background: rgb(246,246,244);
@@ -2303,6 +2309,7 @@ body.has-indicator #scroll-indicator { display: flex; }
 /* ── Bottom controls + tab bar ─────────────────────────────────────── */
 #bottom-controls {
   flex: 0 0 auto;
+  touch-action: none;   /* see #topbar — keep bar drags from panning the page */
   height: var(--bot-h);
   background: rgb(246,246,244);
   border-top: 1px solid var(--line);
@@ -2333,6 +2340,7 @@ body.has-indicator #scroll-indicator { display: flex; }
 
 #tabbar {
   flex: 0 0 auto;
+  touch-action: none;   /* see #topbar — drags on the tab bar must not pan/toggle chrome */
   height: calc(var(--tab-h) + var(--safe-bottom));
   padding-bottom: var(--safe-bottom);
   background: var(--surface);
