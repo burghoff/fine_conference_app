@@ -1421,8 +1421,18 @@ body[data-active-tab="me"] #back-btn[hidden] ~ #page-title {
      content size and scroll internally instead of overflowing the column. */
   flex: 1 1 0;
   min-height: 0;
-  overflow-y: auto;
+  /* overflow-y:scroll (not auto) so #content is ALWAYS a scroll container even
+     when its content is shorter than the viewport — e.g. a short talk-detail
+     page. With `auto`, a short page makes #content non-scrollable, so a swipe
+     falls through to the document and Firefox treats it as a page gesture that
+     toggles its toolbar (the "list pages don't move, detail pages do" symptom:
+     long lists scroll #content and absorb the gesture; short details don't).
+     overscroll-behavior:contain keeps the scroll chain from propagating past
+     #content to the page in either direction. Together these keep every swipe
+     inside #content, so the browser chrome isn't engaged by content scrolling. */
+  overflow-y: scroll;
   overflow-x: hidden;
+  overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   /* Left/right gutter is whitespace — shrink it with small text (--sp),
      capped at default for large text. Top/bottom stay fixed. */
