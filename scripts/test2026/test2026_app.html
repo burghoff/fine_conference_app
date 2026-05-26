@@ -121,6 +121,7 @@ body {
   
   height: 100vh;
   height: 100dvh;
+  height: var(--app-h, 100dvh);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -4843,6 +4844,26 @@ document.addEventListener("click", (e) => {
   if (e.target.closest("#types-panel") || e.target.closest("#types-toggle")) return;
   toggleTypesPanel(false);
 }, true);
+
+let _appHRaf = null;
+function syncAppHeight() {
+  if (_appHRaf) return;
+  _appHRaf = requestAnimationFrame(() => {
+    _appHRaf = null;
+    const vv = window.visualViewport;
+    const h = vv ? vv.height : window.innerHeight;
+    if (h > 0) document.documentElement.style.setProperty("--app-h", h + "px");
+  });
+}
+syncAppHeight();
+if (window.visualViewport) {
+  window.visualViewport.addEventListener("resize", syncAppHeight);
+  window.visualViewport.addEventListener("scroll", syncAppHeight);
+}
+window.addEventListener("resize", syncAppHeight);
+window.addEventListener("orientationchange", syncAppHeight);
+
+window.addEventListener("pageshow", syncAppHeight);
 
 let _wasWide = isWide();
 let _resizeTimer = null;
