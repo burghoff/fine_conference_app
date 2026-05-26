@@ -1141,11 +1141,11 @@ body[data-active-view="session-detail"] .bubble[data-kind="talk"],
   border-radius: 1px;
 }
 .schedule-btn::before {              /* horizontal bar */
-  width: calc(var(--sb-d) * 0.42); height: calc(var(--sb-d) * 0.094);
+  width: calc(var(--sb-d) * 0.42); height: calc(var(--sb-d) * 0.066);
   transform: translate(-50%, -50%);
 }
 .schedule-btn::after {               /* vertical bar (plus only) */
-  width: calc(var(--sb-d) * 0.094); height: calc(var(--sb-d) * 0.42);
+  width: calc(var(--sb-d) * 0.066); height: calc(var(--sb-d) * 0.42);
   transform: translate(-50%, -50%);
 }
 /* Scheduled => minus: hide the vertical bar. */
@@ -1180,7 +1180,7 @@ body[data-active-view="session-detail"] .bubble[data-kind="talk"],
 
 /* Settings section below Notes on the Me page. */
 .me-settings {
-  margin: 4px 0 24px;
+  margin: 24px 0 24px;
 }
 /* About is the last block on the page — a little extra room beneath it. */
 .me-about { margin-bottom: 32px; }
@@ -1221,18 +1221,51 @@ body[data-active-view="session-detail"] .bubble[data-kind="talk"],
   color: var(--muted);
 }
 
-.copy-notes-wrap { margin: 12px 0 20px; text-align: center; }
-.copy-notes-btn {
-  display: inline-block;
-  padding: 8px 16px;
-  border-radius: var(--radius);
-  background: var(--surface-2);
-  color: var(--text);
-  font-size: calc(13px * var(--fs)); font-weight: 500;
-  border: 1px solid var(--line);
-  -webkit-tap-highlight-color: var(--accent-soft);
+/* Notes section header laid out as a row: the "NOTES" label on the left, a
+   compact copy-everything control pinned right. The .section-title margins
+   are preserved (the row IS the title element), so the box still sits the
+   same distance below. */
+.notes-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
-.copy-notes-btn:active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+/* The label inside the row must not inherit the row's flex stretching; it
+   keeps the title's letter-spacing/size from .section-title. */
+.notes-head > span:first-child { flex: 0 1 auto; }
+.notes-copy-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  cursor: pointer;
+  /* Reset the uppercase/letter-spacing the .section-title would impose so the
+     little label reads normally, not as a spaced-out caps run. */
+  font-size: calc(11px * var(--fs));
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
+  -webkit-tap-highlight-color: var(--accent-soft);
+  transition: color .12s, border-color .12s, background .12s;
+}
+.notes-copy-all:hover { color: var(--text); }
+.notes-copy-all:active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.notes-copy-ico {
+  display: inline-flex;
+  font-size: calc(13px * var(--fs));   /* sizes the 1em SVG */
+  line-height: 0;
+}
+.notes-copy-label { white-space: nowrap; }
 
 /* Attribution block, inside the About section on the Me page. Center-aligned
    content (the section label above stays left). */
@@ -1275,6 +1308,36 @@ body[data-active-view="session-detail"] .bubble[data-kind="talk"],
   outline: none;
 }
 .search-controls input[type=search]:focus {
+  border-color: var(--accent);
+}
+/* One-tap suggestion bubbles under the search box — exact affiliation /
+   co-author jumps that mirror the clickable short-affiliation pills in the
+   detail views. Sits between the (sticky) input and the results list. */
+.search-suggest {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 2px 4px;
+}
+.search-suggest:empty { display: none; }
+.search-suggest .suggest-bubble {
+  font: inherit;
+  font-size: calc(12px * var(--fs));
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid transparent;
+  padding: 4px 11px;
+  border-radius: 999px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: var(--accent-soft);
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.search-suggest .suggest-bubble:hover,
+.search-suggest .suggest-bubble:active {
   border-color: var(--accent);
 }
 
@@ -1346,11 +1409,11 @@ body[data-active-view="session-detail"] .bubble[data-kind="talk"],
   border-radius: 1px;
 }
 .dh-add::before {                    /* horizontal bar (− and +'s crossbar) */
-  width: calc(var(--dh-d) * 0.42); height: calc(var(--dh-d) * 0.094);
+  width: calc(var(--dh-d) * 0.42); height: calc(var(--dh-d) * 0.066);
   transform: translate(-50%, -50%);
 }
 .dh-add::after {                     /* vertical bar (plus only) */
-  width: calc(var(--dh-d) * 0.094); height: calc(var(--dh-d) * 0.42);
+  width: calc(var(--dh-d) * 0.066); height: calc(var(--dh-d) * 0.42);
   transform: translate(-50%, -50%);
 }
 .dh-add.added::after { display: none; }   /* scheduled => minus */
@@ -3593,6 +3656,204 @@ function recordMatchesPersonName(rec, qName) {
   return false;
 }
 
+/* ---- Search suggestions (affiliation / co-author quick bubbles) ----
+   As the user types, we offer up to a few one-tap bubbles below the box
+   that jump straight to an exact affiliation or author search — the same
+   destinations as the clickable short-affiliation names and author names
+   in the detail views. The pools below are the universe of those exact
+   targets, deduped and each paired with a folded form for matching.
+
+   Built lazily on first use and memoised: the program is fixed, so the
+   set of affiliations and authors never changes during a session. */
+let _suggestPools = null;
+function suggestPools() {
+  if (_suggestPools) return _suggestPools;
+  const affMap  = new Map();   // folded -> display (first form wins)
+  const nameMap = new Map();
+  const addAff = (s) => {
+    const disp = (s || "").trim();
+    if (!disp) return;
+    const f = searchFold(disp);
+    if (f && !affMap.has(f)) affMap.set(f, disp);
+  };
+  const addName = (s) => {
+    const disp = (s || "").trim();
+    if (!disp) return;
+    const f = searchFold(disp);
+    if (f && !nameMap.has(f)) nameMap.set(f, disp);
+  };
+  for (const t of DATA.talks) {
+    (Array.isArray(t.inst_shorts) ? t.inst_shorts : []).forEach(addAff);
+    addAff(t.speaker_aff);
+    addAff(t.last_aff);
+    (Array.isArray(t.authors) ? t.authors : []).forEach(a => addName(a && a.name));
+  }
+  for (const s of DATA.sessions) {
+    (Array.isArray(s.presider_affs_short) ? s.presider_affs_short : []).forEach(addAff);
+  }
+  const toArrAff = (m) => [...m.entries()]
+    .map(([fold, disp]) => ({ fold, disp }))
+    .sort((a, b) => a.disp.localeCompare(b.disp));
+  // Names also carry a parsed {surname, given} so the initials-robust matcher
+  // (shared with co-author search) can run without re-parsing each keystroke.
+  const toArrName = (m) => [...m.entries()]
+    .map(([fold, disp]) => ({ fold, disp, pname: parsePersonName(disp) }))
+    .sort((a, b) => a.disp.localeCompare(b.disp));
+  _suggestPools = { affs: toArrAff(affMap), names: toArrName(nameMap) };
+  return _suggestPools;
+}
+
+/* Surname match for suggestions: equal, OR the typed surname is a prefix of
+   the candidate's AND is at least 3 letters. The 3-letter floor is what keeps
+   "Capas" → "Capasso" working while stopping a short fragment like "Hu" from
+   prefix-matching "Huang"/"Hughes" (a bare 2-letter "Hu" still matches a real
+   surname "Hu" exactly via the equality branch). */
+function _surnameSuggestMatch(qSur, candSur) {
+  if (!qSur || !candSur) return false;
+  if (qSur === candSur) return true;
+  return qSur.length >= 3 && candSur.startsWith(qSur);
+}
+
+/* Does a pooled author name satisfy a typed name query? Surname per the rule
+   above; given names via the SAME initials-tolerant consistency check the
+   co-author search uses (so "Scott Diddams" hits "Scott A. A. Diddams",
+   "Q. Hu" hits "Qing Hu", but "Qing Hu" never hits "Qili Hu"). */
+function _nameSuggestMatch(qName, cand) {
+  if (!qName || !cand || !cand.pname) return false;
+  if (!_surnameSuggestMatch(qName.surname, cand.pname.surname)) return false;
+  return _givenConsistent(qName.given, cand.pname.given);
+}
+
+/* "Still-typing the last name" match: a query like "David B" or "Scott Did"
+   carries a real given token plus a PARTIAL surname. When the given names are
+   consistent, accept a surname that merely STARTS WITH the typed fragment —
+   no 3-letter floor here, because the leading given name already anchors the
+   match (so "David B" → "David Burghoff" without "B" alone matching everyone).
+   Requires at least one given token; a bare partial surname still goes through
+   the stricter _surnameSuggestMatch (3+ letters) instead.
+
+   The candidate MUST itself carry given tokens. Without this, a query whose
+   "given" name is really an affiliation fragment ("BAE S" parses to given
+   "bae" + surname "s") would match a structureless author like "Sukeert ."
+   (surname "sukeert", no givens): the empty candidate given list is a
+   wildcard, so the bogus "bae" given is never contradicted. Demanding the
+   candidate have a given name forces "bae" to actually be checked, which it
+   then fails. Legitimate authors ("David Burghoff") always have a given. */
+function _namePrefixSuggestMatch(qName, cand) {
+  if (!qName || !cand || !cand.pname) return false;
+  if (!qName.given.length || !qName.surname) return false;
+  if (!cand.pname.given.length) return false;
+  const cs = cand.pname.surname;
+  if (!cs || !cs.startsWith(qName.surname)) return false;
+  return _givenConsistent(qName.given, cand.pname.given);
+}
+
+/* How many sessions+talks a tapped pill would actually return — the SAME
+   counts the landing results page computes (affil via _affilHitPredicates,
+   name via recordMatchesPersonName). Pills always carry the full canonical
+   display string, so the count is stable per (mode, disp) and worth caching;
+   it's what we rank the three pills by. */
+const _suggestCountCache = new Map();
+function _suggestionResultCount(disp, mode) {
+  const key = mode + "\u0000" + disp;
+  if (_suggestCountCache.has(key)) return _suggestCountCache.get(key);
+  let n = 0;
+  if (mode === "affil") {
+    const { talkHit, sessHit } = _affilHitPredicates(disp);
+    for (const s of DATA.sessions) if (sessHit(s)) n++;
+    for (const t of DATA.talks) if (talkHit(t)) n++;
+  } else {
+    const qName = parsePersonName(disp);
+    if (qName) {
+      for (const s of DATA.sessions) if (recordMatchesPersonName(s, qName)) n++;
+      for (const t of DATA.talks) if (recordMatchesPersonName(t, qName)) n++;
+    }
+  }
+  _suggestCountCache.set(key, n);
+  return n;
+}
+
+/* Find up to 3 exact-target suggestion pills for the search box.
+
+   Nothing fires until 3 characters are typed.
+
+   AFFILIATIONS match as a literal prefix of the typed text: "UM " → "UM
+   Dearborn"/"UMKC", "Michigan" → "Michigan"/"Michigan State".
+
+   AUTHOR NAMES match through the initials-robust person-name logic shared
+   with co-author search: a partial surname ("Capas" → "Capasso"), a name
+   missing middle initials ("Scott Diddams" → "Scott A. A. Diddams"), or
+   given-name initials ("Q. Hu" → "Qing Hu") all hit, while wrong initials
+   never do ("Qing Hu" ↛ "Qili Hu"). When the query is a SINGLE word, it is
+   additionally tried as a FIRST name — "David" → "David Burghoff", "Fed" →
+   "Federico Capasso" — using the same exact/3+ char-prefix rule as surnames.
+
+   Candidates are gathered from both passes, then the final list is the THREE
+   with the most underlying results, in descending count order (ties keep the
+   earlier/alphabetical encounter). */
+function suggestionsFor(raw, limit = 3) {
+  const q = searchFold((raw || "").trim());
+  if (q.length < 3) return [];          // no pills until 3+ chars
+  const pools = suggestPools();
+  const cand = [];
+  const seen = new Set();               // dedupe by mode+folded display
+  const add = (disp, mode) => {
+    const k = mode + "\u0000" + searchFold(disp);
+    if (seen.has(k)) return;
+    seen.add(k);
+    cand.push({ disp, mode });
+  };
+
+  // Affiliation prefix pass.
+  for (const it of pools.affs) {
+    if (it.fold.startsWith(q)) add(it.disp, "affil");
+  }
+
+  // Author-name pass (initials-robust). Parse the raw query as a person name.
+  const qName = parsePersonName(raw);
+  const singleWord = (raw || "").trim().split(/\s+/).filter(Boolean).length === 1;
+  // Run the name pass when there's either a usable surname (2+ letters) OR a
+  // given name anchoring a partial surname ("David B" — surname "b" alone is
+  // too short, but the leading "David" makes it safe).
+  const hasGiven = !!(qName && qName.given.length);
+  if (qName && qName.surname && (qName.surname.length >= 2 || hasGiven)) {
+    for (const it of pools.names) {
+      // Surname (exact / 3+ prefix) + initials match.
+      if (_nameSuggestMatch(qName, it)) { add(it.disp, "name"); continue; }
+      // Given name + still-typing partial surname ("David B" → David Burghoff).
+      if (_namePrefixSuggestMatch(qName, it)) { add(it.disp, "name"); continue; }
+      // Single-word queries also try the token as a FIRST name.
+      if (singleWord && it.pname && it.pname.given.length &&
+          _surnameSuggestMatch(qName.surname, it.pname.given[0])) {
+        add(it.disp, "name");
+      }
+    }
+  }
+
+  // Rank by how many results each pill yields, most first; keep top `limit`.
+  cand.sort((a, b) =>
+    _suggestionResultCount(b.disp, b.mode) - _suggestionResultCount(a.disp, a.mode));
+  return cand.slice(0, limit);
+}
+
+function renderSuggestions(raw) {
+  const wrap = $("#search-suggest");
+  if (!wrap) return;
+  wrap.innerHTML = "";
+  const sugg = suggestionsFor(raw);
+  if (!sugg.length) return;
+  for (const s of sugg) {
+    wrap.appendChild(el("button", {
+      type: "button",
+      class: "suggest-bubble",
+      title: s.mode === "affil"
+        ? `Search affiliation “${s.disp}”`
+        : `Find sessions & talks by ${s.disp}`,
+      onclick: () => searchFor(s.disp, s.mode),
+    }, s.disp));
+  }
+}
+
 function renderSearch(c) {
   const ctrl = el("section", { class: "search-controls" });
   const input = el("input", {
@@ -3605,15 +3866,30 @@ function renderSearch(c) {
     spellcheck: "false",
   });
   input.value = state.searchQuery || "";
+  // Debounce the (relatively heavy) suggestion + results recompute so a fast
+  // typist triggers it once after they pause rather than on every keystroke.
+  // The query itself is stored and saved IMMEDIATELY so nothing is lost if the
+  // user navigates away before the timer fires; only the rendering waits.
+  let _searchDebounce = null;
+  const SEARCH_DEBOUNCE_MS = 300;
   input.addEventListener("input", () => {
     state.searchQuery = input.value;
     saveState();
-    rebuildSearchResults();
+    clearTimeout(_searchDebounce);
+    _searchDebounce = setTimeout(() => {
+      renderSuggestions(state.searchQuery);
+      rebuildSearchResults();
+    }, SEARCH_DEBOUNCE_MS);
   });
   ctrl.appendChild(input);
 
   c.appendChild(ctrl);
+  // One-tap exact-target bubbles (affiliation / co-author) live just below
+  // the input, outside the results container so rebuildSearchResults never
+  // clears them.
+  c.appendChild(el("div", { id: "search-suggest", class: "search-suggest" }));
   c.appendChild(el("div", { id: "search-results" }));
+  renderSuggestions(input.value);
   rebuildSearchResults();
 }
 
@@ -3876,25 +4152,15 @@ function renderMe(c) {
   }
 
   // General conference notes — not tied to any session/talk. Stored under the
-  // reserved CONFERENCE_NOTES_KEY in state.notes.
+  // reserved CONFERENCE_NOTES_KEY in state.notes. The "Copy all" control in
+  // this section's header exports these PLUS every scheduled session/talk's
+  // notes (see doCopyNotes); the post-copy toast confirms the scope.
   appendNotesBox(c, CONFERENCE_NOTES_KEY, {
     title: "Notes",
     placeholder: "General conference notes…",
     tall: true,
+    copyAll: true,
   });
-
-  // Copy-Notes button — below the general notes. Builds a plain-text export
-  // of every scheduled session (with all its talks) + every standalone
-  // scheduled talk, including each item's stored notes, plus the general
-  // conference notes above.
-  const btnWrap = el("div", { class: "copy-notes-wrap" });
-  const btn = el("button", {
-    class: "copy-notes-btn",
-    type: "button",
-    onclick: () => doCopyNotes(),
-  }, "Copy notes from all talks");
-  btnWrap.appendChild(btn);
-  c.appendChild(btnWrap);
 
   // Settings section (below Notes): a text-size stepper.
   appendSettingsSection(c);
@@ -3912,11 +4178,16 @@ function renderMe(c) {
       rel: "noopener noreferrer",
     }, "The Fine Conference App v0.1"),
     el("br"),
-    "David Burghoff, UT Austin",
+    el("a", {
+      class: "me-attribution-link",
+      href: "https://burghoff.org",
+      target: "_blank",
+      rel: "noopener noreferrer",
+    }, "David Burghoff, UT Austin"),
     el("div", { class: "me-rights" }, [
-      "App MIT licensed",
+      "App: MIT License",
       el("br"),
-      "Data copyrighted by conference and its publishers",
+      "Data: Copyrighted by conference and its publishers",
     ]),
   ]));
   c.appendChild(about);
@@ -3930,7 +4201,7 @@ function renderMe(c) {
 
    Session-level notes are not part of this export — only talk notes
    are. */
-function buildNotesText() {
+function buildNotesText(stats) {
   const ids = scheduledIds();
   const notes = state.notes || {};
 
@@ -3957,6 +4228,8 @@ function buildNotesText() {
   out.push("");
 
   let anyEmitted = false;
+  let talkCount = 0;            // talks whose notes were actually emitted
+  let hasGeneral = false;
 
   // General conference notes (not tied to any session/talk) come first.
   const general = (notes[CONFERENCE_NOTES_KEY] || "").trim();
@@ -3965,6 +4238,7 @@ function buildNotesText() {
     for (const ln of general.split("\n")) out.push(`  ${ln}`);
     out.push("");                                // blank separator
     anyEmitted = true;
+    hasGeneral = true;
   }
 
   for (const t of talks) {
@@ -3974,8 +4248,10 @@ function buildNotesText() {
     for (const ln of note.split("\n")) out.push(`  ${ln}`);
     out.push("");                              // blank separator
     anyEmitted = true;
+    talkCount++;
   }
   if (!anyEmitted) out.push("(No notes yet.)");
+  if (stats) { stats.talkCount = talkCount; stats.hasGeneral = hasGeneral; }
   return out.join("\n");
 }
 
@@ -4005,10 +4281,17 @@ function formatTalkReference(t) {
 }
 
 async function doCopyNotes() {
-  const text = buildNotesText();
+  const stats = {};
+  const text = buildNotesText(stats);
+  // Confirmation conveys the SCOPE (this is why the control needn't spell it
+  // out): general conference notes + however many talk notes were included.
+  const bits = [];
+  if (stats.hasGeneral) bits.push("conference notes");
+  if (stats.talkCount) bits.push(`${stats.talkCount} talk${stats.talkCount === 1 ? "" : "s"}`);
+  const scope = bits.length ? bits.join(" + ") : "no notes yet";
   try {
     await navigator.clipboard.writeText(text);
-    flashToast(`Copied notes (${text.length} chars).`);
+    flashToast(`Copied: ${scope}.`);
   } catch (_) {
     showSyncSheet({
       title: "Copy notes",
@@ -4725,6 +5008,22 @@ function renderTopbarExtras(tab, top) {
       "aria-label": "Copy sync code",
       onclick: doCopy,
     }, "⧉"));
+  } else if (tab !== "me" && canResetTab(tab)) {
+    // Home: collapse back to this tab's default list (pop stack, unexpand,
+    // clear search), keeping the user's place in Sessions/Talks. Sits in the
+    // same top-right corner the Me view uses for its sync buttons. Shown only
+    // when there's something to reset, so it never reads as a dead control.
+    slot.appendChild(el("button", {
+      class: "icon-btn",
+      title: "Reset this tab",
+      "aria-label": "Reset to top of this section",
+      html: '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" '
+          + 'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+          + 'stroke-linejoin="round" aria-hidden="true">'
+          + '<path d="M3 11.5 12 4l9 7.5"></path>'
+          + '<path d="M5.5 9.7V20h13V9.7"></path></svg>',
+      onclick: resetTab,
+    }));
   }
 }
 
@@ -5067,7 +5366,35 @@ function appendNotesBox(container, itemId, opts) {
   // heading via its own class, so it doesn't depend on view-scoping CSS.
   const titleClass = opts.tall ? "section-title notes-title--bright"
                                : "section-title";
-  section.appendChild(el("div", { class: titleClass }, title));
+  // When asked, the heading becomes a row: the label on the left and a compact
+  // copy-everything control (icon + "Copy all") on the right. The control sits
+  // OVER the whole Notes section rather than glued to the box, signalling it
+  // acts on more than the visible text; the post-copy toast names the scope.
+  if (opts.copyAll) {
+    const head = el("div", { class: titleClass + " notes-head" });
+    head.appendChild(el("span", {}, title));
+    const copyBtn = el("button", {
+      class: "notes-copy-all",
+      type: "button",
+      title: "Copy all notes — these plus every talk's notes",
+      "aria-label": "Copy all notes, including every talk's notes",
+      onclick: () => doCopyNotes(),
+    }, [
+      // Two-overlapping-sheets copy glyph, drawn as inline SVG so it inherits
+      // currentColor and scales with the button's font size.
+      el("span", { class: "notes-copy-ico", html:
+        '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" '
+        + 'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+        + 'stroke-linejoin="round" aria-hidden="true">'
+        + '<rect x="9" y="9" width="11" height="11" rx="2"></rect>'
+        + '<path d="M5 15V5a2 2 0 0 1 2-2h10"></path></svg>' }),
+      el("span", { class: "notes-copy-label" }, "Copy all"),
+    ]);
+    head.appendChild(copyBtn);
+    section.appendChild(head);
+  } else {
+    section.appendChild(el("div", { class: titleClass }, title));
+  }
 
   const ta = el("textarea", {
     class: opts.tall ? "notes-textarea notes-textarea--tall" : "notes-textarea",
@@ -5950,6 +6277,119 @@ function back() {
   }
 }
 
+/* Is there anything for the Home/reset control to undo on this tab? True when
+   the tab is drilled into a sub-view (stack deeper than its root), when any
+   session is expanded inline, or — on Search — when a query is typed. Scroll
+   position alone does NOT count: Home preserves your place in the list, so a
+   merely-scrolled root list has nothing to reset. Me is excluded (it has no
+   Home control; its corner holds the sync buttons). */
+function canResetTab(tab) {
+  if (tab === "me") return false;
+  const stack = state.tabStacks[tab];
+  if (stack && stack.length > 1) return true;
+  if ((state.expandedSessions || []).length) return true;
+  if (tab === "search" && (state.searchQuery || "").trim()) return true;
+  return false;
+}
+
+/* Capture the list item currently anchoring the viewport: the first
+   .bubble whose top is at/below the scroller's top edge, plus how far below
+   that edge it sits. Returned so resetTab can put the SAME item back in the
+   same spot after collapsing changes the list's height above it. Null when
+   no bubble is in view (e.g. an empty list). */
+function captureListAnchor() {
+  const scroller = isWide() ? $("#content") : null;
+  const topEdge = scroller ? scroller.getBoundingClientRect().top : 0;
+  const bubbles = (scroller || document).querySelectorAll(".bubble[data-bubble-id]");
+  let best = null;
+  for (const b of bubbles) {
+    const r = b.getBoundingClientRect();
+    // First bubble whose bottom is still below the top edge — i.e. the
+    // topmost one at least partially in view.
+    if (r.bottom > topEdge + 1) {
+      best = {
+        id:        b.getAttribute("data-bubble-id"),
+        sessionId: b.getAttribute("data-session-id") || "",
+        offset:    r.top - topEdge,   // px from scroller top to the bubble top
+      };
+      break;
+    }
+  }
+  return best;
+}
+
+/* Re-scroll the freshly-rendered list so `anchor` (from captureListAnchor)
+   sits at the same offset from the top it had before. Falls back to the
+   anchor's parent SESSION bubble when the original item was a talk inside a
+   now-collapsed session (so the talk bubble no longer exists in the list).
+   No-op when the anchor or its target can't be found. */
+function restoreListAnchor(anchor) {
+  if (!anchor) return;
+  const find = (id) =>
+    id ? $(`#content .bubble[data-bubble-id="${cssEsc(id)}"]`)
+         || document.querySelector(`.bubble[data-bubble-id="${cssEsc(id)}"]`)
+       : null;
+  let target = find(anchor.id);
+  if (!target && anchor.sessionId) target = find(anchor.sessionId);
+  if (!target) return;
+  const scroller = isWide() ? $("#content") : null;
+  const topEdge = scroller ? scroller.getBoundingClientRect().top : 0;
+  const cur = target.getBoundingClientRect().top - topEdge;
+  // Scroll by the delta between where the anchor is now and where we want it.
+  const delta = cur - anchor.offset;
+  setLeftScrollTop(leftScrollTop() + delta);
+}
+
+/* CSS.escape shim for attribute-selector safety (ids here are simple, but
+   defensive against odd characters). */
+function cssEsc(s) {
+  if (window.CSS && CSS.escape) return CSS.escape(s);
+  return String(s).replace(/["\\\]]/g, "\\$&");
+}
+
+/* Home: reset the active tab to its default state — pop its nav stack to the
+   root list, collapse every inline-expanded session, and (on Search) clear
+   the typed query — while KEEPING the user's place in Sessions/Talks lists by
+   re-anchoring on the item that was at the top of the viewport. On Search the
+   list is cleared with the query, so it simply returns to the top. */
+function resetTab() {
+  const tab = state.activeTab;
+  if (!canResetTab(tab)) return;
+
+  // Anchor preservation only applies when we'll land back on THIS tab's list
+  // and the list isn't about to change out from under us (Search clears its
+  // query, so its list is replaced — go to top there). We also can't anchor
+  // if we're currently in a sub-view (the bubbles in view belong to a detail,
+  // not the root list), so only capture when already on the root list.
+  const onRootList = state.tabStacks[tab].length === 1;
+  const willKeepList = (tab === "sessions" || tab === "talks");
+  const anchor = (onRootList && willKeepList) ? captureListAnchor() : null;
+
+  // Pop to root.
+  const stack = state.tabStacks[tab];
+  stack.length = 1;
+  // Collapse all inline expansions (global state, shared across tabs).
+  if ((state.expandedSessions || []).length) state.expandedSessions = [];
+  // Clear the search query when resetting Search.
+  if (tab === "search") state.searchQuery = "";
+
+  // The root entry's saved scrollY would otherwise yank us elsewhere; pin it
+  // to the current position so render()'s restore doesn't fight the re-anchor.
+  stack[0].scrollY = leftScrollTop();
+
+  saveState();
+  render();
+
+  // After the DOM flushes (render restores scroll in a double rAF; do the
+  // re-anchor after that so our scroll set wins).
+  if (anchor) {
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      restoreListAnchor(anchor);
+      updateScrollIndicator();
+    }));
+  }
+}
+
 function switchTab(tab) {
   // On wide screens Me is permanently shown in the right pane, so the
   // left tab bar can't switch to it (the button is hidden anyway — this
@@ -6091,6 +6531,15 @@ render();
    Show past is OFF). We only re-render on top-level list views to
    avoid disrupting whatever the user is reading in a detail view. */
 setInterval(() => {
+  // Don't re-render while the user is typing. render() rebuilds the list
+  // DOM wholesale; if focus is in an input that lives inside the list view
+  // (e.g. the Search box), the focused node gets destroyed and replaced,
+  // dropping the caret mid-keystroke. Skip this tick when an editable
+  // element is focused — the "Now" marker just catches up on the next one.
+  const ae = document.activeElement;
+  if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" ||
+             ae.isContentEditable)) return;
+
   const tab = state.activeTab;
   const stack = state.tabStacks[tab];
   const top = stack[stack.length - 1];

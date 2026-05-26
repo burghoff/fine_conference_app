@@ -236,6 +236,21 @@ def _anchor_matches(needle: str, norm: str) -> bool:
     return needle in norm
 
 
+# Separator between a state-university name and its campus/branch qualifier.
+# In the source data the same campus shows up joined several different ways:
+#   "University of California, Irvine"   (comma)
+#   "University of California Irvine"     (plain space)
+#   "University of California at Irvine"  (the word "at")
+#   "University of California - Irvine"   (spaced hyphen; normalize() has
+#                                          already folded all dash glyphs to "-")
+# A campus anchor written with this separator matches every variant with ONE
+# pattern, so a stray punctuation form can't slip past a specific campus anchor
+# and fall through to the bare flagship label. Anchored with leading/trailing
+# spaces so it always consumes at least one separator character (never matches
+# an empty gap, which would let "californiairvine"-style runs through).
+_UC_SEP = r'(?:\s*,\s*|\s+at\s+|\s*-\s*|\s+)'
+
+
 # ---------------------------------------------------------------------------
 # Anchor patterns: ordered list of (needle_lowercase, canonical_short).
 #
@@ -352,40 +367,43 @@ ANCHORS: list[tuple[str, str]] = [
     ('nyu', 'NYU'),
     ('george washington', 'George Washington'),
     ('american university', 'American U'),
+    # Saint Louis University (the private Jesuit university), distinct from
+    # University of Missouri-St. Louis (UMSL). Anchor on the full institution
+    # name (not the bare city "St. Louis") so it can't fire on address lines.
+    ('saint louis university', 'SLU'),
+    ('st. louis university', 'SLU'),
+    ('st louis university', 'SLU'),
 
     # ---- UC system (specific campus before the generic word) --------------
-    ('university of california, berkeley', 'UC Berkeley'),
-    ('university of california berkeley', 'UC Berkeley'),
+    # The campus qualifier may be joined to "california" by a comma, the word
+    # "at", a spaced hyphen ("University of California - Irvine"), or just a
+    # space. _UC_SEP captures all of those so each campus needs only ONE anchor
+    # and a stray separator variant can't fall through to the bare "UC" form.
+    (r're:university of california' + _UC_SEP + r'berkeley', 'UC Berkeley'),
     ('uc berkeley', 'UC Berkeley'),
-    ('university of california, irvine', 'UC Irvine'),
-    ('university of california at irvine', 'UC Irvine'),
-    ('university of california irvine', 'UC Irvine'),
+    (r're:university of california' + _UC_SEP + r'irvine', 'UC Irvine'),
     ('uc irvine', 'UC Irvine'),
-    ('university of california, riverside', 'UC Riverside'),
-    ('university of california riverside', 'UC Riverside'),
+    (r're:university of california' + _UC_SEP + r'riverside', 'UC Riverside'),
     ('uc riverside', 'UC Riverside'),
-    ('university of california, san diego', 'UC San Diego'),
-    ('university of california san diego', 'UC San Diego'),
+    (r're:university of california' + _UC_SEP + r'san diego', 'UC San Diego'),
     ('uc san diego', 'UC San Diego'),
-    ('university of california, santa barbara', 'UC Santa Barbara'),
-    ('university of california at santa barbara', 'UC Santa Barbara'),
-    ('university of california santa barbara', 'UC Santa Barbara'),
+    # La Jolla is UC San Diego's town; some strings give only the city
+    # ("University of California, La Jolla") with no "San Diego" token, so pin
+    # it explicitly before the bare "UC" fallback.
+    (r're:university of california' + _UC_SEP + r'la jolla', 'UC San Diego'),
+    (r're:university of california' + _UC_SEP + r'santa barbara', 'UC Santa Barbara'),
     ('uc santa barbara', 'UC Santa Barbara'),
     ('ucsb', 'UC Santa Barbara'),
-    ('university of california, davis', 'UC Davis'),
-    ('university of california at davis', 'UC Davis'),
-    ('university of california davis', 'UC Davis'),
+    (r're:university of california' + _UC_SEP + r'davis', 'UC Davis'),
     ('uc davis', 'UC Davis'),
-    ('university of california, los angeles', 'UCLA'),
-    ('university of california los angeles', 'UCLA'),
     # Tolerate the 'Califonia' (missing-r) misspelling seen in the input,
-    # consistent with the typo-absorbing philosophy. Regex covers the comma
-    # and no-comma forms; must precede the bare "university of california"
-    # fallback (which never matches anyway since it's spelled correctly there).
-    ('re:university of califo[r]?nia,?\\s*los angeles', 'UCLA'),
+    # consistent with the typo-absorbing philosophy. Separator-tolerant like
+    # the other campuses; must precede the bare "university of california"
+    # fallback.
+    (r're:university of califo[r]?nia' + _UC_SEP + r'los angeles', 'UCLA'),
     ('ucla', 'UCLA'),
-    ('university of california, merced', 'UC Merced'),
-    ('university of california, santa cruz', 'UC Santa Cruz'),
+    (r're:university of california' + _UC_SEP + r'merced', 'UC Merced'),
+    (r're:university of california' + _UC_SEP + r'santa cruz', 'UC Santa Cruz'),
     ('university of california', 'UC'),  # fallback bare form
     ('university of southern california', 'USC'),
     (' usc,', 'USC'),
@@ -393,7 +411,11 @@ ANCHORS: list[tuple[str, str]] = [
     # ---- Other big US state schools ---------------------------------------
     # UMBC has irregular ground-truth treatment; most variants → UMBC, but
     # specific RAW_OVERRIDES preserve the verbatim/Maryland exceptions.
-    ('university of maryland baltimore county', 'UMBC'),
+    # Separator-tolerant: "Baltimore County" (and the bare "Baltimore" form,
+    # which in this dataset also refers to UMBC, not the UMB medical campus) is
+    # joined to "maryland" by a space OR a comma. Must precede the bare
+    # "university of maryland" anchor so it doesn't degrade to "Maryland".
+    (r're:university of maryland' + _UC_SEP + r'baltimore', 'UMBC'),
     ('umbc', 'UMBC'),
     ('laboratory for physical sciences, college park', 'LPS Maryland'),
     ('laboratory for telecommunication science', 'LPS Maryland'),
@@ -403,18 +425,25 @@ ANCHORS: list[tuple[str, str]] = [
     ('institute for research in electronics', 'Maryland'),
     ('institute for physical science and technology', 'Maryland'),
     ('university of maryland', 'Maryland'),
+    # University of Michigan-Dearborn and -Flint are separate campuses, not the
+    # Ann Arbor flagship. Separator-tolerant and listed before the bare
+    # "university of michigan" anchor so they don't degrade to "Michigan".
+    (r're:university of michigan' + _UC_SEP + r'dearborn', 'UM-Dearborn'),
+    (r're:university of michigan' + _UC_SEP + r'flint', 'UM-Flint'),
     ('university of michigan', 'Michigan'),
-    ('university of texas at austin', 'UT Austin'),
+    # UT Austin campus. Separator-tolerant (_UC_SEP covers "at"/comma/space/
+    # hyphen), so "...at Austin", "..., Austin", and the plain "Texas Austin"
+    # form all land here instead of the fallback's "U Texas Austin".
+    (r're:university of texas' + _UC_SEP + r'austin', 'UT Austin'),
     ('ut austin', 'UT Austin'),
-    ('the university of texas at austin', 'UT Austin'),
-    # Comma-form variants: "University of Texas, Austin" (same campus, just
-    # written with a comma instead of "at"). Regex tolerates the comma +
-    # whitespace. Must precede any generic "University of Texas" fallback so
-    # these don't degrade to a campus-less "U Texas".
-    ('re:university of texas,\\s*austin', 'UT Austin'),
-    ('university of texas at dallas', 'UT Dallas'),
-    ('re:university of texas,\\s*dallas', 'UT Dallas'),
+    # UT Dallas campus — listed before the bare flagship fallback below.
+    (r're:university of texas' + _UC_SEP + r'dallas', 'UT Dallas'),
     ('ut dallas', 'UT Dallas'),
+    # Bare "University of Texas" with NO campus qualifier resolves to the
+    # flagship (UT Austin). Only Austin and Dallas campuses appear in the data,
+    # and both are caught by the campus anchors above, so this generic form is
+    # safe here as a last resort for the Texas system.
+    ('university of texas', 'UT Austin'),
     ('university of central florida', 'UCF'),
     ('ucf,', 'UCF'),
     ('creol', 'UCF'),
@@ -425,15 +454,26 @@ ANCHORS: list[tuple[str, str]] = [
     ('arizona state university', 'ASU'),
     ('asu,', 'ASU'),
     ('northern arizona university', 'Northern Arizona University'),
-    ('university of colorado boulder', 'CU Boulder'),
+    (r're:university of colorado' + _UC_SEP + r'boulder', 'CU Boulder'),
     ('cu boulder', 'CU Boulder'),
-    ('university of colorado, boulder', 'CU Boulder'),
+    # CU Denver and CU Colorado Springs are separate campuses, not the Boulder
+    # flagship. Separator-tolerant, before the bare "university of colorado".
+    (r're:university of colorado' + _UC_SEP + r'denver', 'CU Denver'),
+    (r're:university of colorado' + _UC_SEP + r'colorado springs', 'UCCS'),
     ('university of colorado', 'Colorado'),
     ('colorado school of mines', 'Colorado School of Mines'),
     ('university of washington', 'UW Seattle'),
     ('uw seattle', 'UW Seattle'),
-    ('university of wisconsin', 'UW-Madison'),
-    ('uw-madison', 'UW-Madison'),
+    # UW-Milwaukee is a separate campus; pin it before the flagship anchors so
+    # it can't be swallowed by the bare "university of wisconsin" form below.
+    (r're:university of wisconsin' + _UC_SEP + r'milwaukee', 'UW-Milwaukee'),
+    # Flagship Madison campus → "Wisconsin" (preferred over "UW-Madison").
+    # Covers the explicit "-Madison" form and the bare "University of Wisconsin"
+    # (no other campus besides Milwaukee appears in the data, and that's caught
+    # above), so the campus-less form resolves to the flagship.
+    (r're:university of wisconsin' + _UC_SEP + r'madison', 'Wisconsin'),
+    ('university of wisconsin', 'Wisconsin'),
+    ('uw-madison', 'Wisconsin'),
     ('university of illinois urbana champaign', 'UIUC'),
     ('university of illinois at urbana-champaign', 'UIUC'),
     ('university of illinois urbana-champaign', 'UIUC'),
@@ -490,12 +530,24 @@ ANCHORS: list[tuple[str, str]] = [
     ('university of houston', 'Houston'),
     ('university of oklahoma', 'U Oklahoma'),
     ('university of arkansas', 'Arkansas'),
+    # UAB (Birmingham) and UAH (Huntsville) are separate campuses, not the
+    # Tuscaloosa flagship. They're joined by "at"/"in"/comma/hyphen, so allow
+    # "in" in addition to the usual _UC_SEP separators. Listed before the bare
+    # "university of alabama" flagship anchor.
+    (r're:university of alabama(?:' + _UC_SEP + r'|\s+in\s+)birmingham', 'UAB'),
+    (r're:university of alabama(?:' + _UC_SEP + r'|\s+in\s+)huntsville', 'UAH'),
     ('university of alabama', 'U Alabama'),
     ('auburn', 'Auburn'),
     ('clemson', 'Clemson'),
+    # UT Chattanooga is a separate campus from the Knoxville flagship.
+    (r're:university of tennessee' + _UC_SEP + r'chattanooga', 'UT Chattanooga'),
     ('university of tennessee', 'U Tennessee'),
     ('university of louisiana at lafayette', 'U Louisiana Lafayette'),
     ('university of louisiana lafayette', 'U Louisiana Lafayette'),
+    # University of Missouri-Kansas City (UMKC) and -St. Louis (UMSL) are
+    # separate campuses from the Columbia flagship.
+    (r're:university of missouri' + _UC_SEP + r'kansas city', 'UMKC'),
+    (r're:university of missouri' + _UC_SEP + r'st\.? louis', 'UMSL'),
     ('university of missouri', 'Missouri'),
     ('university of iowa', 'Iowa'),
     ('university of utah', 'Utah'),
@@ -510,8 +562,16 @@ ANCHORS: list[tuple[str, str]] = [
     ('unm,', 'UNM'),
     ('umass amherst', 'UMass Amherst'),
     ('umass lowell', 'UMass Lowell'),
-    ('university of massachusetts amherst', 'UMass Amherst'),
-    ('university of massachusetts lowell', 'UMass Lowell'),
+    ('umass boston', 'UMass Boston'),
+    ('umass dartmouth', 'UMass Dartmouth'),
+    # Separator-tolerant campus anchors (comma / space / spaced-hyphen forms all
+    # appear, e.g. "University of Massachusetts-Amherst"). Each must precede the
+    # bare "university of massachusetts" flagship so a hyphen/comma variant
+    # can't degrade to plain "UMass".
+    (r're:university of massachusetts' + _UC_SEP + r'amherst', 'UMass Amherst'),
+    (r're:university of massachusetts' + _UC_SEP + r'lowell', 'UMass Lowell'),
+    (r're:university of massachusetts' + _UC_SEP + r'boston', 'UMass Boston'),
+    (r're:university of massachusetts' + _UC_SEP + r'dartmouth', 'UMass Dartmouth'),
     ('university of massachusetts', 'UMass'),
     ('umass', 'UMass'),
     ('stony brook', 'SUNY Stony Brook'),
@@ -569,6 +629,9 @@ ANCHORS: list[tuple[str, str]] = [
 
     # ---- US "private mid-major" + research orgs ---------------------------
     ('boeing', 'Boeing'),
+    # BAE Systems, incl. the "SMS" and spelled-out "Space and Missions Systems"
+    # (Boulder, CO) sub-unit forms, all fold to the parent "BAE Systems".
+    ('bae systems', 'BAE Systems'),
     ('apple inc', 'Apple'),
     ('apple,', 'Apple'),
     ('google', 'Google'),
@@ -636,6 +699,11 @@ ANCHORS: list[tuple[str, str]] = [
     ('vector atomic', 'Vector Atomic'),
     ('cablelabs', 'Cablelabs'),
     ('hamamatsu', 'Hamamatsu'),
+    # Chi 3 Optics (Boulder, CO) shows up as "Chi 3 Optics", "Chi-3 Optics",
+    # and "Chi3 Optics LLC". The hyphen is already folded to "-" by normalize(),
+    # so one regex tolerating an optional space/hyphen between "chi" and "3"
+    # catches all forms; canonical label uses the spaced form.
+    (r're:chi[\s-]?3 optics', 'Chi 3 Optics'),
     ('center for microsystem technology', 'imec'),
     ('imec', 'imec'),
 
