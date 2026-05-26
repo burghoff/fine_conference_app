@@ -4905,9 +4905,7 @@ function updateDebugOverlay() {
   const tabRect = tab ? tab.getBoundingClientRect() : null;
   const appH = getComputedStyle(document.documentElement)
                  .getPropertyValue("--app-h").trim() || "(unset)";
-  const innerH = window.innerHeight;
   const layoutH = document.documentElement.clientHeight;
-  const tabBottom = tabRect ? Math.round(tabRect.bottom) : "n/a";
 
   const overflow = tabRect ? Math.round(tabRect.bottom - layoutH) : "n/a";
 
