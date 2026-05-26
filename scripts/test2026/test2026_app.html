@@ -191,8 +191,10 @@ body[data-active-tab="me"] #back-btn[hidden] ~ #page-title {
   
   flex: 1 1 0;
   min-height: 0;
-  overflow-y: auto;
+  
+  overflow-y: scroll;
   overflow-x: hidden;
+  overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   
   padding: 8px calc(12px * var(--sp)) 24px;
