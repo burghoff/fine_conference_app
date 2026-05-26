@@ -1324,16 +1324,18 @@ html, body {
   text-size-adjust: 100%;
 }
 body {
-  /* App-shell flex column: the body is exactly the (dynamic) viewport tall and
-     never scrolls itself — only #content (the flexing middle) scrolls. This is
-     the key to stable bottom chrome on mobile: because the window/body doesn't
-     scroll, the browser's dynamic toolbar has no scroll to react to, so the
-     fixed-feeling top/bottom bars (now flex children, not position:fixed)
-     don't get repositioned mid-scroll. 100dvh tracks the live viewport; the
-     100vh line is a fallback for engines without dynamic units. The wide
-     (two-pane) layout overrides this back to its own fixed-position scheme. */
+  /* Height precedence (last valid wins): 100vh fallback → 100dvh for engines
+     with dynamic units → --app-h, which JS pins to visualViewport.height (the
+     ACTUALLY-visible height) and keeps updated. The JS pin is needed because
+     some Firefox-Android versions resolve 100dvh to a fixed (toolbar-hidden)
+     value and don't reflow it as the address bar shows/hides, leaving the
+     flex column taller than the visible area — so the bottom chrome parks
+     below the fold with a gap under the tab bar until a scroll forces a
+     recompute. --app-h defaults to 100dvh so first paint (before JS) and
+     no-JS are still correct. See syncAppHeight(). */
   height: 100vh;
   height: 100dvh;
+  height: var(--app-h, 100dvh);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -7239,6 +7241,36 @@ document.addEventListener("click", (e) => {
 
 // Re-render when the viewport crosses the wide/narrow breakpoint so the
 // Me pane appears/disappears and the left column re-flows. Also redraw
+/* Pin the app-shell column to the ACTUALLY-visible viewport height.
+   visualViewport.height excludes the browser's dynamic toolbar and updates as
+   it shows/hides, so this fixes the Firefox-Android case where 100dvh resolves
+   to a fixed (toolbar-hidden) height and leaves a gap below the tab bar until a
+   scroll forces a recompute. Falls back to innerHeight where visualViewport is
+   unavailable. We write a CSS var (--app-h) rather than body.style.height so
+   the wide layout — which sets body height:auto — is unaffected; only the
+   narrow app-shell consumes --app-h. rAF-coalesced because visualViewport can
+   fire a burst of resize/scroll events during a toolbar animation. */
+let _appHRaf = null;
+function syncAppHeight() {
+  if (_appHRaf) return;
+  _appHRaf = requestAnimationFrame(() => {
+    _appHRaf = null;
+    const vv = window.visualViewport;
+    const h = vv ? vv.height : window.innerHeight;
+    if (h > 0) document.documentElement.style.setProperty("--app-h", h + "px");
+  });
+}
+syncAppHeight();
+if (window.visualViewport) {
+  window.visualViewport.addEventListener("resize", syncAppHeight);
+  window.visualViewport.addEventListener("scroll", syncAppHeight);
+}
+window.addEventListener("resize", syncAppHeight);
+window.addEventListener("orientationchange", syncAppHeight);
+// Also re-pin on wake/visibility regain — a toolbar state change while hidden
+// (e.g. returning from another tab/app) won't have fired a resize.
+window.addEventListener("pageshow", syncAppHeight);
+
 // the Me-pane connector tree on any width change while wide, since the
 // SVG geometry depends on the pane's width. A debounce keeps drags cheap.
 let _wasWide = isWide();
