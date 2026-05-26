@@ -133,6 +133,8 @@ button {
 
 #topbar {
   flex: 0 0 auto;
+  
+  touch-action: none;
   height: calc(var(--top-h) + var(--safe-top));
   padding-top: var(--safe-top);
   background: rgb(246,246,244);
@@ -904,6 +906,7 @@ body.has-indicator #scroll-indicator { display: flex; }
 
 #bottom-controls {
   flex: 0 0 auto;
+  touch-action: none;   
   height: var(--bot-h);
   background: rgb(246,246,244);
   border-top: 1px solid var(--line);
@@ -931,6 +934,7 @@ body.has-indicator #scroll-indicator { display: flex; }
 
 #tabbar {
   flex: 0 0 auto;
+  touch-action: none;   
   height: calc(var(--tab-h) + var(--safe-bottom));
   padding-bottom: var(--safe-bottom);
   background: var(--surface);
