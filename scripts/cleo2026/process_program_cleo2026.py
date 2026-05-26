@@ -1170,7 +1170,6 @@ def _with_colors(entries: list[dict]) -> list[dict]:
 # and SESSION_TYPE_ORDER.
 SESSION_TYPE_REGISTRY: list[dict] = _with_colors([
     {"id": "blue",    "label": "Technical"},
-    {"id": "amber",   "label": "Symposia"},
     {"id": "orange",  "label": "Plenary"},
     {"id": "rose",    "label": "Postdeadline"},
     {"id": "teal",    "label": "Poster"},
@@ -1196,9 +1195,9 @@ def classify_session_color(session_type: str, session_title: str = "") -> str:
       - Plenary      (orange):  the session title contains "plenary"
       - Postdeadline (rose):    the session title contains "postdeadline"
       - Poster       (teal):    the session title contains "poster"
-      - Symposia     (amber):   a Symposium-typed session
       - Technical    (blue):    the main tracks (Applications & Technology,
-                                Fundamental Science, Science & Innovations)
+                                Fundamental Science, Science & Innovations),
+                                as well as Symposium-typed sessions
       - Other Events (violet):  everything else
 
     The Plenary/Postdeadline/Poster buckets are detected from the TITLE and take
@@ -1209,7 +1208,7 @@ def classify_session_color(session_type: str, session_title: str = "") -> str:
     if "plenary" in title:                          return "orange"
     if "postdeadline" in title:                     return "rose"
     if "poster" in title:                           return "teal"
-    if "symposi" in s:                              return "amber"
+    if "symposi" in s:                              return "blue"
     if "a&t" in s or "fs" in tokens or "s&i" in s:  return "blue"
     return "violet"
 

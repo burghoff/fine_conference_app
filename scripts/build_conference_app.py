@@ -92,15 +92,514 @@ Run: just `python build_conference_app.py`.
 
 from __future__ import annotations
 
+import base64
 import json
 import re
 import sys
+import zlib
 from pathlib import Path
 
 
 SCRIPT_DIR      = Path(__file__).resolve().parent
 INPUT_DATA_JSON = SCRIPT_DIR / "conference_data.json"
 OUTPUT_HTML     = SCRIPT_DIR / "conference_app.html"
+
+
+# -----------------------------------------------------------------------------
+# Wide/narrow (two-pane vs one-pane) breakpoint — THE SINGLE SOURCE OF TRUTH.
+#
+# Two-pane requires both enough horizontal room AND a landscape shape, so a
+# wide-but-portrait device (e.g. a large tablet held upright, whose CSS width
+# can still exceed the px floor) correctly stays one-pane. Note these are CSS
+# pixels, independent of physical display density.
+#
+# CSS media queries cannot read custom properties, and this file is generated,
+# so Python is the single point of definition: the constants below are
+# templated into BOTH the stylesheet media queries and the JS isWide() matcher
+# at build time. Change the breakpoint here and nowhere else; every consumer
+# (one JS function + three media queries) is regenerated from these.
+#   WIDE_MIN_PX  : px floor for the two-pane layout.
+#   WIDE_QUERY   : full media condition for "wide" (two-pane).
+#   NARROW_QUERY : its exact complement, for "narrow"-only rules.
+# -----------------------------------------------------------------------------
+WIDE_MIN_PX  = 900
+WIDE_QUERY   = f"(min-width: {WIDE_MIN_PX}px) and (orientation: landscape)"
+# Complement of WIDE_QUERY: below the px floor OR portrait. A media query has no
+# clean "not (A and B)" form across the px boundary, so we spell out the
+# De Morgan expansion explicitly as a comma (OR) list. The two clauses may
+# overlap (a small portrait phone matches both); that's harmless.
+NARROW_QUERY = (f"(max-width: {WIDE_MIN_PX - 0.02}px), "
+                f"(orientation: portrait)")
+
+
+# -----------------------------------------------------------------------------
+# Minification of the EMITTED conference_app.html.
+#
+# When True, the builder strips comments (JS //, JS/CSS block, HTML <!-- -->)
+# from the template before writing the output. The Python source — including
+# the heavily-commented HTML_TEMPLATE string — is never touched; only the
+# generated artifact is leaned out. Set False to emit the readable, debuggable
+# HTML (every comment intact) for development.
+#
+# The strip runs on the TEMPLATE ONLY, before the conference JSON is spliced
+# in, so arbitrary data (which may contain //, /*, <!--, or string/regex-like
+# text) is never scanned by the comment remover. The JS pass is tokenizer-aware
+# (it tracks string/template/regex literals) so comment markers living inside
+# string or regex literals in the app code are preserved, not mistaken for
+# comments. See minify_html() / _strip_js_comments().
+# -----------------------------------------------------------------------------
+MINIFY = True
+
+
+# -----------------------------------------------------------------------------
+# Compression of the embedded DATA blob.
+#
+# For large conferences the `const DATA = {...}` JSON literal dominates the
+# file. When True, the builder emits DATA as a base64'd raw-DEFLATE payload
+# plus its uncompressed byte length, and the app inflates it once at startup
+# via a vendored synchronous tiny-inflate (raw DEFLATE) decompressor. JSON
+# compresses extremely well (typically to 5-25% of original), so this is the
+# dominant size win on big programs.
+#
+# Synchronous by design: the decode runs inside the `const DATA = ...`
+# initializer, so DATA is ready before any other top-level code — the rest of
+# startup (loadState, render, the boundary scheduler) is unchanged. The decode
+# fires exactly ONCE per page load; afterward DATA is a plain in-memory object.
+#
+# We use tiny-inflate rather than the browser-native DecompressionStream
+# because that API is async, which would force the whole startup path to become
+# async for no real benefit on a one-time, few-millisecond decode. tiny-inflate
+# is pure JS, synchronous, dependency-free once vendored, and works on any
+# browser with no network (the app is fully offline-capable).
+#
+# Set False to emit the plain readable `const DATA = {...}` literal for
+# debugging. See __decodeData / the vendored block in the template.
+# -----------------------------------------------------------------------------
+COMPRESS_DATA = True
+
+
+# -----------------------------------------------------------------------------
+# Vendored tiny-inflate decoder, spliced into the template only when
+# COMPRESS_DATA is on. Kept as a constant (not a sidecar file) so the builder
+# stays a single self-contained script with no missing-asset failure mode.
+# -----------------------------------------------------------------------------
+DECODER_BLOCK = r"""/*! tiny-inflate (raw DEFLATE decompressor) | MIT License | Copyright (c) 2015-present Devon Govett | https://github.com/foliojs/tiny-inflate
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+/* Wrapped in an IIFE so it exposes exactly one function and touches no globals.
+   Used to inflate the compressed DATA blob at startup (see COMPRESS_DATA in the
+   builder). Synchronous by design: keeps `const DATA` synchronous so the rest
+   of startup (loadState, render, scheduler) runs unchanged. This descriptive
+   comment is ordinary and gets stripped by minify; the /*! banner above is a
+   preserved license comment and is kept. */
+const __tinf_uncompress = (function () {
+var TINF_OK = 0;
+var TINF_DATA_ERROR = -3;
+
+function Tree() {
+  this.table = new Uint16Array(16);   /* table of code length counts */
+  this.trans = new Uint16Array(288);  /* code -> symbol translation table */
+}
+
+function Data(source, dest) {
+  this.source = source;
+  this.sourceIndex = 0;
+  this.tag = 0;
+  this.bitcount = 0;
+  
+  this.dest = dest;
+  this.destLen = 0;
+  
+  this.ltree = new Tree();  /* dynamic length/symbol tree */
+  this.dtree = new Tree();  /* dynamic distance tree */
+}
+
+/* --------------------------------------------------- *
+ * -- uninitialized global data (static structures) -- *
+ * --------------------------------------------------- */
+
+var sltree = new Tree();
+var sdtree = new Tree();
+
+/* extra bits and base tables for length codes */
+var length_bits = new Uint8Array(30);
+var length_base = new Uint16Array(30);
+
+/* extra bits and base tables for distance codes */
+var dist_bits = new Uint8Array(30);
+var dist_base = new Uint16Array(30);
+
+/* special ordering of code length codes */
+var clcidx = new Uint8Array([
+  16, 17, 18, 0, 8, 7, 9, 6,
+  10, 5, 11, 4, 12, 3, 13, 2,
+  14, 1, 15
+]);
+
+/* used by tinf_decode_trees, avoids allocations every call */
+var code_tree = new Tree();
+var lengths = new Uint8Array(288 + 32);
+
+/* ----------------------- *
+ * -- utility functions -- *
+ * ----------------------- */
+
+/* build extra bits and base tables */
+function tinf_build_bits_base(bits, base, delta, first) {
+  var i, sum;
+
+  /* build bits table */
+  for (i = 0; i < delta; ++i) bits[i] = 0;
+  for (i = 0; i < 30 - delta; ++i) bits[i + delta] = i / delta | 0;
+
+  /* build base table */
+  for (sum = first, i = 0; i < 30; ++i) {
+    base[i] = sum;
+    sum += 1 << bits[i];
+  }
+}
+
+/* build the fixed huffman trees */
+function tinf_build_fixed_trees(lt, dt) {
+  var i;
+
+  /* build fixed length tree */
+  for (i = 0; i < 7; ++i) lt.table[i] = 0;
+
+  lt.table[7] = 24;
+  lt.table[8] = 152;
+  lt.table[9] = 112;
+
+  for (i = 0; i < 24; ++i) lt.trans[i] = 256 + i;
+  for (i = 0; i < 144; ++i) lt.trans[24 + i] = i;
+  for (i = 0; i < 8; ++i) lt.trans[24 + 144 + i] = 280 + i;
+  for (i = 0; i < 112; ++i) lt.trans[24 + 144 + 8 + i] = 144 + i;
+
+  /* build fixed distance tree */
+  for (i = 0; i < 5; ++i) dt.table[i] = 0;
+
+  dt.table[5] = 32;
+
+  for (i = 0; i < 32; ++i) dt.trans[i] = i;
+}
+
+/* given an array of code lengths, build a tree */
+var offs = new Uint16Array(16);
+
+function tinf_build_tree(t, lengths, off, num) {
+  var i, sum;
+
+  /* clear code length count table */
+  for (i = 0; i < 16; ++i) t.table[i] = 0;
+
+  /* scan symbol lengths, and sum code length counts */
+  for (i = 0; i < num; ++i) t.table[lengths[off + i]]++;
+
+  t.table[0] = 0;
+
+  /* compute offset table for distribution sort */
+  for (sum = 0, i = 0; i < 16; ++i) {
+    offs[i] = sum;
+    sum += t.table[i];
+  }
+
+  /* create code->symbol translation table (symbols sorted by code) */
+  for (i = 0; i < num; ++i) {
+    if (lengths[off + i]) t.trans[offs[lengths[off + i]]++] = i;
+  }
+}
+
+/* ---------------------- *
+ * -- decode functions -- *
+ * ---------------------- */
+
+/* get one bit from source stream */
+function tinf_getbit(d) {
+  /* check if tag is empty */
+  if (!d.bitcount--) {
+    /* load next tag */
+    d.tag = d.source[d.sourceIndex++];
+    d.bitcount = 7;
+  }
+
+  /* shift bit out of tag */
+  var bit = d.tag & 1;
+  d.tag >>>= 1;
+
+  return bit;
+}
+
+/* read a num bit value from a stream and add base */
+function tinf_read_bits(d, num, base) {
+  if (!num)
+    return base;
+
+  while (d.bitcount < 24) {
+    d.tag |= d.source[d.sourceIndex++] << d.bitcount;
+    d.bitcount += 8;
+  }
+
+  var val = d.tag & (0xffff >>> (16 - num));
+  d.tag >>>= num;
+  d.bitcount -= num;
+  return val + base;
+}
+
+/* given a data stream and a tree, decode a symbol */
+function tinf_decode_symbol(d, t) {
+  while (d.bitcount < 24) {
+    d.tag |= d.source[d.sourceIndex++] << d.bitcount;
+    d.bitcount += 8;
+  }
+  
+  var sum = 0, cur = 0, len = 0;
+  var tag = d.tag;
+
+  /* get more bits while code value is above sum */
+  do {
+    cur = 2 * cur + (tag & 1);
+    tag >>>= 1;
+    ++len;
+
+    sum += t.table[len];
+    cur -= t.table[len];
+  } while (cur >= 0);
+  
+  d.tag = tag;
+  d.bitcount -= len;
+
+  return t.trans[sum + cur];
+}
+
+/* given a data stream, decode dynamic trees from it */
+function tinf_decode_trees(d, lt, dt) {
+  var hlit, hdist, hclen;
+  var i, num, length;
+
+  /* get 5 bits HLIT (257-286) */
+  hlit = tinf_read_bits(d, 5, 257);
+
+  /* get 5 bits HDIST (1-32) */
+  hdist = tinf_read_bits(d, 5, 1);
+
+  /* get 4 bits HCLEN (4-19) */
+  hclen = tinf_read_bits(d, 4, 4);
+
+  for (i = 0; i < 19; ++i) lengths[i] = 0;
+
+  /* read code lengths for code length alphabet */
+  for (i = 0; i < hclen; ++i) {
+    /* get 3 bits code length (0-7) */
+    var clen = tinf_read_bits(d, 3, 0);
+    lengths[clcidx[i]] = clen;
+  }
+
+  /* build code length tree */
+  tinf_build_tree(code_tree, lengths, 0, 19);
+
+  /* decode code lengths for the dynamic trees */
+  for (num = 0; num < hlit + hdist;) {
+    var sym = tinf_decode_symbol(d, code_tree);
+
+    switch (sym) {
+      case 16:
+        /* copy previous code length 3-6 times (read 2 bits) */
+        var prev = lengths[num - 1];
+        for (length = tinf_read_bits(d, 2, 3); length; --length) {
+          lengths[num++] = prev;
+        }
+        break;
+      case 17:
+        /* repeat code length 0 for 3-10 times (read 3 bits) */
+        for (length = tinf_read_bits(d, 3, 3); length; --length) {
+          lengths[num++] = 0;
+        }
+        break;
+      case 18:
+        /* repeat code length 0 for 11-138 times (read 7 bits) */
+        for (length = tinf_read_bits(d, 7, 11); length; --length) {
+          lengths[num++] = 0;
+        }
+        break;
+      default:
+        /* values 0-15 represent the actual code lengths */
+        lengths[num++] = sym;
+        break;
+    }
+  }
+
+  /* build dynamic trees */
+  tinf_build_tree(lt, lengths, 0, hlit);
+  tinf_build_tree(dt, lengths, hlit, hdist);
+}
+
+/* ----------------------------- *
+ * -- block inflate functions -- *
+ * ----------------------------- */
+
+/* given a stream and two trees, inflate a block of data */
+function tinf_inflate_block_data(d, lt, dt) {
+  while (1) {
+    var sym = tinf_decode_symbol(d, lt);
+
+    /* check for end of block */
+    if (sym === 256) {
+      return TINF_OK;
+    }
+
+    if (sym < 256) {
+      d.dest[d.destLen++] = sym;
+    } else {
+      var length, dist, offs;
+      var i;
+
+      sym -= 257;
+
+      /* possibly get more bits from length code */
+      length = tinf_read_bits(d, length_bits[sym], length_base[sym]);
+
+      dist = tinf_decode_symbol(d, dt);
+
+      /* possibly get more bits from distance code */
+      offs = d.destLen - tinf_read_bits(d, dist_bits[dist], dist_base[dist]);
+
+      /* copy match */
+      for (i = offs; i < offs + length; ++i) {
+        d.dest[d.destLen++] = d.dest[i];
+      }
+    }
+  }
+}
+
+/* inflate an uncompressed block of data */
+function tinf_inflate_uncompressed_block(d) {
+  var length, invlength;
+  var i;
+  
+  /* unread from bitbuffer */
+  while (d.bitcount > 8) {
+    d.sourceIndex--;
+    d.bitcount -= 8;
+  }
+
+  /* get length */
+  length = d.source[d.sourceIndex + 1];
+  length = 256 * length + d.source[d.sourceIndex];
+
+  /* get one's complement of length */
+  invlength = d.source[d.sourceIndex + 3];
+  invlength = 256 * invlength + d.source[d.sourceIndex + 2];
+
+  /* check length */
+  if (length !== (~invlength & 0x0000ffff))
+    return TINF_DATA_ERROR;
+
+  d.sourceIndex += 4;
+
+  /* copy block */
+  for (i = length; i; --i)
+    d.dest[d.destLen++] = d.source[d.sourceIndex++];
+
+  /* make sure we start next block on a byte boundary */
+  d.bitcount = 0;
+
+  return TINF_OK;
+}
+
+/* inflate stream from source to dest */
+function tinf_uncompress(source, dest) {
+  var d = new Data(source, dest);
+  var bfinal, btype, res;
+
+  do {
+    /* read final block flag */
+    bfinal = tinf_getbit(d);
+
+    /* read block type (2 bits) */
+    btype = tinf_read_bits(d, 2, 0);
+
+    /* decompress block */
+    switch (btype) {
+      case 0:
+        /* decompress uncompressed block */
+        res = tinf_inflate_uncompressed_block(d);
+        break;
+      case 1:
+        /* decompress block with fixed huffman trees */
+        res = tinf_inflate_block_data(d, sltree, sdtree);
+        break;
+      case 2:
+        /* decompress block with dynamic huffman trees */
+        tinf_decode_trees(d, d.ltree, d.dtree);
+        res = tinf_inflate_block_data(d, d.ltree, d.dtree);
+        break;
+      default:
+        res = TINF_DATA_ERROR;
+    }
+
+    if (res !== TINF_OK)
+      throw new Error('Data error');
+
+  } while (!bfinal);
+
+  if (d.destLen < d.dest.length) {
+    if (typeof d.dest.slice === 'function')
+      return d.dest.slice(0, d.destLen);
+    else
+      return d.dest.subarray(0, d.destLen);
+  }
+  
+  return d.dest;
+}
+
+/* -------------------- *
+ * -- initialization -- *
+ * -------------------- */
+
+/* build fixed huffman trees */
+tinf_build_fixed_trees(sltree, sdtree);
+
+/* build extra bits and base tables */
+tinf_build_bits_base(length_bits, length_base, 4, 3);
+tinf_build_bits_base(dist_bits, dist_base, 2, 1);
+
+/* fix a special case */
+length_bits[28] = 0;
+length_base[28] = 258;
+
+return tinf_uncompress;
+
+})();
+
+/* Decode the embedded base64 raw-DEFLATE payload back into its JSON object.
+   __origLen is the uncompressed byte length (emitted by the builder) so we can
+   size the destination buffer that tiny-inflate fills. */
+function __decodeData(b64, origLen) {
+  const bin = atob(b64);
+  const src = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) src[i] = bin.charCodeAt(i);
+  const dest = new Uint8Array(origLen);
+  __tinf_uncompress(src, dest);
+  return JSON.parse(new TextDecoder("utf-8").decode(dest));
+}
+"""
 
 
 # -----------------------------------------------------------------------------
@@ -1931,7 +2430,7 @@ body.has-indicator #scroll-indicator { display: flex; }
   --me-grip: 10px;
 }
 
-@media (min-width: 900px) {
+@media __WIDE_QUERY__ {
   /* Left-column fixed chrome stops at the pane's left edge.
      NOTE: #bottom-controls is intentionally NOT clipped — it spans the
      full width across both panes (see below). */
@@ -2121,12 +2620,12 @@ body.has-indicator #scroll-indicator { display: flex; }
     z-index: 25;
   }
 }
-@media (prefers-color-scheme: dark) and (min-width: 900px) {
+@media (prefers-color-scheme: dark) and __WIDE_QUERY__ {
   #me-pane-header { background: rgba(17,17,17,.92); }
 }
 /* On narrow screens neither the Me pane nor its resizer/tab bar
    participate in layout — Me is a normal bottom tab there. */
-@media (max-width: 899.98px) {
+@media __NARROW_QUERY__ {
   #me-pane { display: none !important; }
 }
 </style>
@@ -2162,7 +2661,7 @@ body.has-indicator #scroll-indicator { display: flex; }
 </nav>
 
 <!-- Permanently-affixed right-hand pane, only visible on wide screens
-     (see the min-width:900px media query). On narrow screens it is
+     (see the wide-layout media query / WIDE_QUERY). On narrow screens it is
      display:none and Me remains a normal bottom tab. -->
 <aside id="me-pane" aria-label="My Schedule">
   <div id="me-resizer" role="separator" aria-orientation="vertical"
@@ -2180,7 +2679,7 @@ body.has-indicator #scroll-indicator { display: flex; }
 </aside>
 
 <script>
-const DATA = __DATA__;
+__DECODER_BLOCK__const DATA = __DATA_INIT__;
 
 /* =============================================================== */
 /* state                                                            */
@@ -2351,6 +2850,21 @@ let state = loadState();
 /* indexes */
 const sessionMap = Object.fromEntries(DATA.sessions.map(s => [s.id, s]));
 const talkMap    = Object.fromEntries(DATA.talks.map(t => [t.id, t]));
+
+// Heal state saved before the empty-session guard existed: drop any persisted
+// expansion of a session that isn't actually expandable (no resolvable talks,
+// or no longer present in the data). Such ids render nothing yet would keep
+// canResetTab true, surfacing a Reset icon for nothing. Done here — not in
+// loadState — because isExpandableSession needs the maps above, which don't
+// exist when loadState runs. Save only if something was actually pruned.
+if (Array.isArray(state.expandedSessions) && state.expandedSessions.length) {
+  const kept = state.expandedSessions.filter(isExpandableSession);
+  if (kept.length !== state.expandedSessions.length) {
+    state.expandedSessions = kept;
+    saveState();
+  }
+}
+
 const scheduledIds = () => new Set(state.schedule);
 
 /* type color -> human label. */
@@ -2613,7 +3127,28 @@ function toggleScheduled(id) {
 function isSessionExpanded(id) {
   return (state.expandedSessions || []).includes(id);
 }
+
+/* A session is only inline-expandable if it actually has talks to show.
+   Mirrors buildSessionExpansion's emptiness test EXACTLY (resolvable talks,
+   not just a non-empty talk_ids — an id might not resolve via talkMap), so the
+   two never disagree about what "empty" means. An empty session's bubble
+   already shows its full detail, so there's nothing to expand into. */
+function isExpandableSession(id) {
+  const s = sessionMap[id];
+  if (!s) return false;
+  return (s.talk_ids || []).some(tid => talkMap[tid]);
+}
+
 function toggleSessionExpanded(id) {
+  const opening = !isSessionExpanded(id);
+  // Opening an EMPTY session would record it in expandedSessions while
+  // rendering nothing (buildSessionExpansion returns null for it) — a silent
+  // "open" that left no visible tree yet flipped canResetTab on, surfacing the
+  // Reset icon for a no-op. So refuse to OPEN an empty session. Collapsing is
+  // never blocked: a previously-persisted empty id (from before this guard)
+  // must still be clearable.
+  if (opening && !isExpandableSession(id)) return;
+
   // Capture the CURRENT scroll position before we re-render. render()
   // restores state.tabStacks[...].scrollY after rebuilding the DOM; without
   // this snapshot it would restore whatever the debounced scroll handler last
@@ -5759,10 +6294,12 @@ function toggleTypesPanel(force) {
 
 
 
-/* True when we're on a wide screen showing the two-pane layout. Kept in
-   sync with the min-width:900px media query in the stylesheet. */
+/* True when we're on a wide screen showing the two-pane layout. The match
+   condition is templated from WIDE_QUERY in the Python builder, the same
+   string used by the stylesheet's media queries, so JS and CSS can never
+   disagree about what "wide" means. */
 function isWide() {
-  return window.matchMedia("(min-width: 900px)").matches;
+  return window.matchMedia("__WIDE_QUERY__").matches;
 }
 
 /* The top-of-stack view string for the currently active (left) tab.
@@ -6683,16 +7220,54 @@ initMeResize();
 initMePaneScroll();
 render();
 
-/* Refresh the visible list every minute so "Now" stays accurate as
-   talks start and end (and items naturally fall off as they end when
-   Show past is OFF). We only re-render on top-level list views to
-   avoid disrupting whatever the user is reading in a detail view. */
-setInterval(() => {
+/* Keep the visible list's time-derived state ("Now" marker, and items
+   aging out as they end when Show past is OFF) accurate — WITHOUT a blind
+   once-a-minute redraw.
+
+   The program is fixed and fully known up front, so the list's time-derived
+   state only changes at discrete instants: when an item STARTS (upcoming→now)
+   or ENDS (now→past, and falls off the list when Show past is OFF). Both kinds
+   of instant also move the "Now" marker. So instead of polling every 60 s
+   (which redrew even when nothing had changed — and every redraw tears down
+   and rebuilds the Me-pane connector SVG, so the connectors visibly flicker),
+   we wake only AT those boundaries. Each wake-up coincides with a real state
+   change, so a redraw there is warranted rather than gratuitous.
+
+   The redraw body below is byte-for-byte the old interval's: same typing/focus
+   guard, same "top-level list views only" gate, same full render(). Only the
+   SCHEDULING changed (boundary timeouts instead of a fixed interval); the
+   render mechanism is untouched. */
+
+/* All distinct session/talk boundary instants (start and end), ms epoch,
+   ascending. Computed once — the program never changes during a session.
+   Mirrors the CONFERENCE_END_MS idiom above (same parse + isNaN guard). */
+const TIME_BOUNDARIES_MS = (() => {
+  const set = new Set();
+  for (const x of [...DATA.sessions, ...DATA.talks]) {
+    for (const v of [x.start_ts, x.end_ts]) {
+      if (!v) continue;
+      const t = new Date(v).getTime();
+      if (!isNaN(t)) set.add(t);
+    }
+  }
+  return [...set].sort((a, b) => a - b);
+})();
+
+// setTimeout delays are clamped by browsers to a signed 32-bit ms value
+// (~24.8 days); a delay past that fires almost immediately. For a multi-day
+// program the later boundaries exceed it, so we cap each scheduled delay and
+// simply re-arm when the intermediate wake-up fires. Well under the 2^31-1 ms
+// limit, with headroom.
+const MAX_TIMEOUT_MS = 12 * 60 * 60 * 1000;   // 12 h
+
+let _tickTimer = null;
+
+function refreshTimeState() {
   // Don't re-render while the user is typing. render() rebuilds the list
   // DOM wholesale; if focus is in an input that lives inside the list view
   // (e.g. the Search box), the focused node gets destroyed and replaced,
-  // dropping the caret mid-keystroke. Skip this tick when an editable
-  // element is focused — the "Now" marker just catches up on the next one.
+  // dropping the caret mid-keystroke. Skip when an editable element is
+  // focused — the next boundary (or the visibility re-arm) catches up.
   const ae = document.activeElement;
   if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" ||
              ae.isContentEditable)) return;
@@ -6701,12 +7276,180 @@ setInterval(() => {
   const stack = state.tabStacks[tab];
   const top = stack[stack.length - 1];
   if (top && top.view === "list") render();
-}, 60_000);
+}
+
+/* Arm a single timeout for the next future boundary (capped at
+   MAX_TIMEOUT_MS). On fire: redraw if a boundary has actually passed, then
+   re-arm for the one after. Idempotent — safe to call repeatedly (e.g. from
+   the visibility/focus re-arm); it always clears any pending timer first.
+
+   NOTE: this schedules off the wall clock read at arm time. A system-clock
+   jump while the page stays foregrounded (e.g. manual clock change, NTP step)
+   isn't actively watched — we'd rather not reintroduce a poll for that rare
+   case. The visibility/pageshow/focus re-arm below recomputes "now" and
+   redraws on the common trigger for clock changes (travel: unlock the device
+   after a timezone change), which covers it in practice. */
+function scheduleNextTick() {
+  clearTimeout(_tickTimer);
+  _tickTimer = null;
+
+  const now = Date.now();
+  const next = TIME_BOUNDARIES_MS.find(t => t > now);
+  if (next == null) return;   // every boundary is past — nothing left to do
+
+  const delay = Math.min(next - now, MAX_TIMEOUT_MS);
+  _tickTimer = setTimeout(() => {
+    // If this fire is a real boundary (not just a MAX_TIMEOUT_MS re-arm
+    // wake-up), the time state changed — redraw. The find() above guarantees
+    // `next` was the soonest boundary; if we've reached it, refresh.
+    if (Date.now() >= next) refreshTimeState();
+    scheduleNextTick();        // arm for the following boundary
+  }, delay);
+}
+
+/* Coming back from background/sleep: a single queued timeout can't fire for
+   each boundary the device slept through, so on wake we redraw (catching up
+   whatever crossed while hidden) and re-arm from the current clock. Covers
+   throttled/suspended timers and clock changes that land while we were away. */
+function rearmOnWake() {
+  if (document.visibilityState === "hidden") return;
+  refreshTimeState();
+  scheduleNextTick();
+}
+document.addEventListener("visibilitychange", rearmOnWake);
+window.addEventListener("pageshow", rearmOnWake);
+window.addEventListener("focus", rearmOnWake);
+
+scheduleNextTick();
 </script>
 
 </body>
 </html>
 """
+
+
+def _strip_js_comments(s: str) -> str:
+    """Remove // and /* */ comments from JS source while preserving comment
+    markers that appear inside string literals, template literals, and regex
+    literals. Char-by-char state machine: the only reliable way to tell a
+    regex literal from division is to track whether the previous significant
+    token expects a value, so we keep `prev` (last non-space char emitted).
+
+    Conservative by construction: anything that isn't unambiguously a comment
+    is emitted verbatim, so worst case we keep a comment, never delete code.
+    """
+    out = []
+    i, n = 0, len(s)
+    prev = ""   # last significant (non-space) char, for regex-vs-divide
+    while i < n:
+        c = s[i]
+        nxt = s[i + 1] if i + 1 < n else ""
+        # string / template literals — copy through untouched
+        if c in "\"'`":
+            q = c
+            out.append(c)
+            i += 1
+            while i < n:
+                out.append(s[i])
+                if s[i] == "\\":            # escape: copy next char too
+                    if i + 1 < n:
+                        out.append(s[i + 1])
+                    i += 2
+                    continue
+                if s[i] == q:
+                    i += 1
+                    break
+                i += 1
+            prev = q
+            continue
+        # line comment — drop to end of line (keep the newline)
+        if c == "/" and nxt == "/":
+            j = s.find("\n", i)
+            if j == -1:
+                j = n
+            i = j
+            continue
+        # block comment. A /*! ... */ comment is a PRESERVED license/legal
+        # comment (the convention real minifiers honor) — copy it through
+        # verbatim. Any other /* ... */ is dropped through its closing */.
+        if c == "/" and nxt == "*":
+            j = s.find("*/", i + 2)
+            end = n if j == -1 else j + 2
+            if i + 2 < n and s[i + 2] == "!":      # /*! preserved banner
+                out.append(s[i:end])
+                prev = "/"
+            i = end
+            continue
+        # regex literal — a '/' where a value is expected. Copy through to its
+        # closing '/', honoring char classes ([...] may contain an unescaped /)
+        if c == "/" and prev in "(,=:[!&|?{};":
+            out.append(c)
+            i += 1
+            in_class = False
+            while i < n:
+                out.append(s[i])
+                if s[i] == "\\":
+                    if i + 1 < n:
+                        out.append(s[i + 1])
+                    i += 2
+                    continue
+                if s[i] == "[":
+                    in_class = True
+                elif s[i] == "]":
+                    in_class = False
+                elif s[i] == "/" and not in_class:
+                    i += 1
+                    break
+                i += 1
+            prev = "/"
+            continue
+        out.append(c)
+        if not c.isspace():
+            prev = c
+        i += 1
+    return "".join(out)
+
+
+def _strip_block_comments(s: str) -> str:
+    """Remove /* */ comments from CSS, preserving /*! ... */ license banners
+    (same convention as the JS pass). CSS has no string/regex ambiguity that
+    matters for this template, so a non-greedy removal that skips bang-comments
+    is safe."""
+    return re.sub(r"/\*(?!!).*?\*/", "", s, flags=re.S)
+
+
+def minify_html(template: str) -> str:
+    """Strip comments from the TEMPLATE (pre-data-splice). Operates on the
+    three regions by their delimiters: the <script> body (JS), the <style>
+    body (CSS), and HTML <!-- --> comments in the markup. Collapses the blank
+    lines that stripping leaves behind, but does NOT collapse whitespace inside
+    the JS/CSS beyond that — keeping line structure makes the rare production
+    debug far less painful for a near-identical size win once gzipped."""
+
+    # JS: operate only inside <script>...</script>.
+    def _js(m: "re.Match[str]") -> str:
+        return m.group(1) + _strip_js_comments(m.group(2)) + m.group(3)
+    template = re.sub(r"(<script[^>]*>)(.*?)(</script>)", _js, template,
+                      flags=re.S)
+
+    # CSS: operate only inside <style>...</style>.
+    def _css(m: "re.Match[str]") -> str:
+        return m.group(1) + _strip_block_comments(m.group(2)) + m.group(3)
+    template = re.sub(r"(<style[^>]*>)(.*?)(</style>)", _css, template,
+                      flags=re.S)
+
+    # HTML comments in the markup. Guard against accidentally matching the JS
+    # hack-comment idiom: there are none here, and <script>/<style> bodies were
+    # already processed above, so a plain removal across the whole doc is fine
+    # for the remaining markup-level <!-- --> only. To avoid touching anything
+    # inside the (already comment-stripped) script/style, we only remove HTML
+    # comments that aren't within those — but since JS/CSS comments are gone,
+    # any surviving <!-- --> is genuine markup. Safe to remove globally.
+    template = re.sub(r"<!--.*?-->", "", template, flags=re.S)
+
+    # Collapse runs of blank lines left by stripping.
+    template = re.sub(r"\n[ \t]*\n(?:[ \t]*\n)+", "\n\n", template)
+    return template
 
 
 def main() -> None:
@@ -6718,9 +7461,47 @@ def main() -> None:
     data = enrich_affiliations(_DATA)
 
     json_blob = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
-    json_blob = json_blob.replace("</", r"<\/")
 
-    html = HTML_TEMPLATE.replace("__DATA__", json_blob)
+    # Build the DATA initializer + the optional decoder block.
+    #   COMPRESS_DATA on : DATA is a base64 raw-DEFLATE payload, inflated once
+    #                      at startup by the vendored synchronous tiny-inflate.
+    #   COMPRESS_DATA off: DATA is the plain JSON literal (readable/debuggable).
+    # The decoder block is spliced in BEFORE minify (so its own comments get
+    # stripped with everything else); the DATA payload is spliced in AFTER
+    # minify (so the stripper never scans conference data). When compressing,
+    # the payload is pure base64 [A-Za-z0-9+/=] — no "</" can occur — so the
+    # </script> escaping the literal path needs is unnecessary there.
+    if COMPRESS_DATA:
+        raw = json_blob.encode("utf-8")
+        co = zlib.compressobj(9, zlib.DEFLATED, -15)   # -15 => raw DEFLATE
+        comp = co.compress(raw) + co.flush()
+        b64 = base64.b64encode(comp).decode("ascii")
+        data_init = f'__decodeData("{b64}", {len(raw)})'
+        decoder_block = DECODER_BLOCK + "\n\n"
+        print(f"[compress] DATA {len(raw):,} -> {len(b64):,} b64 bytes "
+              f"({100 * len(b64) / len(raw):.1f}% of original).")
+    else:
+        # Plain literal. Escape "</" so an embedded "</script>" in the data
+        # can't terminate the script element early.
+        data_init = json_blob.replace("</", r"<\/")
+        decoder_block = ""
+
+    template = HTML_TEMPLATE.replace("__DECODER_BLOCK__", decoder_block)
+
+    # Minify the TEMPLATE (comments only), before the DATA payload is spliced
+    # in, so the comment stripper never sees the conference data and only the
+    # tiny placeholder tokens remain to fill. No-op when MINIFY is False.
+    if MINIFY:
+        before = len(template)
+        template = minify_html(template)
+        print(f"[minify] template {before:,} -> {len(template):,} bytes "
+              f"({100 * (before - len(template)) / before:.1f}% smaller).")
+
+    # Resolve the wide/narrow breakpoint placeholders, then splice DATA last.
+    html = (template
+            .replace("__WIDE_QUERY__", WIDE_QUERY)
+            .replace("__NARROW_QUERY__", NARROW_QUERY))
+    html = html.replace("__DATA_INIT__", data_init)
     safe_name = (conference_name.replace("&", "&amp;")
                                  .replace("<", "&lt;")
                                  .replace(">", "&gt;"))
