@@ -1312,6 +1312,16 @@ html, body {
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: contain;
+  /* Disable mobile browsers' automatic text-inflation heuristic. Without this,
+     Firefox mobile rescales long flowing text blocks (notably the Talk-detail
+     abstract + stacked author/institution copy) for "readability" while
+     leaving short bubble titles alone — so Talk detail rendered at a different
+     size than the rest of the app on Firefox mobile only (desktop has no text
+     inflation, so it looked fine there). 100% pins text to the authored sizes
+     across all engines. */
+  -webkit-text-size-adjust: 100%;
+  -moz-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 body {
   padding-top:    calc(var(--top-h) + var(--safe-top));
@@ -2229,11 +2239,24 @@ body.has-indicator #scroll-indicator { display: flex; }
   max-height: 55vh;
   overflow-y: auto;
   z-index: 19;
+  /* Hidden by sliding down AND flipping visibility. The translateY alone is
+     relative to the panel's own (variable) height, and the panel is anchored
+     well above the screen bottom (above the tab + controls bars), so for a
+     short panel 110% isn't always enough to clear the visible area — a sliver
+     of checkboxes could peek up from behind the bottom bars, especially on a
+     scroll repaint. visibility:hidden guarantees it's truly gone when closed,
+     regardless of height; the delayed visibility transition lets the slide-out
+     animation finish before it blanks. */
   transform: translateY(110%);
-  transition: transform .22s ease;
+  visibility: hidden;
+  transition: transform .22s ease, visibility 0s linear .22s;
   padding: 8px 12px 12px;
 }
-#types-panel.open { transform: translateY(0); }
+#types-panel.open {
+  transform: translateY(0);
+  visibility: visible;
+  transition: transform .22s ease, visibility 0s linear 0s;
+}
 .types-row {
   display: flex; align-items: center; gap: 10px;
   padding: 9px 4px;
