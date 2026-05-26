@@ -5205,14 +5205,37 @@ function importState(code) {
     if (_sessionIds.has(key)) delete mergedNotes[key];
   }
 
+  // Which tab the LEFT column lands on, and the nav stacks, after an import.
+  //
+  // On a NARROW (one-pane) device the sync code is always copied from the Me
+  // tab — that's the only place the Copy button lives there — so the receiving
+  // phone should likewise stay on Me. Adopting the sender's activeTab is wrong:
+  // a code generated in two-pane mode carries whatever tab the sender's LEFT
+  // pane happened to be on (Sessions/Talks/Search), which would yank the phone
+  // away from Me on paste. So on narrow screens we pin to "me". On WIDE screens
+  // Me can't be the left tab at all (it's the permanent right pane), so we take
+  // the incoming tab and let render() coerce a stray "me" to Sessions.
+  const incomingStacks = data.tabStacks || defaultState().tabStacks;
+  const landTab = isWide() ? (data.activeTab || "sessions") : "me";
+  let landStacks = incomingStacks;
+  if (!isWide()) {
+    // Land the phone at the Me ROOT, not wherever the sender's Me stack was
+    // left (which on a two-pane sender reflects an unrelated session, or a
+    // stale scroll position the receiver shouldn't inherit). A fresh root
+    // entry means render() restores no anchor and we open at the top of Me.
+    landStacks = Object.assign({}, incomingStacks, {
+      me: [{ view: "list", scrollY: 0 }],
+    });
+  }
+
   Object.assign(state, {
     schedule:       merged,
     scheduleLog:    mergedLog,
     showPast:       (typeof data.showPast === "object" && data.showPast)
                       ? Object.values(data.showPast).some(Boolean)
                       : !!data.showPast,
-    activeTab:      data.activeTab || "sessions",
-    tabStacks:      data.tabStacks || defaultState().tabStacks,
+    activeTab:      landTab,
+    tabStacks:      landStacks,
     searchQuery:    data.searchQuery || "",
     hiddenTypes:    Array.isArray(data.hiddenTypes) ? data.hiddenTypes : [],
     selectedDates:  selDates,
@@ -5589,7 +5612,8 @@ function showDateRangeSheet() {
     state.selectedDates = [...working].sort();
     saveState();
     close();
-    render();
+    // Changing which days show alters the list above the fold; keep place.
+    rerenderPreservingAnchor();
   });
 }
 
@@ -5716,7 +5740,8 @@ function refreshTypesPanel() {
       if (cb.checked) set.delete(c); else set.add(c);
       state.hiddenTypes = [...set];
       saveState();
-      render();
+      // Hiding/showing a type reshuffles the list; keep the user's place.
+      rerenderPreservingAnchor();
     });
     row.appendChild(cb);
     panel.appendChild(row);
@@ -5851,9 +5876,21 @@ function stepFontScale(dir, btn) {
   if (next === state.fontScale) return;   // already at the rail
 
   // Anchor: where is the clicked button right now (viewport-relative)?
+  // Button-anchoring keeps the tapped +/- control steady under the finger —
+  // it lives in the Me area (the Me tab on narrow, the right pane on wide),
+  // so this governs whichever scroller the button itself sits in.
   const anchor = btn || null;
   const scroller = anchor ? scrollParentOf(anchor) : null;
   const beforeTop = anchor ? anchor.getBoundingClientRect().top : 0;
+
+  // Separately, when the LEFT column is showing a non-Me list (only possible
+  // in two-pane mode — Sessions/Talks/Search on the left while the Me pane
+  // holds the font control on the right), pin that list on its nearest
+  // session/talk bubble across the reflow. The button anchor above can't do
+  // that: it tracks an element in the OTHER pane. (On the Me tab itself the
+  // visible list IS the Me schedule the button lives in, so button anchoring
+  // already covers it and we deliberately skip the bubble anchor.)
+  const leftAnchor = (state.activeTab !== "me") ? captureListAnchor() : null;
 
   state.fontScale = next;
   applyFontScale();
@@ -5877,6 +5914,8 @@ function stepFontScale(dir, btn) {
     const delta = afterTop - beforeTop;
     if (delta) scroller.by(delta);
   }
+  // Re-pin the left list (non-Me tabs) on the same bubble after the reflow.
+  if (leftAnchor) restoreListAnchor(leftAnchor);
 }
 
 /* Reflect the current scale on EVERY copy of the control (the left pane and
@@ -6067,14 +6106,23 @@ function renderMePane() {
   // to the top every time render() runs — including the once-a-minute
   // "Now" refresh fired from the left pane's list view. That jump also
   // made the connector tree appear to "move" relative to what the user
-  // was looking at. Snapshot now, restore after re-render.
+  // was looking at. We capture the nearest session/talk bubble (robust to
+  // the schedule changing height — past items dropping off, filters, text
+  // resize) and re-pin it after the rebuild; the absolute scrollTop is kept
+  // as a fallback for when the pane has no bubble in view (empty schedule).
   const prevScroll = pane.scrollTop;
+  const prevAnchor = captureListAnchor(pane);
+  const restorePane = () => {
+    if (!(prevAnchor && restoreListAnchor(prevAnchor, pane))) {
+      pane.scrollTop = prevScroll;
+    }
+  };
 
   pane.innerHTML = "";
   renderMe(pane);
   // Restore the scroll position before measuring anything that depends on
   // it (indicator + connectors are scroll-position-aware).
-  pane.scrollTop = prevScroll;
+  restorePane();
   // The pane's scroll indicator depends on the freshly-rendered headers.
   updateScrollIndicatorIn($("#me-scroll-indicator"), pane, "has-me-indicator");
   // Connector tree, scoped to the pane's own container. Drawn after the
@@ -6083,7 +6131,7 @@ function renderMePane() {
     requestAnimationFrame(() => {
       // Re-assert scroll in case layout shifted it during the rebuild
       // (e.g. content got shorter), then draw against the settled layout.
-      pane.scrollTop = prevScroll;
+      restorePane();
       drawMeConnectors(pane);
       updateScrollIndicatorIn($("#me-scroll-indicator"), pane, "has-me-indicator");
     });
@@ -6232,12 +6280,19 @@ function render() {
   // pane is reflected immediately on the right. No-op on narrow screens.
   renderMePane();
 
-  // Restore scroll position after the DOM has actually flushed.
+  // Restore scroll position after the DOM has actually flushed. Prefer the
+  // robust bubble anchor (survives filters/hiding/resize); fall back to the
+  // absolute scrollY when there's no anchor (bubble-less view) or its target
+  // is gone from the freshly-rendered list.
   const target = top.scrollY || 0;
+  const anchor = top.scrollAnchor || null;
+  const place = () => {
+    if (!(anchor && restoreListAnchor(anchor))) setLeftScrollTop(target);
+  };
   requestAnimationFrame(() => {
-    setLeftScrollTop(target);
+    place();
     requestAnimationFrame(() => {
-      setLeftScrollTop(target);
+      place();
       updateScrollIndicator();
       // Draw the Me-tab session→talk connector tree once the layout
       // has settled. This is a no-op on every other tab/view.
@@ -6256,7 +6311,17 @@ function render() {
 
 function snapshotScroll() {
   const stack = state.tabStacks[state.activeTab];
-  if (stack.length) stack[stack.length - 1].scrollY = leftScrollTop();
+  if (!stack.length) return;
+  const entry = stack[stack.length - 1];
+  // Keep the absolute scrollY as a fallback (used for views with no bubbles,
+  // e.g. a talk-detail page, and for older sync codes that carry only it).
+  entry.scrollY = leftScrollTop();
+  // The PRIMARY position record: the nearest session/talk bubble + its offset.
+  // This is what we restore from when possible, because it survives the list
+  // changing height (past talks hidden, filters toggled, text resized) — an
+  // absolute scrollY would point at the wrong content after any of those.
+  // Null on views with no bubbles; restore then falls back to scrollY.
+  entry.scrollAnchor = captureListAnchor();
 }
 
 /* On wide screens the left pane scrolls inside #content (so its scrollbar
@@ -6277,6 +6342,19 @@ function setLeftScrollTop(y) {
   } else {
     window.scrollTo(0, y);
   }
+}
+
+/* Re-render the current view in place while keeping the user looking at the
+   same session/talk. Use this for changes that alter the list's CONTENT or
+   HEIGHT without changing which view we're on — toggling Show past, turning
+   type filters on/off, changing the day filter. Snapshotting the live scroll
+   into the current stack entry first means render()'s own restore path picks
+   up the fresh bubble anchor and re-pins it after the list rebuilds, instead
+   of a stale absolute scrollY yanking the user somewhere unrelated (or to the
+   top) once items above the fold appear/disappear. */
+function rerenderPreservingAnchor() {
+  snapshotScroll();
+  render();
 }
 
 function navigate(view) {
@@ -6311,25 +6389,53 @@ function canResetTab(tab) {
   return false;
 }
 
-/* Capture the list item currently anchoring the viewport: the first
-   .bubble whose top is at/below the scroller's top edge, plus how far below
-   that edge it sits. Returned so resetTab can put the SAME item back in the
-   same spot after collapsing changes the list's height above it. Null when
-   no bubble is in view (e.g. an empty list). */
-function captureListAnchor() {
-  const scroller = isWide() ? $("#content") : null;
+/* The element that scrolls the LEFT column right now. On wide screens that's
+   #content (its own overflow scroller); on narrow screens the window scrolls
+   and there's no element-level scroller, so we return null and callers treat
+   that as "the window". Centralised so anchor capture/restore agree on what
+   they're measuring against. */
+function leftScroller() {
+  return isWide() ? $("#content") : null;
+}
+
+/* Capture the list item currently anchoring the viewport: the topmost
+   .bubble still (partially) in view within `scroller`, recorded as its id +
+   parent session id + pixel offset from the scroller's top edge. This is the
+   ROBUST scroll position — it survives the list changing height above it
+   (talks hidden because they're in the past, type/day filters toggled, text
+   resized, etc.), because we re-find the SAME item afterwards rather than
+   trusting an absolute pixel scrollY that now points somewhere else.
+
+   `scroller` defaults to the active left scroller; pass an explicit element
+   (e.g. the Me pane) to anchor a different container. Null when no bubble is
+   in view (an empty list, or a detail view with no bubbles) — callers then
+   fall back to absolute scrollY. */
+function captureListAnchor(scroller) {
+  if (scroller === undefined) scroller = leftScroller();
   const topEdge = scroller ? scroller.getBoundingClientRect().top : 0;
   const bubbles = (scroller || document).querySelectorAll(".bubble[data-bubble-id]");
   let best = null;
-  for (const b of bubbles) {
+  for (let i = 0; i < bubbles.length; i++) {
+    const b = bubbles[i];
     const r = b.getBoundingClientRect();
     // First bubble whose bottom is still below the top edge — i.e. the
     // topmost one at least partially in view.
     if (r.bottom > topEdge + 1) {
+      // Remember a few of the FOLLOWING items' ids too. If the anchor item
+      // and its parent session are both gone on restore (e.g. they were in
+      // the past and Show past got turned off), restore() walks this chain
+      // to the next surviving bubble so we still land near where the user
+      // was rather than snapping to the top.
+      const fallbacks = [];
+      for (let j = i + 1; j < bubbles.length && fallbacks.length < 8; j++) {
+        const id = bubbles[j].getAttribute("data-bubble-id");
+        if (id) fallbacks.push(id);
+      }
       best = {
         id:        b.getAttribute("data-bubble-id"),
         sessionId: b.getAttribute("data-session-id") || "",
         offset:    r.top - topEdge,   // px from scroller top to the bubble top
+        fallbacks,                    // ordered ids that followed it in the list
       };
       break;
     }
@@ -6340,23 +6446,50 @@ function captureListAnchor() {
 /* Re-scroll the freshly-rendered list so `anchor` (from captureListAnchor)
    sits at the same offset from the top it had before. Falls back to the
    anchor's parent SESSION bubble when the original item was a talk inside a
-   now-collapsed session (so the talk bubble no longer exists in the list).
-   No-op when the anchor or its target can't be found. */
-function restoreListAnchor(anchor) {
-  if (!anchor) return;
+   now-collapsed/hidden session (so the talk bubble no longer exists). When
+   neither the item nor its parent session is present any more — e.g. the
+   nearest item dropped out because it's in the past and Show past was turned
+   off — we step FORWARD through the captured-from list to the next surviving
+   bubble so we land as close as possible to where the user was, rather than
+   giving up. Returns true if it managed to anchor on something, false if it
+   couldn't (caller then falls back to absolute scrollY).
+
+   `scroller` defaults to the active left scroller; pass an explicit element
+   to restore within a different container (the Me pane scrolls its own
+   #me-content rather than the window/#content). */
+function restoreListAnchor(anchor, scroller) {
+  if (!anchor) return false;
+  if (scroller === undefined) scroller = leftScroller();
+  const root = scroller || document;
   const find = (id) =>
-    id ? $(`#content .bubble[data-bubble-id="${cssEsc(id)}"]`)
-         || document.querySelector(`.bubble[data-bubble-id="${cssEsc(id)}"]`)
+    id ? root.querySelector(`.bubble[data-bubble-id="${cssEsc(id)}"]`)
        : null;
   let target = find(anchor.id);
   if (!target && anchor.sessionId) target = find(anchor.sessionId);
-  if (!target) return;
-  const scroller = isWide() ? $("#content") : null;
+  let usedFallback = false;
+  if (!target && Array.isArray(anchor.fallbacks)) {
+    // The exact item and its session are both gone (hidden/filtered). Walk
+    // forward to the next item that's still present and pin THAT to the top
+    // edge — the closest surviving position below where the user was.
+    for (const fid of anchor.fallbacks) {
+      target = find(fid);
+      if (target) { usedFallback = true; break; }
+    }
+  }
+  if (!target) return false;
   const topEdge = scroller ? scroller.getBoundingClientRect().top : 0;
   const cur = target.getBoundingClientRect().top - topEdge;
-  // Scroll by the delta between where the anchor is now and where we want it.
-  const delta = cur - anchor.offset;
-  setLeftScrollTop(leftScrollTop() + delta);
+  // For a real anchor hit, restore its exact offset; for a forward-fallback
+  // item, sit it at the top edge (offset 0) since we don't know its original
+  // position — it wasn't the anchor.
+  const wantOffset = usedFallback ? 0 : anchor.offset;
+  const delta = cur - wantOffset;
+  if (scroller) {
+    scroller.scrollTop += delta;
+  } else {
+    setLeftScrollTop(leftScrollTop() + delta);
+  }
+  return true;
 }
 
 /* CSS.escape shim for attribute-selector safety (ids here are simple, but
@@ -6392,9 +6525,12 @@ function resetTab() {
   // Clear the search query when resetting Search.
   if (tab === "search") state.searchQuery = "";
 
-  // The root entry's saved scrollY would otherwise yank us elsewhere; pin it
-  // to the current position so render()'s restore doesn't fight the re-anchor.
+  // The root entry's saved position would otherwise yank us elsewhere on
+  // render's own restore (which now prefers the bubble anchor). Sync BOTH the
+  // anchor and the absolute scrollY to the current view so render's restore
+  // agrees with the re-anchor below — no flash to a stale position first.
   stack[0].scrollY = leftScrollTop();
+  stack[0].scrollAnchor = anchor || null;
 
   saveState();
   render();
@@ -6478,7 +6614,9 @@ $$("#tabbar .tab-btn").forEach(b => b.addEventListener("click",
 $("#show-past").addEventListener("change", e => {
   state.showPast = e.target.checked;
   saveState();
-  render();
+  // Toggling past items changes the list height above the fold, so re-pin on
+  // the nearest session/talk instead of letting the old scroll position drift.
+  rerenderPreservingAnchor();
 });
 $("#date-range-toggle").addEventListener("click", showDateRangeSheet);
 
