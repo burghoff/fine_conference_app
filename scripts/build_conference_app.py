@@ -1335,21 +1335,26 @@ html {
 }
 body {
   /* Pin the app shell to the viewport so the document has ZERO scrollable area
-     and cannot be panned by a drag (only #content scrolls, internally). We pin
-     top/left/right and let height come from --app-h below, rather than inset:0
-     (which would also pin the bottom and override the height). */
+     and cannot be panned by a drag (only #content scrolls, internally).
+     Pinning top AND bottom (not just top + a height) makes the body's height
+     equal the viewport at INTEGER precision. This matters: --app-h is driven
+     from visualViewport.height, which reports a FRACTIONAL value on some
+     devices (e.g. 832.9166px) while the layout viewport is an integer 833 — so
+     using it as the height left the body ~0.1–1px short, showing a thin strip
+     of page background below the tab bar (the residual gap that "sometimes"
+     closed as sub-pixel rounding shifted). top:0;bottom:0 sidesteps the
+     fraction entirely. --app-h is retained only as a fallback height for
+     engines where a fixed top+bottom doesn't resolve a height (rare). */
   position: fixed;
-  top: 0; left: 0; right: 0;
-  /* Height precedence (last valid wins): 100vh fallback → 100dvh for engines
-     with dynamic units → --app-h, which JS pins to the visible viewport height
-     (min of visual + layout viewport) and keeps updated. The JS pin is needed
-     because some Firefox-Android versions resolve 100dvh to a fixed
-     (toolbar-hidden) value and don't reflow it as the address bar shows/hides.
-     --app-h defaults to 100dvh so first paint (before JS) and no-JS are still
-     correct. See syncAppHeight(). */
-  height: 100vh;
-  height: 100dvh;
-  height: var(--app-h, 100dvh);
+  top: 0; left: 0; right: 0; bottom: 0;
+  /* top+bottom give an integer-precise height equal to the layout viewport
+     (no fractional gap). --app-h, driven from min(visual, layout) viewport, is
+     applied only as a max-height CAP: if the layout viewport ever exceeds the
+     visible area (e.g. a Firefox toolbar state where the two diverge), this
+     clamps the shell to the visible height so the bottom chrome can't fall
+     below the fold. A cap can only shrink, never pad, so it cannot itself
+     create a gap even though --app-h is fractional. */
+  max-height: var(--app-h, 100dvh);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -4563,16 +4568,18 @@ function rebuildSearchResults() {
   wrap.innerHTML = "";
   const raw = (state.searchQuery || "").trim();
 
-  // Testing directive: typing "DEBUG" in search toggles a live overlay of the
-  // viewport-height numbers (visualViewport vs innerHeight vs body/--app-h),
-  // for diagnosing the Firefox-Android dynamic-toolbar gap. Mirrors the NOW
-  // hook: handled before search, leaves no persistent state beyond the overlay
-  // which a second DEBUG (or reload) removes.
-  if (raw.toUpperCase() === "DEBUG") {
+  // Testing directive: typing "DEBUG TFCA" in search toggles a live overlay of
+  // the viewport-height numbers (visualViewport vs innerHeight vs body/--app-h),
+  // for diagnosing mobile dynamic-toolbar / viewport gaps. The TFCA suffix
+  // keeps it from triggering on a real attendee searching "debug" (plausible
+  // at a CS conference). Mirrors the NOW hook: handled before search, leaves no
+  // persistent state beyond the overlay which a second invocation (or reload)
+  // removes.
+  if (raw.toUpperCase() === "DEBUG TFCA") {
     const on = toggleDebugOverlay();
     wrap.appendChild(el("p", { class: "empty" },
       on ? "Debug overlay ON. It shows live viewport heights at the top-left. "
-         + "Type DEBUG again (or reload) to turn it off."
+         + "Type DEBUG TFCA again (or reload) to turn it off."
          : "Debug overlay OFF."));
     return;
   }
@@ -7323,6 +7330,15 @@ function syncAppHeight() {
     const layoutH = document.documentElement.clientHeight || 0;
     const visualH = vv ? vv.height : window.innerHeight;
     let h = layoutH > 0 ? Math.min(visualH, layoutH) : visualH;
+    // Round the cap UP. --app-h is used as body's max-height; visualViewport
+    // reports fractional values (e.g. 832.9166px) and the body's true height
+    // (from top:0;bottom:0) is the integer layout viewport (833). A fractional
+    // cap of 832.92 would shave the 833 body to 832.92 and re-open the very
+    // sub-pixel gap below the tab bar we're fixing. Ceiling ensures the cap is
+    // >= the integer height in the steady state (so it never shrinks the body
+    // there) while still clamping to ~visible height when the viewports truly
+    // diverge.
+    h = Math.ceil(h);
     if (h > 0) document.documentElement.style.setProperty("--app-h", h + "px");
   });
 }
