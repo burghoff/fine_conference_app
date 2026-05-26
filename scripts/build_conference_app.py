@@ -7270,6 +7270,12 @@ function syncAppHeight() {
   _appHRaf = requestAnimationFrame(() => {
     _appHRaf = null;
     const vv = window.visualViewport;
+    // During a pinch-zoom the visual viewport legitimately shrinks (that IS
+    // the zoom), and it also pans (offsetTop changes). Re-pinning --app-h to
+    // that shrunken height mid-gesture fights the zoom and makes the layout
+    // jump. So while zoomed (scale !== 1), leave --app-h alone and let the
+    // user zoom/pan normally; we re-sync once they return to scale 1.
+    if (vv && Math.abs(vv.scale - 1) > 0.01) return;
     const h = vv ? vv.height : window.innerHeight;
     if (h > 0) document.documentElement.style.setProperty("--app-h", h + "px");
   });
