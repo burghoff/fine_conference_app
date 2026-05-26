@@ -1324,11 +1324,19 @@ html, body {
   text-size-adjust: 100%;
 }
 body {
-  padding-top:    calc(var(--top-h) + var(--safe-top));
-  padding-bottom: calc(var(--bot-h) + var(--tab-h) + var(--safe-bottom));
-}
-body.has-indicator {
-  padding-top:  calc(var(--top-h) + var(--safe-top) + var(--ind-h));
+  /* App-shell flex column: the body is exactly the (dynamic) viewport tall and
+     never scrolls itself — only #content (the flexing middle) scrolls. This is
+     the key to stable bottom chrome on mobile: because the window/body doesn't
+     scroll, the browser's dynamic toolbar has no scroll to react to, so the
+     fixed-feeling top/bottom bars (now flex children, not position:fixed)
+     don't get repositioned mid-scroll. 100dvh tracks the live viewport; the
+     100vh line is a fallback for engines without dynamic units. The wide
+     (two-pane) layout overrides this back to its own fixed-position scheme. */
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 button {
   background: none; border: none; color: inherit;
@@ -1337,7 +1345,7 @@ button {
 
 /* ── Top bar ───────────────────────────────────────────────────────── */
 #topbar {
-  position: fixed; top: 0; left: 0; right: 0;
+  flex: 0 0 auto;
   height: calc(var(--top-h) + var(--safe-top));
   padding-top: var(--safe-top);
   background: rgb(246,246,244);
@@ -1404,20 +1412,19 @@ body[data-active-tab="me"] #back-btn[hidden] ~ #page-title {
 /* ── Content ───────────────────────────────────────────────────────── */
 #content {
   position: relative;
+  /* The flexing middle of the app-shell column: it takes all space between the
+     top bar and the bottom chrome and is the ONLY scrolling element (narrow
+     layout). flex-basis:0 + flex-grow:1 lets it fill the leftover height;
+     min-height:0 is required so a flex item is allowed to shrink below its
+     content size and scroll internally instead of overflowing the column. */
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
   /* Left/right gutter is whitespace — shrink it with small text (--sp),
      capped at default for large text. Top/bottom stay fixed. */
   padding: 8px calc(12px * var(--sp)) 24px;
-  /* min-height fills the viewport below the chrome. The vh line is a fallback
-     for browsers without dynamic-viewport units; the dvh line (which they then
-     override with) tracks the CURRENT viewport as a mobile browser's address
-     bar shows/hides. Without dvh, vh resolves to the LARGE (toolbar-hidden)
-     height, so while the toolbar is visible #content is over-tall and the
-     fixed bottom bars can momentarily anchor to a transient viewport bottom
-     during Firefox's toolbar animation — the "bar floats up until you scroll"
-     glitch. dvh keeps #content and the fixed bars resolving against the same
-     settled frame. */
-  min-height: calc(100vh - var(--top-h) - var(--bot-h) - var(--tab-h));
-  min-height: calc(100dvh - var(--top-h) - var(--bot-h) - var(--tab-h));
 }
 
 /* SVG overlay for the connector trees — the Me-tab session→talk tree
@@ -2127,9 +2134,10 @@ body[data-active-view="session-detail"] .detail-head {
 
 /* ── Sticky scroll indicator (current date + time) ─────────────────── */
 #scroll-indicator {
-  position: fixed;
-  top: calc(var(--top-h) + var(--safe-top));
-  left: 0; right: 0;
+  /* A flex child between the top bar and #content: when shown it takes its own
+     row, so #content naturally sits below it (no body padding hack needed as
+     in the old fixed-position layout). flex:0 0 auto holds its height. */
+  flex: 0 0 auto;
   height: var(--ind-h);
   display: none;
   align-items: center; justify-content: flex-start;
@@ -2239,23 +2247,23 @@ body.has-indicator #scroll-indicator { display: flex; }
   max-height: 55vh;
   overflow-y: auto;
   z-index: 19;
-  /* Hidden by sliding down AND flipping visibility. The translateY alone is
-     relative to the panel's own (variable) height, and the panel is anchored
-     well above the screen bottom (above the tab + controls bars), so for a
-     short panel 110% isn't always enough to clear the visible area — a sliver
-     of checkboxes could peek up from behind the bottom bars, especially on a
-     scroll repaint. visibility:hidden guarantees it's truly gone when closed,
-     regardless of height; the delayed visibility transition lets the slide-out
-     animation finish before it blanks. */
-  transform: translateY(110%);
-  visibility: hidden;
-  transition: transform .22s ease, visibility 0s linear .22s;
+  /* Closed = display:none, so the panel is not laid out or painted AT ALL and
+     therefore can never peek above the bottom bars during a scroll repaint
+     (the earlier translateY/visibility approach still occupied layout and a
+     short panel's slide-down didn't always clear the visible area). The
+     trade-off is that display can't be transitioned, so there's no slide-OUT
+     animation — closing is instant. Opening still animates: .open is displayed
+     and slides up from translateY(110%) to 0 via the keyframe below. */
+  display: none;
   padding: 8px 12px 12px;
 }
 #types-panel.open {
-  transform: translateY(0);
-  visibility: visible;
-  transition: transform .22s ease, visibility 0s linear 0s;
+  display: block;
+  animation: types-slide-up .22s ease;
+}
+@keyframes types-slide-up {
+  from { transform: translateY(110%); }
+  to   { transform: translateY(0); }
 }
 .types-row {
   display: flex; align-items: center; gap: 10px;
@@ -2282,9 +2290,7 @@ body.has-indicator #scroll-indicator { display: flex; }
 
 /* ── Bottom controls + tab bar ─────────────────────────────────────── */
 #bottom-controls {
-  position: fixed;
-  bottom: calc(var(--tab-h) + var(--safe-bottom));
-  left: 0; right: 0;
+  flex: 0 0 auto;
   height: var(--bot-h);
   background: rgb(246,246,244);
   border-top: 1px solid var(--line);
@@ -2314,7 +2320,7 @@ body.has-indicator #scroll-indicator { display: flex; }
 }
 
 #tabbar {
-  position: fixed; bottom: 0; left: 0; right: 0;
+  flex: 0 0 auto;
   height: calc(var(--tab-h) + var(--safe-bottom));
   padding-bottom: var(--safe-bottom);
   background: var(--surface);
@@ -2455,6 +2461,21 @@ body.has-indicator #scroll-indicator { display: flex; }
 }
 
 @media __WIDE_QUERY__ {
+  /* The base (narrow) layout makes the chrome flex children of an app-shell
+     column. The wide layout instead uses explicit fixed positioning (it needs
+     to clip the left column at the Me-pane edge and let the controls bar span
+     both panes), so re-establish position:fixed and the viewport anchors here
+     for each piece that the narrow layout had turned into a flex child. */
+  #topbar {
+    position: fixed; top: 0; left: 0;
+  }
+  #scroll-indicator {
+    position: fixed; top: calc(var(--top-h) + var(--safe-top)); left: 0;
+  }
+  #tabbar {
+    position: fixed; bottom: 0; left: 0;
+  }
+
   /* Left-column fixed chrome stops at the pane's left edge.
      NOTE: #bottom-controls is intentionally NOT clipped — it spans the
      full width across both panes (see below). */
@@ -2478,6 +2499,8 @@ body.has-indicator #scroll-indicator { display: flex; }
      sits just above the tab-bar band. Raised above the Me pane so it
      paints across it. */
   #bottom-controls {
+    position: fixed;
+    bottom: calc(var(--tab-h) + var(--safe-bottom));
     left: 0; right: 0;
     z-index: 26;
   }
@@ -2502,6 +2525,10 @@ body.has-indicator #scroll-indicator { display: flex; }
      fixed #content is positioned explicitly; padding-right (the Me-pane
      gutter) is preserved by the rule above. */
   body {
+    /* The wide layout uses its own fixed-position scheme (below), not the
+       narrow app-shell flex column, so revert body to a normal block box. */
+    display: block;
+    height: auto;
     padding-top: 0;
     padding-bottom: 0;
     overflow: hidden;            /* window itself no longer scrolls */
@@ -6890,24 +6917,18 @@ function snapshotScroll() {
   entry.scrollAnchor = captureListAnchor();
 }
 
-/* On wide screens the left pane scrolls inside #content (so its scrollbar
-   sits at the pane's right edge); on narrow screens the window scrolls.
-   These two helpers read/write whichever is in effect so scroll save +
-   restore work in both layouts. */
+/* #content is the scroll container in BOTH layouts now — the narrow app-shell
+   flex column makes #content the only scroller, and the wide layout already
+   scrolled #content (its scrollbar sits at the left pane's right edge). So
+   both helpers simply read/write #content.scrollTop; the old window-scroll
+   branch for narrow is gone along with window scrolling. */
 function leftScrollTop() {
-  if (isWide()) {
-    const c = $("#content");
-    return c ? c.scrollTop : 0;
-  }
-  return window.scrollY;
+  const c = $("#content");
+  return c ? c.scrollTop : 0;
 }
 function setLeftScrollTop(y) {
-  if (isWide()) {
-    const c = $("#content");
-    if (c) c.scrollTop = y;
-  } else {
-    window.scrollTo(0, y);
-  }
+  const c = $("#content");
+  if (c) c.scrollTop = y;
 }
 
 /* Re-render the current view in place while keeping the user looking at the
