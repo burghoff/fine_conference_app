@@ -1347,6 +1347,13 @@ body {
      engines where a fixed top+bottom doesn't resolve a height (rare). */
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
+  /* Reserve the device safe-area insets ONCE here, at the shell boundary, so
+     the flex children (top bar, content, bottom controls, tab bar) lay out
+     inside the safe region and the bars don't need to bake the inset into
+     their own heights (which created dead space inside the tab bar). */
+  padding-top: var(--safe-top);
+  padding-bottom: var(--safe-bottom);
+  box-sizing: border-box;
   /* top+bottom give an integer-precise height equal to the layout viewport
      (no fractional gap). --app-h, driven from min(visual, layout) viewport, is
      applied only as a max-height CAP: if the layout viewport ever exceeds the
@@ -1373,8 +1380,10 @@ button {
      (the "drag from the tab/search bar makes it move" symptom). touch-action:
      none disables drag/pan interpretation here; taps/clicks are unaffected. */
   touch-action: none;
-  height: calc(var(--top-h) + var(--safe-top));
-  padding-top: var(--safe-top);
+  /* Just the bar height — the safe-top inset is reserved on the body now, so
+     the top bar sits inside the safe region without baking the inset in (which
+     would double-count it). */
+  height: var(--top-h);
   background: rgb(246,246,244);
   border-bottom: 1px solid var(--line);
   /* Three columns with EQUAL side tracks so the centered title sits at the
@@ -2360,8 +2369,14 @@ body.has-indicator #scroll-indicator { display: flex; }
 #tabbar {
   flex: 0 0 auto;
   touch-action: none;   /* see #topbar — drags on the tab bar must not pan/toggle chrome */
-  height: calc(var(--tab-h) + var(--safe-bottom));
-  padding-bottom: var(--safe-bottom);
+  /* Just the bar's own height — NOT + safe-bottom. The home-indicator inset is
+     reserved once on the body (padding-bottom: var(--safe-bottom)) so it sits
+     BELOW the whole shell, in the home-indicator zone it's meant to protect.
+     Baking it into the tab bar's height instead (the old way) padded the bar
+     out by the full inset — e.g. a 95px-tall bar where --tab-h is ~58 — and
+     that ~37px of safe-area padding rendered as dead space inside the visible
+     bar, which read as "a gap below the icons". */
+  height: var(--tab-h);
   background: var(--surface);
   border-top: 1px solid var(--line);
   display: grid; grid-template-columns: repeat(4, 1fr);
@@ -7381,6 +7396,13 @@ function updateDebugOverlay() {
   // them gave a misleading 0 before. Positive => shell overflows below the
   // fold (the zoomable black band under the bar).
   const overflow = tabRect ? Math.round(tabRect.bottom - layoutH) : "n/a";
+  // Read the resolved safe-area insets (and the derived --tab-h) so we can see
+  // whether a large env(safe-area-inset-bottom) is padding the tab bar into
+  // dead space.
+  const cs = getComputedStyle(document.documentElement);
+  const safeB = cs.getPropertyValue("--safe-bottom").trim() || "?";
+  const safeT = cs.getPropertyValue("--safe-top").trim() || "?";
+  const tabH = cs.getPropertyValue("--tab-h").trim() || "?";
   // Per-element vertical bands: top→bottom of each app-shell child. A gap shows
   // up as a jump between one element's bottom and the next's top.
   const band = (id) => {
@@ -7401,6 +7423,7 @@ function updateDebugOverlay() {
     `${band("content")}\n` +
     `${band("bottom-controls")}\n` +
     `${band("tabbar")}\n` +
+    `--tab-h: ${tabH} | safe-top: ${safeT} | safe-bot: ${safeB}\n` +
     `OVERFLOW below fold: ${overflow}\n` +
     `wide: ${isWide()}`;
 }

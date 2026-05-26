@@ -127,6 +127,10 @@ body {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
   
+  padding-top: var(--safe-top);
+  padding-bottom: var(--safe-bottom);
+  box-sizing: border-box;
+  
   max-height: var(--app-h, 100dvh);
   display: flex;
   flex-direction: column;
@@ -141,8 +145,8 @@ button {
   flex: 0 0 auto;
   
   touch-action: none;
-  height: calc(var(--top-h) + var(--safe-top));
-  padding-top: var(--safe-top);
+  
+  height: var(--top-h);
   background: rgb(246,246,244);
   border-bottom: 1px solid var(--line);
   
@@ -941,8 +945,8 @@ body.has-indicator #scroll-indicator { display: flex; }
 #tabbar {
   flex: 0 0 auto;
   touch-action: none;   
-  height: calc(var(--tab-h) + var(--safe-bottom));
-  padding-bottom: var(--safe-bottom);
+  
+  height: var(--tab-h);
   background: var(--surface);
   border-top: 1px solid var(--line);
   display: grid; grid-template-columns: repeat(4, 1fr);
@@ -4911,6 +4915,11 @@ function updateDebugOverlay() {
 
   const overflow = tabRect ? Math.round(tabRect.bottom - layoutH) : "n/a";
 
+  const cs = getComputedStyle(document.documentElement);
+  const safeB = cs.getPropertyValue("--safe-bottom").trim() || "?";
+  const safeT = cs.getPropertyValue("--safe-top").trim() || "?";
+  const tabH = cs.getPropertyValue("--tab-h").trim() || "?";
+
   const band = (id) => {
     const e = document.getElementById(id);
     if (!e) return `${id}: (none)`;
@@ -4929,6 +4938,7 @@ function updateDebugOverlay() {
     `${band("content")}\n` +
     `${band("bottom-controls")}\n` +
     `${band("tabbar")}\n` +
+    `--tab-h: ${tabH} | safe-top: ${safeT} | safe-bot: ${safeB}\n` +
     `OVERFLOW below fold: ${overflow}\n` +
     `wide: ${isWide()}`;
 }
