@@ -117,7 +117,15 @@ html, body {
   -moz-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
+
+html {
+  height: 100%;
+  overflow: hidden;
+}
 body {
+  
+  position: fixed;
+  top: 0; left: 0; right: 0;
   
   height: 100vh;
   height: 100dvh;
@@ -1077,8 +1085,10 @@ body.has-indicator #scroll-indicator { display: flex; }
 
   body {
     
+    position: static;
     display: block;
     height: auto;
+    inset: auto;
     padding-top: 0;
     padding-bottom: 0;
     overflow: hidden;            
