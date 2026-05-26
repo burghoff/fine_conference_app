@@ -4528,6 +4528,20 @@ function rebuildSearchResults() {
   wrap.innerHTML = "";
   const raw = (state.searchQuery || "").trim();
 
+  // Testing directive: typing "DEBUG" in search toggles a live overlay of the
+  // viewport-height numbers (visualViewport vs innerHeight vs body/--app-h),
+  // for diagnosing the Firefox-Android dynamic-toolbar gap. Mirrors the NOW
+  // hook: handled before search, leaves no persistent state beyond the overlay
+  // which a second DEBUG (or reload) removes.
+  if (raw.toUpperCase() === "DEBUG") {
+    const on = toggleDebugOverlay();
+    wrap.appendChild(el("p", { class: "empty" },
+      on ? "Debug overlay ON. It shows live viewport heights at the top-left. "
+         + "Type DEBUG again (or reload) to turn it off."
+         : "Debug overlay OFF."));
+    return;
+  }
+
   // Testing directive: "NOW YYYY-MM-DD HH:MM" pins the app's clock instead
   // of running a search. Handled before the min-length check so the user
   // gets immediate feedback as they finish typing it.
@@ -7270,6 +7284,74 @@ window.addEventListener("orientationchange", syncAppHeight);
 // Also re-pin on wake/visibility regain — a toolbar state change while hidden
 // (e.g. returning from another tab/app) won't have fired a resize.
 window.addEventListener("pageshow", syncAppHeight);
+
+/* ----------------------------------------------------------------------------
+   DEBUG overlay (toggled by typing DEBUG in Search). A diagnostic readout of
+   the competing viewport-height numbers, pinned over everything, updated on
+   every viewport event. In the "stuck high / gap below tab bar" state, the
+   screenshot of these numbers shows exactly which height is diverging and
+   whether visualViewport is reporting a stale value. Purely a dev aid — leaves
+   no persistent state; a second DEBUG or a reload removes it.
+---------------------------------------------------------------------------- */
+let _dbgEl = null;
+let _dbgTick = null;
+function updateDebugOverlay() {
+  if (!_dbgEl) return;
+  const vv = window.visualViewport;
+  const body = document.body.getBoundingClientRect();
+  const tab = document.getElementById("tabbar");
+  const tabRect = tab ? tab.getBoundingClientRect() : null;
+  const appH = getComputedStyle(document.documentElement)
+                 .getPropertyValue("--app-h").trim() || "(unset)";
+  const innerH = window.innerHeight;
+  const tabBottom = tabRect ? Math.round(tabRect.bottom) : "n/a";
+  // Gap below the tab bar relative to the visible viewport bottom (vv.height
+  // if available, else innerHeight). Positive => empty space under the bar.
+  const visibleBottom = vv ? vv.height : innerH;
+  const gap = tabRect ? Math.round(visibleBottom - tabRect.bottom) : "n/a";
+  _dbgEl.textContent =
+    `visualViewport.h: ${vv ? Math.round(vv.height) : "n/a"}\n` +
+    `visualViewport.offsetTop: ${vv ? Math.round(vv.offsetTop) : "n/a"}\n` +
+    `window.innerHeight: ${innerH}\n` +
+    `documentElement.clientHeight: ${document.documentElement.clientHeight}\n` +
+    `body height: ${Math.round(body.height)}\n` +
+    `--app-h: ${appH}\n` +
+    `tabbar.bottom: ${tabBottom}\n` +
+    `GAP below tabbar: ${gap}\n` +
+    `wide: ${isWide()}`;
+}
+function toggleDebugOverlay() {
+  if (_dbgEl) {
+    _dbgEl.remove();
+    _dbgEl = null;
+    if (_dbgTick) { clearInterval(_dbgTick); _dbgTick = null; }
+    if (window.visualViewport) {
+      window.visualViewport.removeEventListener("resize", updateDebugOverlay);
+      window.visualViewport.removeEventListener("scroll", updateDebugOverlay);
+    }
+    window.removeEventListener("resize", updateDebugOverlay);
+    return false;
+  }
+  _dbgEl = document.createElement("pre");
+  // Inline styles so it needs no CSS rule; fixed + max z-index so it floats
+  // above all chrome. Pointer-events:none so it never intercepts taps.
+  _dbgEl.style.cssText =
+    "position:fixed;top:0;left:0;z-index:99999;margin:0;padding:6px 8px;" +
+    "font:11px/1.35 ui-monospace,Menlo,Consolas,monospace;white-space:pre;" +
+    "background:rgba(0,0,0,.82);color:#0f0;pointer-events:none;" +
+    "border-bottom-right-radius:8px;max-width:80vw;";
+  document.body.appendChild(_dbgEl);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", updateDebugOverlay);
+    window.visualViewport.addEventListener("scroll", updateDebugOverlay);
+  }
+  window.addEventListener("resize", updateDebugOverlay);
+  // Also refresh on a steady tick, since some toolbar transitions settle
+  // without firing a final event — this keeps the readout current to ~250ms.
+  _dbgTick = setInterval(updateDebugOverlay, 250);
+  updateDebugOverlay();
+  return true;
+}
 
 // the Me-pane connector tree on any width change while wide, since the
 // SVG geometry depends on the pane's width. A debounce keeps drags cheap.
