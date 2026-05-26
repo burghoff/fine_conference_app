@@ -1347,12 +1347,16 @@ body {
      engines where a fixed top+bottom doesn't resolve a height (rare). */
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
-  /* Reserve the device safe-area insets ONCE here, at the shell boundary, so
-     the flex children (top bar, content, bottom controls, tab bar) lay out
-     inside the safe region and the bars don't need to bake the inset into
-     their own heights (which created dead space inside the tab bar). */
+  /* NOTE on safe areas: the body is pinned with bottom:0 (and top:0) to the
+     fixed layout viewport, which on the target devices ALREADY sits above the
+     home indicator — debug showed env(safe-area-inset-bottom)=~37px while the
+     tab bar pinned at bottom:0 lands at the true visible bottom (OVERFLOW=-37).
+     Reserving safe-area-inset-bottom here therefore DOUBLE-counts it and lifts
+     the tab bar ~37px into the visible area as an empty band. So we do NOT pad
+     the bottom for the safe area in this pinned layout. (safe-top is padded
+     because the top bar isn't otherwise inset; it resolves to 0 where there's
+     no top inset, so it's harmless when absent.) */
   padding-top: var(--safe-top);
-  padding-bottom: var(--safe-bottom);
   box-sizing: border-box;
   /* top+bottom give an integer-precise height equal to the layout viewport
      (no fractional gap). --app-h, driven from min(visual, layout) viewport, is
