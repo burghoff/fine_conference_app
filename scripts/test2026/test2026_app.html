@@ -127,9 +127,6 @@ body {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
   
-  padding-top: var(--safe-top);
-  box-sizing: border-box;
-  
   max-height: var(--app-h, 100dvh);
   display: flex;
   flex-direction: column;
@@ -144,8 +141,8 @@ button {
   flex: 0 0 auto;
   
   touch-action: none;
-  
-  height: var(--top-h);
+  height: calc(var(--top-h) + var(--safe-top));
+  padding-top: var(--safe-top);
   background: rgb(246,246,244);
   border-bottom: 1px solid var(--line);
   
@@ -944,8 +941,8 @@ body.has-indicator #scroll-indicator { display: flex; }
 #tabbar {
   flex: 0 0 auto;
   touch-action: none;   
-  
-  height: var(--tab-h);
+  height: calc(var(--tab-h) + var(--safe-bottom));
+  padding-bottom: var(--safe-bottom);
   background: var(--surface);
   border-top: 1px solid var(--line);
   display: grid; grid-template-columns: repeat(4, 1fr);
