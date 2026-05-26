@@ -7371,9 +7371,7 @@ function updateDebugOverlay() {
   const tabRect = tab ? tab.getBoundingClientRect() : null;
   const appH = getComputedStyle(document.documentElement)
                  .getPropertyValue("--app-h").trim() || "(unset)";
-  const innerH = window.innerHeight;
   const layoutH = document.documentElement.clientHeight;
-  const tabBottom = tabRect ? Math.round(tabRect.bottom) : "n/a";
   // The meaningful number is how far the bottom of the app shell (≈ body
   // bottom / tabbar bottom) sits BELOW the layout-viewport fold. tabbar.bottom
   // is in layout-viewport coords, so compare to layoutH (clientHeight), NOT
