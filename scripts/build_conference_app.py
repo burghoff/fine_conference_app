@@ -1347,17 +1347,6 @@ body {
      engines where a fixed top+bottom doesn't resolve a height (rare). */
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
-  /* NOTE on safe areas: the body is pinned with bottom:0 (and top:0) to the
-     fixed layout viewport, which on the target devices ALREADY sits above the
-     home indicator — debug showed env(safe-area-inset-bottom)=~37px while the
-     tab bar pinned at bottom:0 lands at the true visible bottom (OVERFLOW=-37).
-     Reserving safe-area-inset-bottom here therefore DOUBLE-counts it and lifts
-     the tab bar ~37px into the visible area as an empty band. So we do NOT pad
-     the bottom for the safe area in this pinned layout. (safe-top is padded
-     because the top bar isn't otherwise inset; it resolves to 0 where there's
-     no top inset, so it's harmless when absent.) */
-  padding-top: var(--safe-top);
-  box-sizing: border-box;
   /* top+bottom give an integer-precise height equal to the layout viewport
      (no fractional gap). --app-h, driven from min(visual, layout) viewport, is
      applied only as a max-height CAP: if the layout viewport ever exceeds the
@@ -1384,10 +1373,8 @@ button {
      (the "drag from the tab/search bar makes it move" symptom). touch-action:
      none disables drag/pan interpretation here; taps/clicks are unaffected. */
   touch-action: none;
-  /* Just the bar height — the safe-top inset is reserved on the body now, so
-     the top bar sits inside the safe region without baking the inset in (which
-     would double-count it). */
-  height: var(--top-h);
+  height: calc(var(--top-h) + var(--safe-top));
+  padding-top: var(--safe-top);
   background: rgb(246,246,244);
   border-bottom: 1px solid var(--line);
   /* Three columns with EQUAL side tracks so the centered title sits at the
@@ -2373,14 +2360,8 @@ body.has-indicator #scroll-indicator { display: flex; }
 #tabbar {
   flex: 0 0 auto;
   touch-action: none;   /* see #topbar — drags on the tab bar must not pan/toggle chrome */
-  /* Just the bar's own height — NOT + safe-bottom. The home-indicator inset is
-     reserved once on the body (padding-bottom: var(--safe-bottom)) so it sits
-     BELOW the whole shell, in the home-indicator zone it's meant to protect.
-     Baking it into the tab bar's height instead (the old way) padded the bar
-     out by the full inset — e.g. a 95px-tall bar where --tab-h is ~58 — and
-     that ~37px of safe-area padding rendered as dead space inside the visible
-     bar, which read as "a gap below the icons". */
-  height: var(--tab-h);
+  height: calc(var(--tab-h) + var(--safe-bottom));
+  padding-bottom: var(--safe-bottom);
   background: var(--surface);
   border-top: 1px solid var(--line);
   display: grid; grid-template-columns: repeat(4, 1fr);
