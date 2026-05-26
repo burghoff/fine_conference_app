@@ -1323,16 +1323,30 @@ html, body {
   -moz-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
+/* Lock the document root itself. Putting overflow:hidden only on <body> wasn't
+   enough: <html> remained the scrollable document, so a drag could pan the
+   whole (correctly-833-tall) app up and down within a slightly taller visual
+   viewport — the "drag the tab bar up, then back down" behavior, with a band
+   of empty space appearing below the tab bar. Fixing the root height and
+   hiding its overflow removes that document-level scroll entirely. */
+html {
+  height: 100%;
+  overflow: hidden;
+}
 body {
+  /* Pin the app shell to the viewport so the document has ZERO scrollable area
+     and cannot be panned by a drag (only #content scrolls, internally). We pin
+     top/left/right and let height come from --app-h below, rather than inset:0
+     (which would also pin the bottom and override the height). */
+  position: fixed;
+  top: 0; left: 0; right: 0;
   /* Height precedence (last valid wins): 100vh fallback → 100dvh for engines
-     with dynamic units → --app-h, which JS pins to visualViewport.height (the
-     ACTUALLY-visible height) and keeps updated. The JS pin is needed because
-     some Firefox-Android versions resolve 100dvh to a fixed (toolbar-hidden)
-     value and don't reflow it as the address bar shows/hides, leaving the
-     flex column taller than the visible area — so the bottom chrome parks
-     below the fold with a gap under the tab bar until a scroll forces a
-     recompute. --app-h defaults to 100dvh so first paint (before JS) and
-     no-JS are still correct. See syncAppHeight(). */
+     with dynamic units → --app-h, which JS pins to the visible viewport height
+     (min of visual + layout viewport) and keeps updated. The JS pin is needed
+     because some Firefox-Android versions resolve 100dvh to a fixed
+     (toolbar-hidden) value and don't reflow it as the address bar shows/hides.
+     --app-h defaults to 100dvh so first paint (before JS) and no-JS are still
+     correct. See syncAppHeight(). */
   height: 100vh;
   height: 100dvh;
   height: var(--app-h, 100dvh);
@@ -2546,9 +2560,12 @@ body.has-indicator #scroll-indicator { display: flex; }
      gutter) is preserved by the rule above. */
   body {
     /* The wide layout uses its own fixed-position scheme (below), not the
-       narrow app-shell flex column, so revert body to a normal block box. */
+       narrow app-shell flex column, so revert body to a normal block box.
+       position:static undoes the narrow layout's position:fixed pin. */
+    position: static;
     display: block;
     height: auto;
+    inset: auto;
     padding-top: 0;
     padding-bottom: 0;
     overflow: hidden;            /* window itself no longer scrolls */
