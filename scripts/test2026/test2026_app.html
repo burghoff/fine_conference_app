@@ -4860,6 +4860,8 @@ function syncAppHeight() {
   _appHRaf = requestAnimationFrame(() => {
     _appHRaf = null;
     const vv = window.visualViewport;
+
+    if (vv && Math.abs(vv.scale - 1) > 0.01) return;
     const h = vv ? vv.height : window.innerHeight;
     if (h > 0) document.documentElement.style.setProperty("--app-h", h + "px");
   });
