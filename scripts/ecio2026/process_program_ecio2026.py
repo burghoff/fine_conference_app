@@ -51,11 +51,21 @@ SKELETON. The processor's job is to populate each track session in that
 skeleton with the talks the PDF actually prints under it.
 
 For non-track items (Plenary, Workshop panels, Industry Talks, Poster sessions,
-ceremonies, social events) we emit them as sessions in their own right and (for
-the ones that have named speakers — plenaries, workshop panellists, industry
-talks) attach those speakers as single-author talks. These are also hand-listed
-in the skeleton, since the PDF mixes them with the technical grid in
-visually-irregular ways that aren't worth a special-case parser.
+ceremonies, social events) we emit them as sessions in their own right. The
+talks under Workshops and Industry Talk sessions also come straight from the
+PDF — those cells don't use the wide title-vs-speaker x-gap of the tech grid;
+they pack "Title. Speaker, Affiliation" into a single run of words. We parse
+that run with _harvest_block_cells (see below). Plenary lectures are the one
+exception: the PDF only prints the plenary speaker's name on a meta-row, with
+no talk title we could extract, so those entries are still hand-listed below
+(speaker name + invented "Plenary Lecture" placeholder).
+
+Session titles also come from the PDF wherever the PDF renders one: the topic
+words above each tech-track column (e.g. "Electro-Optic Modulators"), the long
+"WORKSHOP 1: …" / "WORKSHOP 2: …" headers, and the "Industry Talk Session N: …"
+headers all sit at a known Y in a known column and we read them off. For
+sessions the PDF has no explicit header for (ceremonies, lunches, social
+events) the SKELETON carries an explicit `title`.
 
 Output:
     conference_data.json   schema documented in docs/CONFERENCE_JSON.md
@@ -137,7 +147,10 @@ TALK_TYPES = [
 #   id        : stable string id (used in talk session_id)
 #   day       : key into DAYS (-> ISO date)
 #   start/end : "HH:MM" local time
-#   title     : display title
+#   title     : OPTIONAL display title. When omitted we read it from the PDF
+#               (topic header for track sessions, header row for workshops /
+#               industry sessions); supplied for ceremonies, lunches, and
+#               social events where the PDF has no header to scrape.
 #   type      : human label shown in the session detail header
 #   color     : token referenced by SESSION_TYPES above
 #   room      : optional override (else ROOM_BY_COL[column])
@@ -145,14 +158,38 @@ TALK_TYPES = [
 #               purely metadata, surfaces in the topic line
 #   column    : 1/2/3 -> the PDF column to harvest talks from; OMIT for sessions
 #               with no PDF-parsed talks (ceremonies, lunches, social events,
-#               and non-track items we hard-list under `talks`)
-#   talks     : optional explicit talk list for non-track sessions (plenaries,
-#               workshops, industry talks). Each entry: {"title", "speaker",
-#               "speaker_aff", "color"}. The processor turns these into talk
-#               objects directly.
+#               and hand-listed entries like the plenary lectures)
+#   pdf_title : optional PDF-title hints. Maps to the topic-header / row-text
+#               location the title text lives at. Two shapes:
+#                 {"source": "topic_header", "column": 1|2|3}
+#                     The size-4.56 topic words sitting just above this
+#                     session's Y band in the given column. Default for any
+#                     tech-track session (one with "column" + "track") if
+#                     pdf_title is omitted.
+#                 {"source": "row_text", "column": 1|2|3, "y": <float>}
+#                     A single PDF row at the given Y (size-4.08 text) in the
+#                     given column — used for workshop and industry headers
+#                     which sit on a dedicated row, not above the column.
+#   harvest   : optional directive to harvest non-grid talk cells from the PDF
+#               (used for industry sessions + workshops, whose cells pack
+#               "Title. Speaker, Affiliation" into a single run rather than
+#               using the wide title-vs-speaker x-gap of the tech grid).
+#                 {"column": 1|2|3, "talk_color": "rose",
+#                  "slot_mode": "per_slot" | "session",
+#                  "slot_minutes": <int>}      # only for slot_mode "per_slot"
+#               "per_slot" walks the time-slot rows inside the band in order
+#               and emits one talk per slot from the cell at that Y; "session"
+#               emits one talk per non-empty cell row and inherits the
+#               session's start/end for all of them.
+#   talks     : optional explicit talk list (kept for the few plenary-lecture
+#               entries whose talk title is invented, not from the PDF).
+#               Each entry: {"title", "speaker", "speaker_aff", "color"}. The
+#               processor turns these into talk objects directly.
 # =============================================================================
 SKELETON: list[dict] = [
     # ---- Sunday June 14 — student day ---------------------------------------
+    # These three have no PDF row of their own (they're listed in the Sunday
+    # banner only), so keep titles hardcoded.
     {"id": "S-sun-student-workshop", "day": "sun",
      "start": "13:00", "end": "16:30",
      "title": "Student Workshop", "type": "Student Event",
@@ -172,36 +209,37 @@ SKELETON: list[dict] = [
      "title": "Opening Ceremony", "type": "Ceremony",
      "color": "orange", "room": PLENARY_ROOM},
 
+    # Tech-track sessions. Title omitted -> read from the PDF topic-header row
+    # above the column. talks parsed from the wide title-vs-speaker grid as
+    # before.
     {"id": "S-mon-M1A", "day": "mon", "start": "08:30", "end": "10:15",
-     "title": "Electro-Optic Modulators", "type": "Technical Session",
+     "type": "Technical Session",
      "color": "blue", "track": "M1A", "column": 1},
     {"id": "S-mon-M1B", "day": "mon", "start": "08:30", "end": "10:15",
-     "title": "Light Emitters", "type": "Technical Session",
+     "type": "Technical Session",
      "color": "blue", "track": "M1B", "column": 2},
     {"id": "S-mon-M1C", "day": "mon", "start": "08:30", "end": "10:15",
-     "title": "Photonic Devices for Quantum I", "type": "Technical Session",
+     "type": "Technical Session",
      "color": "blue", "track": "M1C", "column": 3},
 
     {"id": "S-mon-M2A", "day": "mon", "start": "10:45", "end": "12:30",
-     "title": "Lasers I (Light Emitters)", "type": "Technical Session",
+     "type": "Technical Session",
      "color": "blue", "track": "M2A", "column": 1},
     {"id": "S-mon-M2B", "day": "mon", "start": "10:45", "end": "12:30",
-     "title": "Programmable Photonics for Information Processing",
      "type": "Technical Session",
      "color": "blue", "track": "M2B", "column": 2},
     {"id": "S-mon-M2C", "day": "mon", "start": "10:45", "end": "12:30",
-     "title": "Photonic Devices for Quantum II", "type": "Technical Session",
+     "type": "Technical Session",
      "color": "blue", "track": "M2C", "column": 3},
 
     {"id": "S-mon-M3A", "day": "mon", "start": "13:30", "end": "15:15",
-     "title": "Lasers II", "type": "Technical Session",
+     "type": "Technical Session",
      "color": "blue", "track": "M3A", "column": 1},
     {"id": "S-mon-M3B", "day": "mon", "start": "13:30", "end": "15:15",
-     "title": "Scalable Integrated Photonics for Communications and AI Systems",
      "type": "Technical Session",
      "color": "blue", "track": "M3B", "column": 2},
     {"id": "S-mon-M3C", "day": "mon", "start": "13:30", "end": "15:15",
-     "title": "Photonic Devices for Quantum III", "type": "Technical Session",
+     "type": "Technical Session",
      "color": "blue", "track": "M3C", "column": 3},
 
     {"id": "S-mon-poster-blitz-1-1", "day": "mon",
@@ -217,88 +255,37 @@ SKELETON: list[dict] = [
      "title": "Coffee + Poster Session 1", "type": "Poster Session",
      "color": "amber", "room": "Foyers in front of Plenary Auditorium"},
 
-    # All three Monday industry sessions run in parallel 16:55–17:55, six 10-min
-    # slots. Each talk carries its own start/end so the bubble shows the actual
-    # slot, not the whole hour. Speaker/affiliation/title taken directly from
-    # the detailed PDF grid (cols x ≈ 55-415 / 415-770 / 770-1100).
+    # All three Monday industry sessions run in parallel 16:55–17:55 with six
+    # 10-min slots per column. Title text and per-slot talk cells both come
+    # straight from the PDF (cells x ≈ 55-415 / 415-770 / 770-1100, header
+    # row y ≈ 319.1). _harvest_block_cells parses the "Title. Speaker,
+    # Affiliation" run packed inside each cell.
     {"id": "S-mon-industry-1", "day": "mon",
      "start": "16:55", "end": "17:55",
-     "title": "Industry Talk Session 1: Devices",
      "type": "Industry Talks", "color": "amber", "room": ROOM_COL1,
-     "talks": [
-        {"start": "16:55", "end": "17:05",
-         "title": "Advances in Electro-Optical Components for Data Communications",
-         "speaker": "Jean Teissier", "speaker_aff": "Coherent", "color": "rose"},
-        {"start": "17:05", "end": "17:15",
-         "title": "Glass micro-components for fiber connectivity in integrated and quantum photonics",
-         "speaker": "Rolando Ferrini", "speaker_aff": "FEMTOPRINT SA", "color": "rose"},
-        {"start": "17:15", "end": "17:25",
-         "title": "High-Repetition-Rate Ultrafast Lasers for Integrated Photonics",
-         "speaker": "Florian Emaury", "speaker_aff": "Menhir Photonics AG", "color": "rose"},
-        {"start": "17:25", "end": "17:35",
-         "title": "Advancing Photonic Integrated Circuits with Plasmonic Modulators",
-         "speaker": "Milana Lalovic",
-         "speaker_aff": "Marvell Technologies (formerly Polariton Technologies AG)",
-         "color": "rose"},
-        {"start": "17:35", "end": "17:45",
-         "title": "High-speed InP- and GaAs-based photodiodes and avalanche photodiodes",
-         "speaker": "Maria Haemmerli", "speaker_aff": "Albis Optoelectronics", "color": "rose"},
-        {"start": "17:45", "end": "17:55",
-         "title": "Si PIC technology with local-backside accessible Avalanche Photodiodes for sensing application",
-         "speaker": "Andreas Mai", "speaker_aff": "IHP", "color": "rose"},
-     ]},
+     "pdf_title": {"source": "row_text", "column": 1, "y": 319.1},
+     "harvest": {"column": 1, "talk_color": "rose",
+                 "slot_mode": "per_slot", "slot_minutes": 10}},
     {"id": "S-mon-industry-2", "day": "mon",
      "start": "16:55", "end": "17:55",
-     "title": "Industry Talk Session 2: Photonic Platforms",
      "type": "Industry Talks", "color": "amber", "room": ROOM_COL2,
-     "talks": [
-        {"start": "16:55", "end": "17:05",
-         "title": "Industry Talk", "speaker": "Frederic Loizeau",
-         "speaker_aff": "Lightium AG", "color": "rose"},
-        {"start": "17:05", "end": "17:15",
-         "title": "Industry Talk", "speaker": "",
-         "speaker_aff": "LIGENTEC SA", "color": "rose"},
-        {"start": "17:15", "end": "17:25",
-         "title": "ltoi300: the first Lithium Tantalate PDK for ultrafast electro-optic PICs",
-         "speaker": "Andrei Kiselev", "speaker_aff": "Luxtelligence SA", "color": "rose"},
-        {"start": "17:25", "end": "17:35",
-         "title": "Europe's First Independent TFLN PIC Foundry",
-         "speaker": "Hernán Furci", "speaker_aff": "CCRAFT", "color": "rose"},
-        {"start": "17:35", "end": "17:45",
-         "title": "Scalable semiconductor laser FM comb engines for AI datacenters and beyond",
-         "speaker": "Dmitry Kazakov", "speaker_aff": "Aylight AG", "color": "rose"},
-        {"start": "17:45", "end": "17:55",
-         "title": "Breaking the Copper Wall: Embedded Optical Interconnects for Scalable Baseboards and PCIe Links",
-         "speaker": "Nikolaus Flöry", "speaker_aff": "Vario-Optics AG", "color": "rose"},
-     ]},
+     "pdf_title": {"source": "row_text", "column": 2, "y": 319.1},
+     "harvest": {"column": 2, "talk_color": "rose",
+                 "slot_mode": "per_slot", "slot_minutes": 10}},
     {"id": "S-mon-industry-3", "day": "mon",
      "start": "16:55", "end": "17:55",
-     "title": "Industry Talk Session 3: Modelling, Design and Systems",
      "type": "Industry Talks", "color": "amber", "room": ROOM_COL3,
-     "talks": [
-        {"start": "16:55", "end": "17:05",
-         "title": "GPU Accelerated Photonic Circuit Simulations",
-         "speaker": "Justus Bohn", "speaker_aff": "COMSOL Multiphysics GmbH",
-         "color": "rose"},
-        {"start": "17:05", "end": "17:15",
-         "title": "From noise to signal with the right measurement technique",
-         "speaker": "Heidi Potts", "speaker_aff": "Zurich Instruments", "color": "rose"},
-        {"start": "17:15", "end": "17:25",
-         "title": "How Luceda Empowers the PIC value chain",
-         "speaker": "Ana Filipa Carvalho", "speaker_aff": "Luceda Photonics", "color": "rose"},
-        {"start": "17:25", "end": "17:35",
-         "title": "Photonic Layer Security",
-         "speaker": "Dan Sadot", "speaker_aff": "CyberRidge", "color": "rose"},
-        {"start": "17:35", "end": "17:45",
-         "title": "Photonic Integrated Circuits for 4D Imaging",
-         "speaker": "Remus Nicolaescu", "speaker_aff": "Point Cloud", "color": "rose"},
-     ]},
+     "pdf_title": {"source": "row_text", "column": 3, "y": 319.1},
+     "harvest": {"column": 3, "talk_color": "rose",
+                 "slot_mode": "per_slot", "slot_minutes": 10}},
 
     {"id": "S-mon-plenary-1", "day": "mon",
      "start": "18:05", "end": "18:50",
      "title": "Plenary Session 1", "type": "Plenary",
      "color": "violet", "room": PLENARY_ROOM,
      "talks": [
+        # Plenary "talks" are speaker-only — the PDF prints only the lecturer
+        # name on a meta-row, no extractable talk title.
         {"title": "Plenary Lecture", "speaker": "Peter Seitz",
          "speaker_aff": "", "color": "teal"},
      ]},
@@ -310,52 +297,39 @@ SKELETON: list[dict] = [
 
     # ---- Tuesday June 16 ----------------------------------------------------
     {"id": "S-tue-T1A", "day": "tue", "start": "08:30", "end": "10:15",
-     "title": "Advanced Photonics", "type": "Technical Session",
+     "type": "Technical Session",
      "color": "blue", "track": "T1A", "column": 1},
     {"id": "S-tue-T1B", "day": "tue", "start": "08:30", "end": "10:15",
-     "title": "Next-Generation Integrated Non-Linear Photonics",
      "type": "Technical Session",
      "color": "blue", "track": "T1B", "column": 2},
     {"id": "S-tue-T1C", "day": "tue", "start": "08:30", "end": "10:15",
-     "title": "Bio-Photonics and Sensing", "type": "Technical Session",
+     "type": "Technical Session",
      "color": "blue", "track": "T1C", "column": 3},
 
     {"id": "S-tue-T2A", "day": "tue", "start": "10:45", "end": "12:30",
-     "title": "Detectors", "type": "Technical Session",
+     "type": "Technical Session",
      "color": "blue", "track": "T2A", "column": 1},
     {"id": "S-tue-T2B", "day": "tue", "start": "10:45", "end": "12:30",
-     "title": "Nonlinear Optics", "type": "Technical Session",
+     "type": "Technical Session",
      "color": "blue", "track": "T2B", "column": 2},
     {"id": "S-tue-T2C", "day": "tue", "start": "10:45", "end": "12:30",
-     "title": "Memristive Photonics and Neuromorphic Photonics",
      "type": "Technical Session",
      "color": "blue", "track": "T2C", "column": 3},
 
+    # Workshops: title text + panellist cells both from the PDF (header row
+    # y ≈ 508.6, talk cells scattered through y 508..555 inside the column).
+    # slot_mode "session" because workshop cells don't line up with the
+    # time-slot rows — they're free-form panellist entries.
     {"id": "S-tue-W1", "day": "tue", "start": "13:30", "end": "15:20",
-     "title": "WORKSHOP 1: Electronic–Photonic Integration: Which Technology Will Lead the Way?",
      "type": "Workshop", "color": "emerald", "room": ROOM_COL1,
-     "talks": [
-        {"title": "Workshop Chair / Moderator", "speaker": "Bert Offrein",
-         "speaker_aff": "IBM Research", "color": "rose"},
-        {"title": "Workshop Panellist", "speaker": "Lars Zimmermann",
-         "speaker_aff": "IHP", "color": "rose"},
-        {"title": "Zero-change electronics in conventional silicon photonics",
-         "speaker": "Francesco Zanetto",
-         "speaker_aff": "Politecnico di Milano", "color": "rose"},
-     ]},
+     "pdf_title": {"source": "row_text", "column": 1, "y": 508.6},
+     "harvest": {"column": 1, "talk_color": "rose",
+                 "slot_mode": "session"}},
     {"id": "S-tue-W2", "day": "tue", "start": "13:30", "end": "15:20",
-     "title": "WORKSHOP 2: Which Quantum Technology—Photonic or RF—Has the Potential to Build a Quantum Computer?",
      "type": "Workshop", "color": "emerald", "room": ROOM_COL2,
-     "talks": [
-        {"title": "Monolithic GKP Qubit Sources: A Path toward Scalable Photonic Quantum Computing",
-         "speaker": "Matteo Menotti", "speaker_aff": "Xanadu", "color": "rose"},
-        {"title": "Photonic Integrated Circuits for Neutral-Atom Quantum Computing",
-         "speaker": "Kang Tan", "speaker_aff": "QuEra", "color": "rose"},
-        {"title": "Perovskite Quantum Dots as Quantum Light Sources",
-         "speaker": "Gabriele Raino", "speaker_aff": "ETH Zurich", "color": "rose"},
-        {"title": "Superconducting Qubit Interconnects",
-         "speaker": "Johannes Fink", "speaker_aff": "IST Austria", "color": "rose"},
-     ]},
+     "pdf_title": {"source": "row_text", "column": 2, "y": 508.6},
+     "harvest": {"column": 2, "talk_color": "rose",
+                 "slot_mode": "session"}},
 
     {"id": "S-tue-poster-blitz-2-1", "day": "tue",
      "start": "15:30", "end": "16:00",
@@ -390,29 +364,27 @@ SKELETON: list[dict] = [
 
     # ---- Wednesday June 17 --------------------------------------------------
     {"id": "S-wed-W1A", "day": "wed", "start": "08:30", "end": "10:15",
-     "title": "Waveguides and Gratings", "type": "Technical Session",
+     "type": "Technical Session",
      "color": "blue", "track": "W1A", "column": 1},
     {"id": "S-wed-W1B", "day": "wed", "start": "08:30", "end": "10:15",
-     "title": "Integrated THz Generation and Detection",
      "type": "Technical Session",
      "color": "blue", "track": "W1B", "column": 2},
 
     {"id": "S-wed-W2A", "day": "wed", "start": "10:45", "end": "12:30",
-     "title": "Fabrication Platforms", "type": "Technical Session",
+     "type": "Technical Session",
      "color": "blue", "track": "W2A", "column": 1},
     {"id": "S-wed-W2B", "day": "wed", "start": "10:45", "end": "12:30",
-     "title": "Frequency Combs for THz", "type": "Technical Session",
+     "type": "Technical Session",
      "color": "blue", "track": "W2B", "column": 2},
     {"id": "S-wed-W2C", "day": "wed", "start": "10:45", "end": "12:30",
-     "title": "Emerging Platforms for Advanced Control of Light",
      "type": "Technical Session",
      "color": "blue", "track": "W2C", "column": 3},
 
     {"id": "S-wed-W3A", "day": "wed", "start": "13:30", "end": "15:15",
-     "title": "Frequency Combs", "type": "Technical Session",
+     "type": "Technical Session",
      "color": "blue", "track": "W3A", "column": 1},
     {"id": "S-wed-W3B", "day": "wed", "start": "13:30", "end": "15:15",
-     "title": "On-chip THz Signal Processing", "type": "Technical Session",
+     "type": "Technical Session",
      "color": "blue", "track": "W3B", "column": 2},
 
     {"id": "S-wed-closing", "day": "wed",
@@ -854,6 +826,339 @@ def _build_minute_slots(start: str, end: str) -> list[tuple[str, str]]:
 
 
 # =============================================================================
+# PDF title + non-grid cell harvesting.
+#
+# Used for sessions whose talks (and titles) come from PDF rows that don't fit
+# the wide title-vs-speaker tech grid: the industry-talk blocks and the two
+# workshop blocks. Their cells render "Title. Speaker, Affiliation" as one run
+# of words with normal letter spacing (no big x-gap), and their session titles
+# sit on a dedicated row inside the column rather than as a size-4.56 topic
+# header above it.
+# =============================================================================
+
+# Title and Speaker are separated by ". " (period + space). The PDF sometimes
+# pads or omits the space; allow zero-or-more spaces on either side. Followed
+# by a capital letter so we don't split a mid-sentence abbreviation.
+_PERIOD_SPLIT_RE = re.compile(r"\s*\.\s+(?=[A-ZÀ-Ý])")
+# Speaker, Affiliation separator: a comma with optional whitespace either side.
+# The PDF occasionally renders as "Heidi Potts ,Zurich Instruments" (space
+# before, none after), so we tolerate both directions.
+_COMMA_SPLIT_RE = re.compile(r"\s*,\s*")
+
+# Rows of this content inside a workshop band are panel/meta rows, not talks.
+_WORKSHOP_NON_TALK_RE = re.compile(
+    r"^(Panel Discussion|Q&A|Lunch|Coffee|Plenary|Poster|WORKSHOP\b)",
+    re.IGNORECASE,
+)
+
+
+def _read_pdf_title(
+    rows: list[dict],
+    pdf_title_spec: dict,
+) -> str:
+    """Return the session title text read from a specific PDF row.
+
+    Used by workshops and industry sessions, whose header text sits on a
+    dedicated row inside the column (not as a larger-font topic banner above
+    the column). The spec carries the column index and the target Y; we find
+    the row clustered nearest that Y and pull its in-column words.
+    """
+    col = pdf_title_spec["column"]
+    target_y = float(pdf_title_spec["y"])
+    col_lo, col_hi = COL_X_RANGES[col]
+    # Find the row whose centre is closest to target_y (tolerance: a single
+    # ROW_TOL window). Rows further than ROW_TOL away don't actually contain
+    # our header.
+    candidates = [r for r in rows if abs(r["top"] - target_y) <= ROW_TOL + 0.5]
+    if not candidates:
+        return ""
+    row = min(candidates, key=lambda r: abs(r["top"] - target_y))
+    header_words = [
+        w for w in row["words"]
+        if col_lo <= (w["x0"] + w["x1"]) / 2 < col_hi
+    ]
+    if not header_words:
+        return ""
+    header_words.sort(key=lambda w: w["x0"])
+    text = _join_words(header_words).strip()
+    # Trim a trailing punctuation/colon the renderer sometimes leaves on.
+    text = re.sub(r"[:\s]+$", "", text)
+    return text
+
+
+def _topic_header_title(
+    rows: list[dict],
+    band: tuple[float, float],
+    column: int,
+) -> str:
+    """Return the topic-header text rendered above a tech-track session's
+    column, e.g. "Electro-Optic Modulators". The PDF uses a larger 4.56pt
+    font for topic headers on Mon/Tue but mysteriously falls back to the
+    4.08pt talk-text font on Wed — so we cannot key purely on size.
+
+    Strategy: identify the row immediately above the session's first slot
+    that, in this column, looks like a SHORT, NON-TALK row (no large
+    word-gap, no time tag, no track label, not a day banner). The
+    "Registration, Foyer in front…" banner that sometimes sits just above
+    the topic row is filtered out by a non-talk-prefix check.
+    """
+    col_lo, col_hi = COL_X_RANGES[column]
+    # All candidate rows in this column above the session's first slot row
+    # but no more than ~25pt above (so we don't reach into a previous block).
+    candidates: list[tuple[float, str, float]] = []  # (top, text, size)
+    for r in rows:
+        if r["top"] > band[0] + 0.5:  # below the band's start — talks, not headers
+            continue
+        if r["top"] < band[0] - 25:
+            continue
+        cell = [
+            w for w in r["words"]
+            if col_lo <= (w["x0"] + w["x1"]) / 2 < col_hi
+        ]
+        if not cell:
+            continue
+        cell.sort(key=lambda w: w["x0"])
+        # Day banner rows: large font, often contain "JUNE" or weekday.
+        sizes = [float(w.get("size", 0)) for w in cell]
+        if max(sizes, default=0) >= 4.7:
+            continue
+        text = _join_words(cell).strip()
+        if not text:
+            continue
+        # Filter generic non-topic banners.
+        if text.startswith(("Registration", "Coffee", "Lunch", "Welcome",
+                            "Closing", "Opening", "Plenary", "Industry",
+                            "Workshop", "Poster", "Panel", "Gala",
+                            "Networking", "Bench", "Student", "Zurich",
+                            "Lab", "Exhibition", "Session Rooms",
+                            "WORKSHOP")):
+            continue
+        if TIME_RE.match(text.split()[0] if text.split() else ""):
+            continue
+        if TRACK_LABEL_RE.match(text.split()[0] if text.split() else ""):
+            continue
+        # If any size-4.56 word, prefer this row strongly.
+        candidates.append((r["top"], text, max(sizes)))
+    if not candidates:
+        return ""
+    # Prefer a size-4.56 row when present (Mon/Tue case). Otherwise take
+    # the row closest to band[0] from above.
+    larger = [c for c in candidates if c[2] >= TOPIC_FONT_MIN]
+    if larger:
+        chosen = max(larger, key=lambda c: c[0])  # closest from above
+    else:
+        chosen = max(candidates, key=lambda c: c[0])
+    return chosen[1]
+
+
+def _split_industry_cell(text: str) -> tuple[str, str, str]:
+    """Parse one industry/workshop cell into (title, speaker, affiliation).
+
+    The PDF packs the three fields as "Title. Speaker, Affiliation" in one
+    continuous run. We split from the right:
+      1. The affiliation is everything after the LAST comma.
+      2. In the prefix that remains, the title is split from the speaker
+         by ". " (period + space + capital letter). Where no such period
+         exists, an unambiguous trailing "X Y" name pattern (1–4 words,
+         each starting upper-case) is taken as the speaker; otherwise the
+         whole prefix is the title and speaker is empty.
+
+    Degenerate inputs:
+      - empty / whitespace-only             -> ("", "", "")
+      - one company token, no comma         -> ("", "", text)  (sponsor slot)
+      - "Bert Offrein" (one name, no comma) -> ("", "Bert Offrein", "")
+    """
+    def _strip_trailing_punct(s: str) -> str:
+        # Some title cells embed an inner comma before the speaker (e.g.
+        # "ltoi300: ... PICs, Andrei Kiselev, Luxtelligence SA"). The last
+        # comma correctly splits off the affiliation, but the title is then
+        # left with a stray ", " or ",". Trim any trailing comma / semicolon
+        # / colon / whitespace so titles don't render with that artifact.
+        return re.sub(r"[\s,;:]+$", "", s).strip()
+
+    t = text.strip()
+    if not t:
+        return "", "", ""
+
+    # Strip an opening "." (the PDF sometimes leads with one when a sponsor
+    # slot has no title, e.g. ". Frederic Loizeau, Lightium AG").
+    t = re.sub(r"^\.\s*", "", t)
+
+    # No commas at all: either a bare affiliation (single sponsor) or a bare
+    # speaker (workshop chair). A bare affiliation tends to be a known-company
+    # short string like "LIGENTEC SA"; a bare speaker is a 1-3-word personal
+    # name. Use word-count + presence of digits/all-caps as a weak signal.
+    if "," not in t:
+        if _looks_like_person(t):
+            return "", _strip_trailing_punct(t), ""
+        return "", "", t
+
+    # One or more commas: the LAST comma chunk is the affiliation.
+    last_comma = t.rfind(",")
+    affiliation = t[last_comma + 1:].strip()
+    prefix = t[:last_comma].strip()
+
+    # In the prefix, split title/speaker on ". <Capital>". Look at the LAST
+    # such split (titles can legitimately contain period+capital, though rare;
+    # the speaker always comes last). If no such split, fall back to "look at
+    # the trailing word group: if it looks like a person name (<=4 short
+    # capital-led words), take it as the speaker; otherwise treat the whole
+    # prefix as title".
+    matches = list(_PERIOD_SPLIT_RE.finditer(prefix))
+    if matches:
+        last = matches[-1]
+        title = prefix[:last.start()].strip()
+        speaker = prefix[last.end():].strip()
+        return _strip_trailing_punct(title), _strip_trailing_punct(speaker), affiliation
+
+    # No period delimiter — look for an implicit speaker tail (a short
+    # capital-led name run). Walk back from the end and absorb tokens until
+    # we hit one that doesn't look like a name token.
+    tokens = prefix.split()
+    if not tokens:
+        return "", "", affiliation
+    # Collect a trailing run of "name-shaped" tokens, max 4.
+    tail_start = len(tokens)
+    for i in range(len(tokens) - 1, max(-1, len(tokens) - 5), -1):
+        if _looks_like_name_token(tokens[i]):
+            tail_start = i
+        else:
+            break
+    if tail_start < len(tokens) and tail_start > 0:
+        title = " ".join(tokens[:tail_start]).strip()
+        speaker = " ".join(tokens[tail_start:]).strip()
+        # Sanity: if "title" is suspiciously short (1 word), probably it's
+        # actually all a name and there's no title.
+        if len(title.split()) <= 1 and _looks_like_person(prefix):
+            return "", _strip_trailing_punct(prefix), affiliation
+        return _strip_trailing_punct(title), _strip_trailing_punct(speaker), affiliation
+    # The whole prefix is name-shaped -> bare-speaker entry.
+    if _looks_like_person(prefix):
+        return "", _strip_trailing_punct(prefix), affiliation
+    # Otherwise treat the whole prefix as title and speaker as empty.
+    return _strip_trailing_punct(prefix), "", affiliation
+
+
+_NAME_TOKEN_RE = re.compile(r"^[A-ZÀ-Ý][A-Za-zÀ-ÿ'’\-]*[A-Za-zÀ-ÿ\-]?\.?$")
+
+
+def _looks_like_name_token(tok: str) -> bool:
+    """A token that could plausibly be part of a personal name."""
+    return bool(_NAME_TOKEN_RE.match(tok))
+
+
+def _looks_like_person(text: str) -> bool:
+    """Heuristic: 1-4 words, each starting upper-case, total ≤32 chars, no
+    digits, no all-caps abbreviation token at the end. Matches "Bert Offrein",
+    "Ana Filipa Carvalho", "Hernán Furci" but not "LIGENTEC SA" or
+    "Industry Talk Session 1: Devices"."""
+    s = text.strip()
+    if not s or any(ch.isdigit() for ch in s):
+        return False
+    toks = s.split()
+    if not (1 <= len(toks) <= 4):
+        return False
+    if len(s) > 36:
+        return False
+    for tok in toks:
+        if not _looks_like_name_token(tok):
+            return False
+        # All-caps token of length 3+ is more company-like than name-like
+        # (e.g. "IHP", "UCLA"). We allow short initials like "A." but reject
+        # bare all-caps words.
+        if len(tok) >= 3 and tok.isupper():
+            return False
+    return True
+
+
+def _harvest_block_cells(
+    rows: list[dict],
+    band: tuple[float, float],
+    column: int,
+) -> list[tuple[str, str, str, float]]:
+    """Walk every row whose top sits in [band[0], band[1]] and pick out the
+    column's cell content. Return [(title, speaker, affiliation, top_y), …]
+    sorted by Y.
+
+    Rows whose max in-column word-gap is wider than SPEAKER_GAP_PT are SKIPPED
+    — those are tech-grid rows (title left + right-aligned speaker chip) that
+    bleed into the band (the schedule has one such overflow row at 1330-1345
+    in the workshop column). Rows matching a workshop-meta pattern (panel
+    discussion, lunch, …) are also dropped.
+    """
+    col_lo, col_hi = COL_X_RANGES[column]
+    out: list[tuple[str, str, str, float]] = []
+    for r in rows:
+        if not (band[0] <= r["top"] <= band[1]):
+            continue
+        cell = [
+            w for w in r["words"]
+            if col_lo <= (w["x0"] + w["x1"]) / 2 < col_hi
+            and float(w.get("size", 0)) < TOPIC_FONT_MIN
+        ]
+        if not cell:
+            continue
+        cell.sort(key=lambda w: w["x0"])
+        # Tech-grid rejection: a tech-grid talk has a giant gap between its
+        # title block and the right-aligned speaker chip.
+        max_gap = 0.0
+        for i in range(1, len(cell)):
+            max_gap = max(max_gap, cell[i]["x0"] - cell[i - 1]["x1"])
+        if max_gap >= SPEAKER_GAP_PT:
+            continue
+        text = _join_words(cell)
+        if not text:
+            continue
+        if _WORKSHOP_NON_TALK_RE.match(text):
+            continue
+        if TRACK_LABEL_RE.match(text.split()[0] if text.split() else ""):
+            continue
+        title, speaker, aff = _split_industry_cell(text)
+        out.append((title, speaker, aff, r["top"]))
+    out.sort(key=lambda t: t[3])
+    return out
+
+
+def _harvest_per_slot_talks(
+    cells: list[tuple[str, str, str, float]],
+    sess_start_min: int,
+    sess_end_min: int,
+    slot_minutes: int,
+) -> list[dict]:
+    """For a per-slot industry block: assign each harvested cell to a
+    fixed-length time slot, in Y order. The PDF prints six 10-min slots for
+    the ECIO industry blocks; this function maps the first cell to
+    [start, start+slot_minutes), the second to the next slot, and so on.
+
+    Returns a list of dicts {title, speaker, aff, start_min, end_min}.
+    """
+    out: list[dict] = []
+    cur = sess_start_min
+    for (title, speaker, aff, _y) in cells:
+        nxt = min(cur + slot_minutes, sess_end_min)
+        out.append({
+            "title": title, "speaker": speaker, "aff": aff,
+            "start_min": cur, "end_min": nxt,
+        })
+        cur = nxt
+        if cur >= sess_end_min:
+            break
+    return out
+
+
+def _harvest_session_talks(
+    cells: list[tuple[str, str, str, float]],
+) -> list[dict]:
+    """For a session-wide workshop block: emit one talk per non-empty cell,
+    with no per-talk time window (they inherit the session start/end)."""
+    return [
+        {"title": title, "speaker": speaker, "aff": aff,
+         "start_min": None, "end_min": None}
+        for (title, speaker, aff, _y) in cells
+    ]
+
+
+# =============================================================================
 # Driver
 # =============================================================================
 def main() -> None:
@@ -893,6 +1198,36 @@ def main() -> None:
         start_iso = f"{day_iso}T{sess['start']}:00"
         end_iso = f"{day_iso}T{sess['end']}:00"
         room = sess.get("room") or ROOM_BY_COL.get(sess.get("column", 0), "")
+        day_band = bands.get(day_key)
+
+        # ---- Resolve the session's display title --------------------------
+        # Precedence: explicit `title` -> `pdf_title` directive -> topic
+        # header above this session's column (default for tech tracks) ->
+        # the track code as a last-resort label.
+        title = sess.get("title", "").strip()
+        if not title:
+            spec = sess.get("pdf_title")
+            if spec and spec.get("source") == "row_text":
+                title = _read_pdf_title(rows, spec)
+            elif (spec and spec.get("source") == "topic_header"
+                  and day_band):
+                s_min = _hhmm_to_minutes(sess["start"])
+                e_min = _hhmm_to_minutes(sess["end"])
+                slots = _session_time_slots(words, day_band, s_min, e_min)
+                y_range = _harvest_session_y_range(slots, day_band)
+                title = _topic_header_title(rows, y_range, spec["column"])
+            elif "column" in sess and day_band:
+                # Default for tech-track sessions: topic header above the
+                # column at this session's Y.
+                s_min = _hhmm_to_minutes(sess["start"])
+                e_min = _hhmm_to_minutes(sess["end"])
+                slots = _session_time_slots(words, day_band, s_min, e_min)
+                y_range = _harvest_session_y_range(slots, day_band)
+                title = _topic_header_title(rows, y_range, sess["column"])
+        if not title:
+            title = sess.get("track", "") or "(untitled session)"
+            log(f"[warn] no title resolved for {sess['id']}; "
+                f"falling back to {title!r}")
 
         topic_parts = []
         if sess.get("track"):
@@ -901,7 +1236,7 @@ def main() -> None:
 
         s_obj: dict = {
             "id": sess["id"],
-            "title": sess["title"],
+            "title": title,
             "color": sess["color"],
             "type": sess["type"],
             "start_ts": start_iso,
@@ -915,13 +1250,17 @@ def main() -> None:
         sessions_out.append(s_obj)
 
         # ---- Collect this session's talks
-        # Each entry is (title, speaker, is_invited, talk_start_min, talk_end_min);
-        # for hand-listed entries the minutes are None -> talk inherits the
-        # session's start/end. For PDF-harvested rows we look up the slot window.
+        # Each entry is (title, speaker, aff, is_invited, color_override,
+        # talk_start_min, talk_end_min). For PDF-harvested talks, color
+        # follows the harvest directive ("rose" for industry/workshop) and
+        # is_invited stays False. For tech-grid harvested talks, color is
+        # decided downstream from is_invited.
         talks_for_session: list[
-            tuple[str, str, bool, int | None, int | None]
+            tuple[str, str, str, bool, str | None, int | None, int | None]
         ] = []
+
         if "talks" in sess:
+            # Hand-listed talks (plenary speakers only, in this skeleton).
             for t in sess["talks"]:
                 ts = t.get("start")
                 te = t.get("end")
@@ -930,48 +1269,77 @@ def main() -> None:
                 talks_for_session.append((
                     t.get("title", "").strip(),
                     t.get("speaker", "").strip(),
-                    False,
+                    t.get("speaker_aff", "").strip(),
+                    False, t.get("color"),
                     t_start_min, t_end_min,
                 ))
-        elif "column" in sess:
-            band = bands.get(day_key)
-            if not band:
+        elif "harvest" in sess:
+            # Non-grid harvest (industry talks + workshops). Walks the entire
+            # band as a block, parsing "Title. Speaker, Affiliation" cells.
+            if not day_band:
                 log(f"[warn] no day band for {day_key}; skipping {sess['id']}")
                 continue
             s_min = _hhmm_to_minutes(sess["start"])
             e_min = _hhmm_to_minutes(sess["end"])
-            slots = _session_time_slots(words, band, s_min, e_min)
-            y_range = _harvest_session_y_range(slots, band)
+            slots = _session_time_slots(words, day_band, s_min, e_min)
+            # For "session" mode (workshops), there may be no slot rows in the
+            # session's band (workshops just use the session-wide time). Fall
+            # back to a Y range derived from the session's own time bounds.
+            if slots:
+                y_range = _harvest_session_y_range(slots, day_band)
+            else:
+                y_range = day_band
+            harvest = sess["harvest"]
+            cells = _harvest_block_cells(rows, y_range, harvest["column"])
+            color_override = harvest.get("talk_color", "rose")
+            if harvest.get("slot_mode") == "per_slot":
+                slot_minutes = int(harvest.get("slot_minutes", 10))
+                parsed = _harvest_per_slot_talks(
+                    cells, s_min, e_min, slot_minutes)
+            else:
+                parsed = _harvest_session_talks(cells)
+            for p in parsed:
+                if not (p["title"] or p["speaker"] or p["aff"]):
+                    continue
+                talks_for_session.append((
+                    p["title"], p["speaker"], p["aff"],
+                    False, color_override,
+                    p["start_min"], p["end_min"],
+                ))
+        elif "column" in sess:
+            # Tech-grid harvest (title left, right-aligned speaker chip).
+            if not day_band:
+                log(f"[warn] no day band for {day_key}; skipping {sess['id']}")
+                continue
+            s_min = _hhmm_to_minutes(sess["start"])
+            e_min = _hhmm_to_minutes(sess["end"])
+            slots = _session_time_slots(words, day_band, s_min, e_min)
+            y_range = _harvest_session_y_range(slots, day_band)
             col_x = COL_X_RANGES[sess["column"]]
             lines = _extract_cell_lines(rows, col_x, y_range)
             for title_raw, speaker_raw, y in lines:
-                title, is_invited = _clean_title(title_raw)
+                t_title, is_invited = _clean_title(title_raw)
                 speaker = _clean_speaker(speaker_raw)
-                if not title and not speaker:
+                if not t_title and not speaker:
                     continue
                 t_start, t_end = _talk_time_window(
                     y, slots, s_min, e_min, is_invited=is_invited)
                 talks_for_session.append(
-                    (title, speaker, is_invited, t_start, t_end))
+                    (t_title, speaker, "", is_invited, None, t_start, t_end))
 
         # ---- Emit talks for this session
-        for i, (title, speaker, is_invited, t_start_min, t_end_min) in enumerate(
-                talks_for_session, 1):
+        for i, (t_title, speaker, aff, is_invited, color_override,
+                t_start_min, t_end_min) in enumerate(talks_for_session, 1):
             tid = _talk_id(sess["id"], i)
-            color = "indigo" if is_invited else "pink"
-            # For hand-listed industry/workshop/plenary entries, override color
-            # from the entry itself if provided.
-            if "talks" in sess:
-                entry = sess["talks"][i - 1]
-                color = entry.get("color", color)
+            if color_override:
+                color = color_override
+            else:
+                color = "indigo" if is_invited else "pink"
 
             authors: list[dict] = []
             institutions: list[dict] = []
-            aff = ""
-            if "talks" in sess and (i - 1) < len(sess["talks"]):
-                aff = sess["talks"][i - 1].get("speaker_aff", "").strip()
             if speaker:
-                a = {"name": speaker}
+                a: dict = {"name": speaker}
                 if aff:
                     a["insts"] = [1]
                     institutions = [{"n": 1, "name": aff}]
@@ -979,9 +1347,14 @@ def main() -> None:
                 else:
                     a["insts"] = []
                 authors = [a]
+            elif aff:
+                # Bare-affiliation sponsor slot (e.g. "LIGENTEC SA"): record
+                # the institution but emit no author.
+                institutions = [{"n": 1, "name": aff}]
+                affiliations_pool.add(aff)
 
-            # Per-talk timing: PDF-harvested talks get the slot window from
-            # _talk_time_window; hand-listed ones inherit the session times.
+            # Per-talk timing: PDF-harvested talks get the slot window;
+            # session-mode entries inherit the session times.
             if t_start_min is not None and t_end_min is not None:
                 t_start_iso = (f"{day_iso}T"
                                f"{t_start_min // 60:02d}:"
@@ -993,10 +1366,22 @@ def main() -> None:
                 t_start_iso = start_iso
                 t_end_iso = end_iso
 
+            # Pick a sensible placeholder when the PDF cell has no title text
+            # (e.g. ". Frederic Loizeau, Lightium AG" or a bare-affiliation
+            # sponsor slot like "LIGENTEC SA"). The placeholder uses the
+            # session type, not invented title text.
+            sess_type = sess.get("type", "")
+            if sess_type == "Industry Talks":
+                placeholder = "Industry Talk"
+            elif sess_type == "Workshop":
+                placeholder = "Workshop Panelist"
+            else:
+                placeholder = "(untitled)"
+
             talk_obj: dict = {
                 "id": tid,
                 "session_id": sess["id"],
-                "title": title or "(untitled)",
+                "title": t_title or placeholder,
                 "color": color,
                 "start_ts": t_start_iso,
                 "end_ts": t_end_iso,
