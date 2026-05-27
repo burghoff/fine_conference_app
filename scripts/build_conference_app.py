@@ -806,6 +806,22 @@ def _author_first_inst(author: dict, institutions: list):
     return _inst_by_number(institutions, insts[0])
 
 
+def _author_short_affs(author: dict, institutions: list) -> list:
+    """All of an author's affiliations as SHORT canonical names, in the
+    author's `insts` order, de-duplicated (an author can list two departments
+    of the same institution, which shorten to the same name). Empty/unresolved
+    entries are dropped."""
+    out: list = []
+    for n in (author.get("insts") or []):
+        inst = _inst_by_number(institutions, n)
+        if not inst:
+            continue
+        s = short_affiliation((inst.get("name") or "").strip())
+        if s and s not in out:
+            out.append(s)
+    return out
+
+
 def _person_short_aff_by_key(person: str, authors: list,
                              institutions: list, key_fn) -> str:
     """Resolve a person's short affiliation: find the matching author, take
@@ -830,6 +846,33 @@ def _person_short_aff_by_key(person: str, authors: list,
 
 
 def speaker_short_aff(speaker: str, authors: list, institutions: list) -> str:
+    """Short affiliation to display for the speaker.
+
+    Default is the speaker's FIRST affiliation (short canonical name). But when
+    the speaker lists MULTIPLE affiliations and any of them coincides (by short
+    name) with one of the LAST author's affiliations, prefer the speaker's first
+    such shared affiliation instead. Rationale: a speaker who did the work at a
+    PI's institution and has since moved often lists the new institution first;
+    the shared affiliation is the one relevant to this talk's group.
+
+    Falls back to the original first-affiliation behaviour (and ultimately the
+    talk's first institution) whenever there's no multi-affiliation overlap.
+    """
+    if speaker and authors:
+        target = _norm_name(speaker)
+        spk = next((a for a in authors
+                    if _norm_name(a.get("name", "")) == target), None)
+        if spk is not None:
+            spk_affs = _author_short_affs(spk, institutions)
+            if len(spk_affs) > 1 and authors:
+                last_affs = set(_author_short_affs(authors[-1], institutions))
+                shared = next((s for s in spk_affs if s in last_affs), None)
+                if shared:
+                    return shared
+            if spk_affs:
+                return spk_affs[0]
+    # No structured speaker membership resolved — fall back to the talk's first
+    # institution (same behaviour as the generic resolver).
     return _person_short_aff_by_key(speaker, authors, institutions, _norm_name)
 
 
@@ -1027,6 +1070,111 @@ def latex_to_unicode(text: str) -> str:
     return text
 
 
+# ---------------------------------------------------------------------------
+# Institution-number normalization.
+#
+# Author `insts` reference institutions by their EXPLICIT number `n`, not by
+# list position, and the source sometimes numbers institutions in an order that
+# reads out of sequence down the author list (e.g. the first author points at
+# institution 3). The renderer handles that fine, but the raw numbering is
+# tidier — and friendlier to anything that reads the emitted JSON directly — if
+# numbers appear in ascending first-appearance order: the first author's first
+# affiliation is 1, the next newly seen one is 2, and so on.
+#
+# This renumber is a pure relabeling of pointers. It remaps BOTH `institutions`
+# and every author's `insts` together, per talk, then verifies the set of
+# institution *names* each author resolves to is unchanged. A talk that fails
+# verification (e.g. a dangling reference or duplicate number) is left exactly
+# as-is so the build never breaks on one malformed record.
+def _author_inst_namesets(authors: list, institutions: list):
+    """(per-author frozenset of institution names, number->name dict).
+
+    Raises ValueError on a duplicate institution number or an author reference
+    to a number with no matching institution — the two cases we refuse to guess
+    through, so the caller can skip the talk untouched.
+    """
+    num_to_name: dict = {}
+    for inst in institutions:
+        n = inst.get("n")
+        if n in num_to_name:
+            raise ValueError(f"duplicate institution number {n!r}")
+        num_to_name[n] = (inst.get("name") or "").strip()
+    per_author = []
+    for a in authors:
+        names = set()
+        for n in (a.get("insts") or []):
+            if n not in num_to_name:
+                raise ValueError(
+                    f"author {a.get('name')!r} references institution "
+                    f"number {n!r} with no matching institution")
+            names.add(num_to_name[n])
+        per_author.append(frozenset(names))
+    return per_author, num_to_name
+
+
+def _renumber_talk_insts(talk: dict) -> bool:
+    """Renumber one talk's institutions into author first-appearance order,
+    remapping author `insts` in lockstep. Returns True if numbering changed.
+
+    Behavior-preserving and verified: commits only after confirming every
+    author still resolves to the same set of institution names. Raises
+    ValueError (leaving the talk untouched) if the talk can't be safely
+    renumbered; the caller decides how to handle that.
+    """
+    authors = talk.get("authors") or []
+    institutions = talk.get("institutions") or []
+    if not institutions:
+        return False
+
+    before_sets, before_num_to_name = _author_inst_namesets(
+        authors, institutions)
+    old_numbers = [inst.get("n") for inst in institutions]
+
+    # New order: institution numbers in the order first referenced reading down
+    # the author list; any never-referenced institution is appended afterward in
+    # its original list order so nothing is dropped.
+    first_seen: list = []
+    seen: set = set()
+    for a in authors:
+        for n in (a.get("insts") or []):
+            if n not in seen:
+                seen.add(n)
+                first_seen.append(n)
+    for inst in institutions:
+        n = inst.get("n")
+        if n not in seen:
+            seen.add(n)
+            first_seen.append(n)
+
+    remap = {old: i + 1 for i, old in enumerate(first_seen)}
+    if all(remap[old] == old for old in old_numbers):
+        return False  # already in target order
+
+    inst_by_old = {inst.get("n"): inst for inst in institutions}
+    new_insts = []
+    for old in first_seen:
+        inst = dict(inst_by_old[old])
+        inst["n"] = remap[old]
+        new_insts.append(inst)
+    new_authors = []
+    for a in authors:
+        a2 = dict(a)
+        a2["insts"] = [remap[n] for n in (a.get("insts") or [])]
+        new_authors.append(a2)
+
+    # Verify behavior preservation before committing.
+    after_sets, after_num_to_name = _author_inst_namesets(
+        new_authors, new_insts)
+    if after_sets != before_sets:
+        raise ValueError("author->institution name sets changed during remap")
+    if sorted(before_num_to_name.values()) != sorted(after_num_to_name.values()):
+        raise ValueError("institution name multiset changed during remap")
+
+    talk["institutions"] = new_insts
+    talk["authors"] = new_authors
+    return True
+
+
 def enrich_affiliations(data: dict) -> dict:
     sessions = data.get("sessions", [])
     talks = data.get("talks", [])
@@ -1050,6 +1198,28 @@ def enrich_affiliations(data: dict) -> dict:
     for t in talks:
         if t.get("abstract"):
             t["abstract"] = latex_to_unicode(t["abstract"])
+
+    # 0b. Normalize institution numbering into author first-appearance order
+    #     (first author's first affiliation -> 1, etc.). Runs before the step-1
+    #     dedup so the two compose: renumber puts numbers in author order, then
+    #     dedup (when institutions_may_dedup is set) collapses + renumbers 1..N
+    #     over that already-ordered list. Each talk is remapped atomically and
+    #     verified name-preserving; a talk that can't be safely renumbered is
+    #     left untouched (its original numbering already renders correctly) and
+    #     reported, so one malformed record never breaks the build.
+    _renum_changed = 0
+    _renum_skipped = 0
+    for t in talks:
+        try:
+            if _renumber_talk_insts(t):
+                _renum_changed += 1
+        except ValueError as e:
+            _renum_skipped += 1
+            print(f"[insts] skipped {t.get('id') or t.get('number') or '<?>'}"
+                  f": {e}")
+    print(f"[insts] renumbered {_renum_changed} talk(s) into author order"
+          + (f"; left {_renum_skipped} untouched (unsafe to renumber)"
+             if _renum_skipped else ""))
 
     # 1. Talks: build inst_shorts (collapsing dup institutions by short name
     #    when allowed), speaker_aff, last_aff. `institutions` is the structured
