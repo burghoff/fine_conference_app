@@ -105,6 +105,15 @@ def _bootstrap_pdfplumber() -> None:
 # =============================================================================
 CONFERENCE_NAME = "ECIO 2026"
 
+# Curator credit shown at the bottom of the About section in the built app.
+# Schema (per CONFERENCE_JSON.md): {name, affiliation?, link?}. Leave `name`
+# empty (or set CURATOR = None) to omit the curator line entirely.
+CURATOR = {
+    "name": "Dmitry Kazakov",
+    "affiliation": "AyLight AG",
+    "link": "https://aylight.io/",
+}
+
 # day key -> ISO date. The key is what the SKELETON entries reference.
 DAYS = {
     "sun": "2026-06-14",
@@ -1406,6 +1415,15 @@ def main() -> None:
         "session_types": SESSION_TYPES,
         "talk_types": TALK_TYPES,
     }
+    # Optional curator credit (shown in the About section of the built app).
+    # Per the schema, the block is rendered only when `name` is non-empty.
+    if CURATOR and CURATOR.get("name"):
+        cur = {"name": CURATOR["name"]}
+        if CURATOR.get("affiliation"):
+            cur["affiliation"] = CURATOR["affiliation"]
+        if CURATOR.get("link"):
+            cur["link"] = CURATOR["link"]
+        data["curator"] = cur
     if affiliations_pool:
         data["affiliation_sources"] = {
             "affiliation_full_lines": sorted(affiliations_pool),
