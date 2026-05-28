@@ -40,14 +40,6 @@ Once built, `<conference_name>_app.html` is the whole app. Open it directly in a
 
 If your conference does **not** yet have a subdirectory, it will need to be set up first. See [Curation: Adding a new conference](#curation-adding-a-new-conference) below.
 
-## How it works
-
-The project is a small pipeline. Each conference has its own subdirectory under `scripts/`, while the shared app builder is conference-agnostic.
-
-For an already-supported conference, `make_app.py` runs the full pipeline: it obtains any needed program files, generates `conference_data.json`, and builds a single self-contained HTML app.
-
-For a new conference, see [Curation: Adding a new conference](#curation-adding-a-new-conference).
-
 ## Curation: Adding a new conference
 
 If your conference doesn't have a subdirectory yet, you will need to create one. This is called curation, and you are credited for it in the generated app.
