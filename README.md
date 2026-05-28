@@ -28,10 +28,10 @@ Conference organizers often ship a large app that requires an install, an accoun
 
 ## Usage
 
-If your conference already has a subdirectory in `conferences/`, building its app requires just a single command from the `scripts/` directory:
+If your conference already has a subdirectory in `conferences/`, building its app requires just a single command from the root directory:
 
 ```bash
-python make_app.py <conference_name>
+python scripts/make_app.py <conference_name>
 ```
 
 That's all that's needed for any conference that's already set up. The command will download any needed program files and put them in `data/` (if needed), run the processor to produce `conference_data.json`, and run the builder to produce the HTML app.
