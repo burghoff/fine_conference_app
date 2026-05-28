@@ -811,8 +811,18 @@ _ANCHORS_SRC: list = [
     # come BEFORE the generic paris-saclay anchor, since the C2N strings carry
     # "Université Paris-Saclay" in the address and would otherwise degrade to
     # plain "Paris-Saclay". The "(c2n)" token is distinctive to these strings.
-    (['(c2n)', 'centre de nanoscience et nanotechnologie'], 'C2N Paris-Saclay'),
-    (['universite paris-saclay', 'paris-saclay'], 'Paris-Saclay'),
+    # Match both singular ("Nanotechnologie") and plural ("Nanotechnologies"),
+    # the French ("Centre de … et [de] …") and English ("Center of … and …")
+    # spellings, and the connecting "de"/"of" variants. All appear in the
+    # source data (e.g. "Center of nanosciences and nanotechnologies, CNRS,
+    # Univ. Paris Saclay" alongside the French forms).
+    ([r"re:cent(?:re|er) (?:de|of) nanoscience(?:s)? (?:et|and) (?:de )?nanotechnologie(?:s)?",
+      '(c2n)'], 'C2N Paris-Saclay'),
+    # Accept both the hyphenated official form ("Paris-Saclay") and the space-
+    # separated variant ("Paris Saclay") that appears in some affiliation strings
+    # (e.g. "Université Paris Saclay" without the hyphen).
+    (['universite paris-saclay', 'paris-saclay',
+      'universite paris saclay', 'paris saclay'], 'Paris-Saclay'),
     # The "Laboratoire de Physique de l'ENS / de l'École Normale Supérieure"
     # (LPENS) is the ENS physics department. Its affiliation strings list many
     # co-tutelles (ENS, PSL, CNRS, Sorbonne, Université Paris Cité) in varying
@@ -874,7 +884,6 @@ _ANCHORS_SRC: list = [
     (['luli', 'laboratoire pour l'], 'LULI'),
     ('lpgp', 'Paris-Saclay'),  # gas-discharge lab at Saclay
     ('thales', 'Thales'),
-    ('centre de nanoscience et de nanotechnologies', 'C2N Paris-Saclay'),
     ('centre national de la recherche scientifique', 'CNRS'),
     ('exail', 'Exail'),
     ('exail,', 'EXAIL'),
