@@ -1709,6 +1709,15 @@ let state = loadState();
 const sessionMap = Object.fromEntries(DATA.sessions.map(s => [s.id, s]));
 const talkMap    = Object.fromEntries(DATA.talks.map(t => [t.id, t]));
 
+function effectiveLocation(item) {
+  if (item.location != null) return item.location;   
+  if (item.session_id) {
+    const s = sessionMap[item.session_id];
+    if (s && s.location) return s.location;
+  }
+  return "";
+}
+
 if (Array.isArray(state.expandedSessions) && state.expandedSessions.length) {
   const kept = state.expandedSessions.filter(isExpandableSession);
   if (kept.length !== state.expandedSessions.length) {
@@ -2041,7 +2050,7 @@ function makeBubble(item, opts = {}) {
     const sd = tsToDate(item.start_ts);
     chipText = sd ? timeLabel(sd) : "";
   } else {
-    chipText = item.location || "";
+    chipText = effectiveLocation(item);
   }
   const locChip = chipText
     ? `<span class="bubble-loc">${esc(chipText)}</span>`
@@ -2606,8 +2615,11 @@ function renderTalkDetail(c, tid) {
 
   head.appendChild(el("h2", { class: "dh-title" }, displayTitle(t) || "(untitled)"));
   const sd = tsToDate(t.start_ts);
-  if (sd) head.appendChild(el("div", { class: "dh-meta" },
-    `${dateLabel(sd)} · ${timeRange(t)}${t.location ? " · " + t.location : ""}`));
+  if (sd) {
+    const loc = effectiveLocation(t);
+    head.appendChild(el("div", { class: "dh-meta" },
+      `${dateLabel(sd)} · ${timeRange(t)}${loc ? " · " + loc : ""}`));
+  }
   if (t.status && t.status.toLowerCase() !== "sessioned")
     head.appendChild(el("div", { class: "dh-meta" }, `Status: ${t.status}`));
   head.appendChild(el("button", {
