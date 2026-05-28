@@ -434,7 +434,17 @@ _ANCHORS_SRC: list = [
     ('michigan state', 'Michigan State'),
     ('michigan technological', 'Michigan Tech'),
     ('ohio state', 'Ohio State'),
-    (['penn state', 'pennsylvania state'], 'Penn State'),
+    # Penn State. The main campus is "University Park, PA 16802", so some
+    # affiliations name only the campus town / ZIP (e.g. an institute line like
+    # "Materials Research Institute, University Park, PA 16802") without the
+    # words "Penn State". Catch those campus forms here — up at the early anchor
+    # position so they win over the generic bare "university park" anchor far
+    # below (which would otherwise degrade them to "University Park"). The
+    # "university park" needles are PA-qualified / ZIP-qualified so they don't
+    # also grab the unrelated "University Park, TX" (SMU's town).
+    (['penn state', 'pennsylvania state',
+      'university park, pa', 'university park pa', 'university park, pennsylvania',
+      '16802'], 'Penn State'),
     ('north carolina state', 'NC State'),
     (['university of north carolina at charlotte', 'university of north carolina charlotte', 'unc charlotte', 'univ of north carolina at charlotte'], 'UNC Charlotte'),
     (['north carolina agricultural and technical state', 'north caorlina agriculture and technology'], 'NC A&T'),
@@ -1675,7 +1685,12 @@ _ANCHORS_SRC: list = [
     (['byu,', 'brigham young'], 'BYU'),
     ('weber state', 'Weber State'),
     ('utah state', 'Utah State'),
-    ('university park', 'University Park'),
+    # NOTE: there is intentionally no bare ('university park', ...) anchor here.
+    # "University Park" is a campus town, not an institution: it's Penn State's
+    # main campus (handled by the PA-/ZIP-qualified needles on the Penn State
+    # anchor above) and also SMU's town ("University Park, TX"). A bare token
+    # anchor mislabeled both as "University Park"; without it, any unqualified
+    # leftover falls through to the fallback shortener instead.
     ('university of guelph', 'U Guelph'),
     ([
         'clemson center for optical materials',

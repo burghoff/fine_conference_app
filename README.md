@@ -1,6 +1,6 @@
 # The Fine Conference App
 
-The Fine Conference App is a lightweight planner that replaces the clunky apps conferences foist on attendees. It's a single webpage, with nothing to install, no account, no notifications, and no splash screen. Your schedule lives in your browser, syncs across your devices, and works flawlessly on both your phone and computer. See it in action [here](https://htmlpreview.github.io/?https://github.com/burghoff/fine_conference_app/blob/main/scripts/test2026/test2026_app.html)!
+The Fine Conference App is a lightweight planner that replaces the clunky apps conferences foist on attendees. It's a single webpage, with nothing to install, no account, no notifications, and no splash screen. Your schedule lives in your browser, syncs across your devices, and works flawlessly on both your phone and computer. See it in action [here](https://htmlpreview.github.io/?https://github.com/burghoff/fine_conference_app/blob/main/conferences/test2026/test2026_app.html)!
 
 <table>
   <tr>
@@ -28,7 +28,7 @@ Conference organizers often ship a large app that requires an install, an accoun
 
 ## Usage
 
-If your conference already has a subdirectory in `scripts`, building its app requires just a single command from the `scripts` directory:
+If your conference already has a subdirectory in `conferences/`, building its app requires just a single command from the `scripts/` directory:
 
 ```bash
 python make_app.py <conference_name>
@@ -42,7 +42,7 @@ If your conference does **not** yet have a subdirectory, it will need to be set 
 
 ## How it works
 
-The project is a small pipeline. Each conference has its own subdirectory under `scripts/`, while the shared app builder is conference-agnostic.
+The project is a small pipeline. Each conference has its own subdirectory under `conferences/`, while the shared app builder and `make_app.py` live in `scripts/` and are conference-agnostic.
 
 For an already-supported conference, `make_app.py` runs the full pipeline: it obtains any needed program files, generates `conference_data.json`, and builds a single self-contained HTML app.
 
