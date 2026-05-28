@@ -11,9 +11,9 @@ Celare Quantum Communications ApS (Denmark)	Celare
 Center for Integrated Nanotechnologies, Sandia National Laboratories (USA)	Sandia
 Center for Micro-and Nanostructures, TU Wien (Austria)	TU Vienna
 Center of Materials Science and Optoelectronics Engineering, University of Chinese Academy of Sciences (China)	UCAS
-Center of nanosciences and nanotechnologies, CNRS, Univ. Paris Saclay (France)	CNRS
-Centre de Nanosciences et de Nanotechnologies, CNRS, Univ. Paris Saclay (France)	CNRS
-Centre de Nanosciences et de Nanotechnologies, Université Paris-Saclay, CNRS (France)	Paris-Saclay
+Center of nanosciences and nanotechnologies, CNRS, Univ. Paris Saclay (France)	C2N Paris-Saclay
+Centre de Nanosciences et de Nanotechnologies, CNRS, Univ. Paris Saclay (France)	C2N Paris-Saclay
+Centre de Nanosciences et de Nanotechnologies, Université Paris-Saclay, CNRS (France)	C2N Paris-Saclay
 Centre d’Optique Photonique et Lasers, Université Laval (Canada)	Laval
 Centre for Micro- and Nanostructures, TU Wien, (Austria)	TU Vienna
 Centre for OptoElectronics and Biophotonics, School of Electrical and Electronic Engineering & The Photonics Institute, Nanyang Technological University (Singapore)	NTU Singapore
@@ -148,7 +148,7 @@ University of Würzburg, Physikalisches Institut, Lehrstuhl für Technische Phys
 Università Roma Tre, Department of Sciences (Italy)	Roma Tre
 Università di Pisa, Department of Physics (Italy)	U Pisa
 Université Laval – Canada & Télécom Paris – France	Laval
-Université Paris-Saclay, CNRS, Centre de Nanosciences et de Nanotechnologies (France)	Paris-Saclay
+Université Paris-Saclay, CNRS, Centre de Nanosciences et de Nanotechnologies (France)	C2N Paris-Saclay
 Vigo Photonics SA (Poland)	Vigo Photonics
 Walter Schottky Institute, Technical University of Munich (Germany)	TU Munich
 Wroclaw Universityof Science & Technology (Poland)	Wroclaw

@@ -449,10 +449,10 @@ Central Laser Facility, UKRI, Didcot, Choose one…, United Kingdom	Central Lase
 Central South University	Central South University
 Central South University, Changsha, China	Central South University
 Centre d'Optique, Photonique et Laser, Université Laval, Quebec City, QC, Canada	Laval
-Centre de Nanoscience et de Nanotechnologies, CNRS, Universite Paris-Sud, Universite Paris Saclay	CNRS
-Centre de Nanoscience et de Nanotechnologies, CNRS, Universite Paris-Sud, Universite Paris Saclay, Palaiseau, France	CNRS
-Centre de Nanosciences et de Nanotechnologies	Centre de Nanosciences et de Nanotechnologies
-Centre de Nanosciences et de Nanotechnologies, Palaiseau, France	Centre de Nanosciences et de Nanotechnologies
+Centre de Nanoscience et de Nanotechnologies, CNRS, Universite Paris-Sud, Universite Paris Saclay	C2N Paris-Saclay
+Centre de Nanoscience et de Nanotechnologies, CNRS, Universite Paris-Sud, Universite Paris Saclay, Palaiseau, France	C2N Paris-Saclay
+Centre de Nanosciences et de Nanotechnologies	C2N Paris-Saclay
+Centre de Nanosciences et de Nanotechnologies, Palaiseau, France	C2N Paris-Saclay
 Centre de Radiofrequences, Optique et Micro-nanoelectronique des Alpes	Centre de Radiofrequences
 Centre de Radiofrequences, Optique et Micro-nanoelectronique des Alpes, Grenoble, France	Optique et Micro-nanoelectronique des Alpes
 Centre d’Optique, Photonique et Laser, Université Laval, Québec, QC, Canada	Laval
@@ -4068,8 +4068,8 @@ Université Laval, Québec	Laval
 Université Laval, Québec, QC, Canada	Laval
 Université Libre de Bruxelles	ULB
 Université Paris Cité	U Paris Cité
-Université Paris Saclay	Université Paris Saclay
-Université Paris Saclay, Palaiseau, France	Université Paris Saclay
+Université Paris Saclay	Paris-Saclay
+Université Paris Saclay, Palaiseau, France	Paris-Saclay
 Université Paris-Saclay	Paris-Saclay
 Université Paris-Saclay, Institut d’Optique Graduate School, CNRS, Laboratoire Charles Fabry	Institut d'Optique
 Université Paris-Saclay, Palaiseau, France	Paris-Saclay
