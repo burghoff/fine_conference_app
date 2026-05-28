@@ -97,6 +97,26 @@ fetcher downloads.
    writes `conferences/<slug>/<slug>_app.html`. Open it in a browser and
    iterate on the processor until the program renders correctly.
 
+6. **Add the conference to the affiliation-map regression suite.** Once the
+   processor is stable, register the new conference's affiliation strings with
+   the regression harness at `scripts/tests/` so any future tweak to anchors
+   or the fallback shortener can't silently change its canonical short names:
+
+   ```bash
+   python scripts/tests/make_fixture.py conferences/<slug>/conference_data_<slug>.json
+   pytest -k <slug> --update-golden
+   ```
+
+   The first command writes
+   `scripts/tests/fixtures/<slug>.affiliation_sources.json` (the trimmed input
+   the test reads — just the `affiliation_sources` list); the second writes
+   `scripts/tests/golden/<slug>.expected.txt` (the frozen `{raw -> short}`
+   mapping). Eyeball the golden once to make sure the short names look right,
+   then commit both files. See `scripts/tests/README.md` for the full workflow,
+   including how `--update-golden` produces `.expected.new` proposal files when
+   an existing conference's map would change so a human can review the diff
+   before promoting it.
+
 ## Login-required sources
 
 If the program lives behind a login, the fetcher can use Playwright with the
@@ -155,3 +175,6 @@ Other examples, in rough order of complexity:
 - [ ] The slug-named JSON (`conference_data_<slug>.json`) and built app
       (`<slug>_app.html`) end up in `conferences/<slug>/`, not committed
       anywhere else.
+- [ ] `scripts/tests/fixtures/<slug>.affiliation_sources.json` and
+      `scripts/tests/golden/<slug>.expected.txt` exist (see Workflow step 6),
+      and `pytest scripts/tests/test_affiliation_map.py` is green.

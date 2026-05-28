@@ -3205,11 +3205,11 @@ Shanghai University, Shanghai, China	Shanghai
 Shanghai jiaotong university	SJTU
 Shanghai jiaotong university, Shanghai, China	SJTU
 ShanghaiTech University	ShanghaiTech
-Shenzhen Huazhong University of Sci. and Technol. Research Institute	Shenzhen Huazhong University of Sci. and Technol. Research Institute
-Shenzhen Huazhong University of Sci. and Technol. Research Institute, Shenzhen, Guangdong, China	Shenzhen Huazhong University of Sci. and Technol. Research Institute
-Shenzhen Huazhong University of Science and Technology Research Institute	Huazhong
-Shenzhen Huazhong University of Science and Technology Research Institute, Shenzhen, China	Huazhong
-Shenzhen Huazhong University of Science and Technology Research Institute, Shenzhen, Guangdong, China	Huazhong
+Shenzhen Huazhong University of Sci. and Technol. Research Institute	HUST Shenzhen
+Shenzhen Huazhong University of Sci. and Technol. Research Institute, Shenzhen, Guangdong, China	HUST Shenzhen
+Shenzhen Huazhong University of Science and Technology Research Institute	HUST Shenzhen
+Shenzhen Huazhong University of Science and Technology Research Institute, Shenzhen, China	HUST Shenzhen
+Shenzhen Huazhong University of Science and Technology Research Institute, Shenzhen, Guangdong, China	HUST Shenzhen
 Shenzhen Institute of Advanced Technology, Chinese Academy of Science, Shenzhen, Guangdong, China	CAS
 Shenzhen Institute of Huazhong University of Science and Technology	Huazhong
 Shenzhen Institute of Huazhong University of Science and Technology, Shenzhen, China	Huazhong
@@ -3503,10 +3503,10 @@ The Ohio State University, Columbus, OH, United States	Ohio State
 The Pennsylvania State University	Penn State
 The Pennsylvania State University, University Park, PA, United States	Penn State
 The State University of New York	The State University of New York
-The Univ. of Electro-Communications	The Univ. of Electro-Communications
-The Univ. of Electro-Communications, Chofu, TOKYO, Japan	The Univ. of Electro-Communications
-The Univ. of North Carolina at Charlotte	The Univ. of North Carolina at Charlotte
-The Univ. of North Carolina at Charlotte, Charlotte, NC, United States	The Univ. of North Carolina at Charlotte
+The Univ. of Electro-Communications	U Electro-Comm Tokyo
+The Univ. of Electro-Communications, Chofu, TOKYO, Japan	U Electro-Comm Tokyo
+The Univ. of North Carolina at Charlotte	UNC Charlotte
+The Univ. of North Carolina at Charlotte, Charlotte, NC, United States	UNC Charlotte
 The University of Adelaide	Adelaide University
 The University of Arizona	Arizona
 The University of Arizona, Tucson, AZ, United States	Arizona
