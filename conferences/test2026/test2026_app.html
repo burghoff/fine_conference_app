@@ -311,6 +311,8 @@ body[data-active-view="session-detail"] .date-header,
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   opacity: .92;
   
+}
+.bubble-title.has-chip {
   padding-left: 5px;
 }
 .bubble-sub {
@@ -2046,7 +2048,11 @@ function makeBubble(item, opts = {}) {
     : "";
 
   const titleHTML = esc(displayTitle(item));
-  wrap.appendChild(el("div", { class: "bubble-title", html: titleHTML }));
+
+  wrap.appendChild(el("div", {
+    class: "bubble-title" + (locChip ? " has-chip" : ""),
+    html: titleHTML,
+  }));
 
   const subBody = subtitleFor(item);
   const subHTML = locChip + (subBody || "");
