@@ -275,6 +275,11 @@ body[data-active-view="session-detail"] .date-header,
 }
 .bubble:active { transform: scale(.985); }
 
+body.me-resizing .bubble {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 52px;
+}
+
 .bubble.clr-blue    { background: var(--c-blue-bg);    border-left-color: var(--c-blue-fg); }
 .bubble.clr-violet  { background: var(--c-violet-bg);  border-left-color: var(--c-violet-fg); }
 .bubble.clr-emerald { background: var(--c-emerald-bg); border-left-color: var(--c-emerald-fg); }
@@ -289,20 +294,12 @@ body[data-active-view="session-detail"] .date-header,
 .bubble.clr-orange  { background: var(--c-orange-bg);  border-left-color: var(--c-orange-fg); }
 
 .bubble-loc {
-  display: inline-block;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: calc(10.5px * var(--fs)); font-weight: 600;
-  letter-spacing: .02em;
-  color: var(--text);
-  background: rgba(0,0,0,.08);
-  border-radius: 4px;
-  padding: 1px 5px;
-  margin-right: 6px;
-  vertical-align: 1px;
-  opacity: .82;
+  
+  color: inherit;
 }
-@media (prefers-color-scheme: dark) {
-  .bubble-loc { background: rgba(255,255,255,.10); }
+.bubble-sep {
+  margin: 0 .4em;
+  opacity: .7;
 }
 
 .bubble-title {
@@ -310,10 +307,6 @@ body[data-active-view="session-detail"] .date-header,
   overflow: hidden; text-overflow: ellipsis;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   opacity: .92;
-  
-}
-.bubble-title.has-chip {
-  padding-left: 5px;
 }
 .bubble-sub {
   font-size: calc(12px * var(--fs)); color: var(--muted);
@@ -1709,6 +1702,12 @@ let state = loadState();
 const sessionMap = Object.fromEntries(DATA.sessions.map(s => [s.id, s]));
 const talkMap    = Object.fromEntries(DATA.talks.map(t => [t.id, t]));
 
+const EMPTY_SESSIONS = DATA.sessions.filter(s => {
+  const tids = s.talk_ids || [];
+  for (const tid of tids) if (talkMap[tid]) return false;
+  return true;
+});
+
 function effectiveLocation(item) {
   if (item.location != null) return item.location;   
   if (item.session_id) {
@@ -1794,7 +1793,12 @@ for (const id in TYPE_LABELS_TALK) {
 }
 function labelForType(color, tab) {
   if (tab === "sessions") return TYPE_LABELS_SESSION[color] || color;
-  if (tab === "talks")    return TYPE_LABELS_TALK[color]    || color;
+
+  if (tab === "talks") {
+    return TYPE_LABELS_TALK[color]
+        || TYPE_LABELS_SESSION[color]
+        || color;
+  }
   return TYPE_LABELS[color] || color;
 }
 
@@ -1805,7 +1809,11 @@ const SESSION_TYPE_COUNTS = (() => {
   const c = {}; for (const x of DATA.sessions) { const k = x.color || "neutral"; c[k] = (c[k]||0)+1; } return c;
 })();
 const TALK_TYPE_COUNTS = (() => {
-  const c = {}; for (const x of DATA.talks) { const k = x.color || "neutral"; c[k] = (c[k]||0)+1; } return c;
+
+  const c = {};
+  for (const x of DATA.talks)     { const k = x.color || "neutral"; c[k] = (c[k]||0)+1; }
+  for (const x of EMPTY_SESSIONS) { const k = x.color || "neutral"; c[k] = (c[k]||0)+1; }
+  return c;
 })();
 function typesForTab(tab) {
   if (tab === "sessions") {
@@ -1814,7 +1822,12 @@ function typesForTab(tab) {
       .map(c => ({ color: c, count: SESSION_TYPE_COUNTS[c] }));
   }
   if (tab === "talks") {
-    return TALK_TYPE_ORDER
+
+    const order = [
+      ...TALK_TYPE_ORDER,
+      ...SESSION_TYPE_ORDER.filter(c => !TALK_TYPE_ORDER.includes(c)),
+    ];
+    return order
       .filter(c => TALK_TYPE_COUNTS[c] > 0)
       .map(c => ({ color: c, count: TALK_TYPE_COUNTS[c] }));
   }
@@ -1913,7 +1926,55 @@ function toggleScheduled(id) {
   state.scheduleLog = state.scheduleLog || {};
   state.scheduleLog[id] = { op, ts: Date.now() };
   saveState();
-  render();
+
+  const isAdded = op === "add";
+
+  document.querySelectorAll(
+    `#content .bubble[data-bubble-id="${CSS.escape(id)}"]`
+  ).forEach(b => {
+    b.classList.toggle("added", isAdded);
+    if (isAdded) b.classList.remove("partial");   
+    const btn = b.querySelector(".schedule-btn");
+    if (btn) btn.setAttribute("aria-label",
+      isAdded ? "Remove from schedule" : "Add to schedule");
+  });
+
+  const detailHead = document.querySelector(
+    `#content .detail-head[data-detail-id="${CSS.escape(id)}"]`
+  );
+  if (detailHead) {
+    const dh = detailHead.querySelector(".dh-add");
+    if (dh) {
+      dh.classList.toggle("added", isAdded);
+      dh.setAttribute("aria-label",
+        isAdded ? "Remove from schedule" : "Add to schedule");
+    }
+  }
+
+  invalidatePartial();
+  const t = talkMap[id];
+  const affectedSessionIds = [];
+  if (t && t.session_id) affectedSessionIds.push(t.session_id);
+  if (sessionMap[id]) affectedSessionIds.push(id);
+  for (const sid of affectedSessionIds) {
+    document.querySelectorAll(
+      `#content .bubble[data-bubble-id="${CSS.escape(sid)}"]`
+    ).forEach(sb => {
+      const sessionAdded = state.schedule.includes(sid);
+      const partial = !sessionAdded && partialSessionIds().has(sid);
+      sb.classList.toggle("partial", partial);
+    });
+  }
+
+  if (isWide()) {
+    renderMePane();
+  } else if (state.activeTab === "me") {
+
+    render();
+    return;
+  }
+
+  refreshTypesPanel();
 }
 
 function isSessionExpanded(id) {
@@ -2052,26 +2113,31 @@ function makeBubble(item, opts = {}) {
   } else {
     chipText = effectiveLocation(item);
   }
-  const locChip = chipText
-    ? `<span class="bubble-loc">${esc(chipText)}</span>`
-    : "";
 
   const titleHTML = esc(displayTitle(item));
-
   wrap.appendChild(el("div", {
-    class: "bubble-title" + (locChip ? " has-chip" : ""),
+    class: "bubble-title",
     html: titleHTML,
   }));
 
   const subBody = subtitleFor(item);
-  const subHTML = locChip + (subBody || "");
+  const hasByline = !!subBody && subBody.trim() !== "" && subBody !== "&nbsp;";
+  const locPrefix = chipText
+    ? `<span class="bubble-loc">${esc(chipText)}</span>` +
+      (hasByline ? `<span class="bubble-sep">•</span>` : "")
+    : "";
+  const subHTML = locPrefix + (subBody || "");
   if (subHTML) {
     const subEl = el("div", { class: "bubble-sub", html: subHTML });
     wrap.appendChild(subEl);
 
     if (item.session_id) {
-      subEl._chip = locChip;
-      requestAnimationFrame(() => fitByline(subEl, item, locChip));
+      subEl._chip = locPrefix;
+      if (_bylineSearchCtx) {
+        subEl._searchByline = true;
+      } else {
+        requestAnimationFrame(() => observeBylineForFit(subEl));
+      }
     }
   }
 
@@ -2214,41 +2280,81 @@ function talkByline(item) {
   if (prev < lastI) html += "…";
 
   const tail = item.speaker_aff || item.last_aff || "";
-  if (tail) html += html ? `, ${esc(tail)}` : esc(tail);
+  if (tail) html += html ? ` · ${esc(tail)}` : esc(tail);
   return html;
 }
 
-function abbrevFirstName(name) {
+const NOBILIARY_PARTICLES = new Set([
+  "von","van","de","der","den","del","della","di","da","dos","das","du",
+  "le","la","les","el","al","bin","ibn","ben","zu","auf","am","im","vom",
+  "ten","ter","te","op","ait","aït","abu","abd","saint","st","st.",
+  "y","i","e",
+]);
+
+function _initialToken(token) {
+  const t = (token || "").trim();
+  if (!t) return null;
+  
+  if (/^[A-Za-zÀ-ÿ]\.?(?:[-.][A-Za-zÀ-ÿ]\.?)*$/.test(t)) return null;
+
+  if (NOBILIARY_PARTICLES.has(t.toLowerCase())) return null;
+  
+  const segs = t.split("-");
+  const out = [];
+  for (const seg of segs) {
+    const m = seg.match(/^([A-Za-zÀ-ÿ])[A-Za-zÀ-ÿ'’]*$/);
+    if (!m) return null;
+    out.push(m[1] + ".");
+  }
+  return out.join("-");
+}
+
+function _surnameStart(tokens) {
+  if (tokens.length <= 1) return 0;
+  let i = tokens.length - 1; 
+  while (i - 1 >= 0 && NOBILIARY_PARTICLES.has(tokens[i - 1].toLowerCase())) {
+    i--;
+  }
+  return i;
+}
+
+function abbrevGivenNames(name) {
   const raw = (name || "").trim();
   if (!raw) return raw;
 
   const ci = raw.indexOf(",");
   if (ci >= 0) {
+
     const afterComma = raw.slice(ci + 1);
-    const ws = (afterComma.match(/^\s*/) || [""])[0];   
+    const ws = (afterComma.match(/^\s*/) || [""])[0];
     const given = afterComma.slice(ws.length);
-    const abbr = _abbrevLeadingToken(given);
-    return abbr == null ? raw : raw.slice(0, ci + 1) + ws + abbr;
+    const toks = given.split(/\s+/).filter(Boolean);
+    if (!toks.length) return raw;
+    const out = [];
+    for (const t of toks) {
+      const ab = _initialToken(t);
+      out.push(ab == null ? t : ab);
+    }
+    return raw.slice(0, ci + 1) + ws + out.join(" ");
   }
 
-  const sp = raw.search(/\s/);
-  if (sp < 0) return raw;
-  const head = raw.slice(0, sp);                   
-  const rest = raw.slice(sp);                      
-  const abbr = _abbrevLeadingToken(head);
-  return abbr == null ? raw : abbr + rest;
-}
+  const tokens = raw.split(/\s+/).filter(Boolean);
+  if (tokens.length <= 1) return raw; 
 
-function _abbrevLeadingToken(token) {
-  const t = (token || "").trim();
-  if (!t) return null;
-  
-  if (/^[A-Za-zÀ-ÿ]\.?$/.test(t)) return null;
-  const m = t.match(/^([A-Za-zÀ-ÿ])[A-Za-zÀ-ÿ'’]*(-.*)?$/);
-  if (!m) return null;                              
-  const initial = m[1] + ".";
-  const hyphenTail = m[2] || "";                    
-  return initial + hyphenTail;
+  const surStart = _surnameStart(tokens);
+  if (surStart <= 0) return raw; 
+
+  const givenToks = tokens.slice(0, surStart);
+  const tail = tokens.slice(surStart);
+  const out = [];
+  let changed = false;
+  for (const t of givenToks) {
+    const ab = _initialToken(t);
+    if (ab == null) { out.push(t); }
+    else { out.push(ab); changed = true; }
+  }
+  if (!changed) return raw;
+  return out.concat(tail).join(" ");
 }
 
 function legacyTalkByline(item, abbrevLevel = 0) {
@@ -2264,11 +2370,11 @@ function legacyTalkByline(item, abbrevLevel = 0) {
   const isLastSpeaker  = effLast && (_norm(speaker) === _norm(effLast));
   const speakerIsMiddle = speaker && !isFirstSpeaker && !isLastSpeaker && effLast;
 
-  const firstDisp  = (abbrevLevel >= 1) ? abbrevFirstName(first) : first;
+  const firstDisp  = (abbrevLevel >= 1) ? abbrevGivenNames(first) : first;
   const middleDisp = (abbrevLevel >= 2 && speakerIsMiddle)
-    ? abbrevFirstName(speaker) : speaker;
+    ? abbrevGivenNames(speaker) : speaker;
   const lastDisp   = (abbrevLevel >= 3 && effLast)
-    ? abbrevFirstName(effLast) : effLast;
+    ? abbrevGivenNames(effLast) : effLast;
 
   const fmt = (name, isSpeaker) => isSpeaker
     ? `<span class="speaker">${esc(name)}</span>`
@@ -2281,13 +2387,15 @@ function legacyTalkByline(item, abbrevLevel = 0) {
   let html = parts.join("…");
 
   const aff = item.speaker_aff || item.last_aff || "";
-  if (aff) html += html ? `, ${esc(aff)}` : esc(aff);
+  if (aff) html += html ? ` · ${esc(aff)}` : esc(aff);
   return html;
 }
 
 function fitByline(subEl, item, chipPrefix = "") {
   if (!subEl || !item || !item.session_id) return;   
   if (_bylineSearchCtx) return;                       
+
+  if (subEl._searchByline) return;
   const overflowing = () => subEl.scrollWidth > subEl.clientWidth + 1;
   
   subEl.innerHTML = chipPrefix + legacyTalkByline(item, 0);
@@ -2299,17 +2407,74 @@ function fitByline(subEl, item, chipPrefix = "") {
 
 }
 
+let _bylineFitGen = 0;
+const _bylineObservers = new WeakMap();   
+const _bylineVisible   = new WeakMap();   
+
+function _bylineScrollRoot(subEl) {
+  let n = subEl.parentElement;
+  while (n) {
+    if (n.id === "content" || n.id === "me-content") return n;
+    n = n.parentElement;
+  }
+  return null;
+}
+
+function _fitIfStale(subEl) {
+  if (subEl._fitGen === _bylineFitGen) return;
+  const id = subEl.parentElement
+          && subEl.parentElement.getAttribute("data-bubble-id");
+  const item = id ? talkMap[id] : null;
+  if (item) fitByline(subEl, item, subEl._chip || "");
+  subEl._fitGen = _bylineFitGen;
+}
+
+function _getBylineObserver(root) {
+  let obs = _bylineObservers.get(root);
+  if (obs) return obs;
+  let visSet = _bylineVisible.get(root);
+  if (!visSet) { visSet = new Set(); _bylineVisible.set(root, visSet); }
+  obs = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      const subEl = e.target;
+      if (e.isIntersecting) { visSet.add(subEl); _fitIfStale(subEl); }
+      else                  { visSet.delete(subEl); }
+    }
+  }, { root, rootMargin: "200px 0px" });   
+  _bylineObservers.set(root, obs);
+  return obs;
+}
+
+function observeBylineForFit(subEl) {
+  const root = _bylineScrollRoot(subEl);
+  if (!root) return;
+  _getBylineObserver(root).observe(subEl);
+}
+
+function disconnectBylineObservers(specificRoot) {
+  const roots = specificRoot
+    ? [specificRoot]
+    : ["content", "me-content"].map(id => document.getElementById(id));
+  for (const root of roots) {
+    if (!root) continue;
+    const obs = _bylineObservers.get(root);
+    if (obs) { obs.disconnect(); _bylineObservers.delete(root); }
+    _bylineVisible.delete(root);
+  }
+}
+
 function refitAllBylines() {
   if (_bylineSearchCtx) return;
-  requestAnimationFrame(() => requestAnimationFrame(() => {
-    document.querySelectorAll('.bubble[data-kind="talk"] > .bubble-sub')
-      .forEach(subEl => {
-        const id = subEl.parentElement
-          && subEl.parentElement.getAttribute("data-bubble-id");
-        const item = id ? talkMap[id] : null;
-        if (item) fitByline(subEl, item, subEl._chip || "");
-      });
-  }));
+  _bylineFitGen++;
+  requestAnimationFrame(() => {
+    for (const id of ["content", "me-content"]) {
+      const root = document.getElementById(id);
+      if (!root) continue;
+      const set = _bylineVisible.get(root);
+      if (!set || set.size === 0) continue;
+      for (const subEl of set) _fitIfStale(subEl);
+    }
+  });
 }
 
 function _norm(s) {
@@ -2491,7 +2656,13 @@ function renderSessionsList(c) {
   renderTimeGrouped(c, DATA.sessions, { expandable: true });
 }
 function renderTalksList(c) {
-  renderTimeGrouped(c, DATA.talks);
+
+  let items = DATA.talks;
+  if (EMPTY_SESSIONS.length) {
+    items = [...DATA.talks, ...EMPTY_SESSIONS]
+      .sort((a, b) => cmpTs(a.start_ts, b.start_ts));
+  }
+  renderTimeGrouped(c, items);
 }
 
 function appendSessionMetaLines(s, container) {
@@ -2563,7 +2734,11 @@ function appendSessionMetaLines(s, container) {
 
 function buildSessionHead(s) {
   const added = state.schedule.includes(s.id);
-  const head = el("section", { class: `detail-head clr-${s.color}` });
+
+  const head = el("section", {
+    class: `detail-head clr-${s.color}`,
+    "data-detail-id": s.id,
+  });
 
   head.appendChild(el("h2", { class: "dh-title" }, s.title || "(untitled)"));
   appendSessionMetaLines(s, head);
@@ -2611,7 +2786,10 @@ function renderTalkDetail(c, tid) {
   const s = sessionMap[t.session_id];
   const added = state.schedule.includes(t.id);
 
-  const head = el("section", { class: `detail-head clr-${t.color}` });
+  const head = el("section", {
+    class: `detail-head clr-${t.color}`,
+    "data-detail-id": t.id,
+  });
 
   head.appendChild(el("h2", { class: "dh-title" }, displayTitle(t) || "(untitled)"));
   const sd = tsToDate(t.start_ts);
@@ -4581,19 +4759,33 @@ function initMeResize() {
   const grip = $("#me-resizer");
   if (!grip) return;
   let dragging = false;
+  let pendingW = null;
+  let rafScheduled = false;
+
+  const flush = () => {
+    rafScheduled = false;
+    if (pendingW == null) return;
+    document.documentElement.style.setProperty("--me-w", pendingW + "px");
+    state.meWidth = pendingW;   
+    pendingW = null;
+  };
 
   const onMove = (e) => {
     if (!dragging) return;
     
-    const w = Math.max(ME_MIN(), Math.min(ME_MAX(),
+    pendingW = Math.max(ME_MIN(), Math.min(ME_MAX(),
       Math.round(window.innerWidth - e.clientX)));
-    document.documentElement.style.setProperty("--me-w", w + "px");
-    state.meWidth = w;            
+    if (!rafScheduled) {
+      rafScheduled = true;
+      requestAnimationFrame(flush);
+    }
     if (e.cancelable) e.preventDefault();
   };
   const onUp = () => {
     if (!dragging) return;
     dragging = false;
+
+    if (pendingW != null) flush();
     document.body.classList.remove("me-resizing");
     window.removeEventListener("pointermove", onMove);
     window.removeEventListener("pointerup", onUp);
@@ -4638,7 +4830,7 @@ function initMePaneScroll() {
 function renderMePane() {
   const pane = $("#me-content");
   if (!pane) return;
-  if (!isWide()) { pane.innerHTML = ""; return; }
+  if (!isWide()) { disconnectBylineObservers(pane); pane.innerHTML = ""; return; }
 
   const sync = $("#me-pane-sync");
   if (sync) sync.textContent = formatLastSync(state.lastSyncAt);
@@ -4665,6 +4857,7 @@ function renderMePane() {
     }
   };
 
+  disconnectBylineObservers(pane);
   pane.innerHTML = "";
   renderMe(pane);
 
@@ -4758,6 +4951,7 @@ function render() {
   renderTopbarExtras(tab, top);
 
   const c = $("#content");
+  disconnectBylineObservers(c);
   c.innerHTML = "";
 
   if (top.view === "list") {
@@ -4989,11 +5183,36 @@ function searchFor(query, mode) {
   navigate(view);
 }
 
+function focusSearch() {
+  snapshotScroll();
+  state.activeTab = "search";
+  const stack = state.tabStacks["search"];
+  if (stack && stack.length > 1) stack.length = 1;
+  saveState();
+  render();
+  requestAnimationFrame(() => {
+    const input = $("#search-input");
+    if (input) {
+      input.focus();
+      input.select();
+    }
+  });
+}
+
 document.addEventListener("pointerdown", (e) => {
   const btn = e.target.closest(".schedule-btn, .dh-add");
   if (!btn) return;
   try { btn.setPointerCapture(e.pointerId); } catch (_) {}
 }, true);
+
+document.addEventListener("keydown", (e) => {
+  const isFind = (e.ctrlKey || e.metaKey) && !e.altKey
+    && (e.key === "f" || e.key === "F");
+  if (!isFind) return;
+  if (typeof isWide === "function" && !isWide()) return;
+  e.preventDefault();
+  focusSearch();
+});
 
 $("#back-btn").addEventListener("click", back);
 
