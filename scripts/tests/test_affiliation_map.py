@@ -29,7 +29,7 @@ from conftest import (
 FIXTURES = discover_fixtures()
 
 
-def _build_quiet(builder, sources: dict) -> dict[str, str]:
+def _build_quiet(builder, sources: list) -> dict[str, str]:
     """Run build() with its chatty stdout suppressed and its .txt side-effect
     directed to a throwaway temp file.
 

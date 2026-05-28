@@ -36,26 +36,22 @@ wherever that affiliation appears.
 
 INPUT
 Everything comes from conference_data.json's source-agnostic
-"affiliation_sources" block. This module reads ONLY that JSON; the processor
-does all of the upstream scraping/parsing. The block holds three lists of raw
-strings, which differ only in where the processor harvested them — they are
-treated identically once read (pooled together, de-duplicated, and each
-becomes a key to canonicalize):
-  - affiliation_sources["affiliation_full_lines"]
-        Long, multi-field postal-address lines, e.g.
+"affiliation_sources" value. This module reads ONLY that JSON; the processor
+does all of the upstream scraping/parsing. It is a single flat list of raw
+affiliation strings that the processor has already pooled, de-duplicated, and
+sorted. The strings come in several forms, differing only in where the
+processor harvested them; they are treated identically here (each becomes a key
+to canonicalize):
+  - Long, multi-field postal-address lines, e.g.
         "4th Physical Institute, University of Göttingen, Göttingen, Germany".
-        Used whole (not split).
-  - affiliation_sources["presider_affiliation_strings"]
-        Affiliations of session presiders, usually already short, e.g.
-        "KAUST" or "University of Florence". A single string may pack several
-        affiliations separated by ";", so these are split on ";" before use.
-  - affiliation_sources["institution_strings"]
-        Institution names the processor pre-extracted, usually already fairly
-        short, e.g. "North Carolina State University". Like the presider
-        strings, one entry may be a ";"-separated list, so these are also
-        split on ";". They mostly duplicate names already present in the
-        full-address lines, but are included anyway because they occasionally
-        contribute an institution that never appears in a full-address line.
+  - Session-presider affiliations, usually already short, e.g.
+        "KAUST" or "University of Florence".
+  - Institution names the processor pre-extracted, usually already fairly
+        short, e.g. "North Carolina State University". These mostly duplicate
+        names already present in the full-address lines, but occasionally
+        contribute an institution that never appears in one.
+The processor splits any ';'-joined lists at the source, so every entry here is
+a single affiliation string and this module needs no further splitting.
 
 HOW A RAW STRING BECOMES A SHORT LABEL (see canonicalize())
 Each raw string is run through these steps, in order, and the FIRST one that
@@ -89,53 +85,11 @@ import re
 import unicodedata
 from pathlib import Path
 
-# ---------------------------------------------------------------------------
-# Extraction
-# ---------------------------------------------------------------------------
-# NOTE: this module reads only the source-agnostic affiliation_sources block of
-# the processor's data JSON. The processor does all upstream data gathering and
-# bundles the full-address affiliation lines into "affiliation_full_lines", so
-# this module only consumes that JSON.
-
-
-def extract_presider_affiliations(strings: list[str]) -> set[str]:
-    """Pull every presider affiliation out of the presider-affiliation strings.
-
-    The values are short forms like ``KAUST``, ``University of Florence``,
-    ``DTU Copenhagen``, ``Trinity College Dunlin`` (note the typo), each
-    possibly a semicolon-separated list of several affiliations.
-
-    `strings` is the list of presider-affiliation strings bundled in the data
-    JSON under affiliation_sources["presider_affiliation_strings"].
-    """
-    out: set[str] = set()
-    for v in strings:
-        for piece in (v or '').split(';'):
-            p = piece.strip()
-            if p:
-                out.add(p)
-    return out
-
-
-def extract_institutions(strings: list[str]) -> set[str]:
-    """Pull every institution value out of the institution strings.
-
-    These are semicolon-separated short forms like
-    ``Hewlett Packard Enterprise; North Carolina State University``.
-    They are usually duplicates of the full-address short forms but
-    occasionally add something the address lines don't (e.g. when no
-    full-address line is generated).
-
-    `strings` is the list of institution strings bundled in the data JSON
-    under affiliation_sources["institution_strings"].
-    """
-    out: set[str] = set()
-    for v in strings:
-        for piece in (v or '').split(';'):
-            p = piece.strip()
-            if p:
-                out.add(p)
-    return out
+# NOTE: this module reads only the source-agnostic affiliation_sources list of
+# the processor's data JSON: one flat, de-duplicated list of raw affiliation
+# strings (full-address lines, presider affiliations, and institution names are
+# all pooled together by the processor, which also splits any ';'-joined lists
+# at the source). This module just canonicalizes each string into a short label.
 
 
 # ---------------------------------------------------------------------------
@@ -2417,25 +2371,22 @@ def _strip_trailing_country(raw: str) -> str:
 # Driver
 # ---------------------------------------------------------------------------
 
-def build(data: dict, out_txt: Path | None = None) -> dict[str, str]:
+def build(data: dict | list, out_txt: Path | None = None) -> dict[str, str]:
     """Build the raw-affiliation -> short-name mapping.
 
     `data` is the dict the processor bundles into conference_data.json. This
-    reads only its "affiliation_sources" block (see the module docstring for
-    what the three string pools are):
-        affiliation_sources["affiliation_full_lines"]
-        affiliation_sources["presider_affiliation_strings"]
-        affiliation_sources["institution_strings"]
-    All three are pooled into one de-duplicated set of raw strings, and each
-    distinct raw string is canonicalized into its short label.
+    reads only its "affiliation_sources" value: a single flat list of raw
+    affiliation strings (full-address lines, presider affiliations, and
+    institution names all pooled and de-duplicated by the processor, which also
+    splits any ';'-joined lists at the source). Each distinct string is
+    canonicalized into its short label.
 
-    For backward compatibility, if no "affiliation_sources" block is present
-    the three pools are looked up at the top level of `data` under the same
-    neutral names, so callers may pass either the whole JSON or just the block.
+    Callers may pass either the whole JSON (a dict with an "affiliation_sources"
+    list) or the bare list itself.
 
-    Verbose by design: each input is reported as it's consumed, then the
-    canonicalization is summarized. Output is prefixed `[affil]` to match
-    the convention build_conference_app.py uses for affiliation-related logs.
+    Verbose by design: the canonicalization is summarized on stdout, prefixed
+    `[affil]` to match the convention build_conference_app.py uses for
+    affiliation-related logs.
 
     Side effect: writes the mapping as a tab-separated text file. By default
     it lands at ``affiliation_map.txt`` in the current directory; pass
@@ -2443,30 +2394,12 @@ def build(data: dict, out_txt: Path | None = None) -> dict[str, str]:
     it on disk for inspection.
     """
     print('[affil] building map from the processor data JSON')
-    src = data.get('affiliation_sources')
-    if not isinstance(src, dict):
-        # Accept either the whole JSON (with an affiliation_sources block) or
-        # the block itself passed directly.
-        src = data
-    affils: set[str] = set()
-
-    print('[affil]   reading full-address lines from affiliation_full_lines…')
-    full_line_affils = set(src.get('affiliation_full_lines') or [])
-    print(f'[affil]     {len(full_line_affils):,} unique full-address lines')
-    affils |= full_line_affils
-
-    print('[affil]   reading presider affiliations from '
-          'presider_affiliation_strings…')
-    presider_affils = extract_presider_affiliations(
-        src.get('presider_affiliation_strings') or [])
-    print(f'[affil]     {len(presider_affils):,} unique presider strings')
-    affils |= presider_affils
-
-    print('[affil]   reading short-form institutions from institution_strings…')
-    inst_affils = extract_institutions(
-        src.get('institution_strings') or [])
-    print(f'[affil]     {len(inst_affils):,} unique short-form institutions')
-    affils |= inst_affils
+    if isinstance(data, dict):
+        sources = data.get('affiliation_sources') or []
+    else:
+        # The bare affiliation_sources list passed directly.
+        sources = data or []
+    affils: set[str] = {s.strip() for s in sources if s and s.strip()}
 
     print(f'[affil]   canonicalizing {len(affils):,} unique raw strings…')
     mapping = {k: canonicalize(k) for k in sorted(affils)}

@@ -7,8 +7,9 @@ tweaked for a new conference.
 ## How it works
 
 `build_affiliation_map.build(sources)` is a pure, deterministic function from a
-conference's `affiliation_sources` block to a `{raw_string -> short_label}`
-dict. For every conference already built, that dict is frozen to disk
+conference's `affiliation_sources` list (one flat, de-duplicated list of raw
+affiliation strings) to a `{raw_string -> short_label}` dict. For every
+conference already built, that dict is frozen to disk
 (`tests/golden/<slug>.expected.txt`) and each run asserts the output reproduces
 it byte-for-byte. Any unintended change to an old conference fails the test with
 a readable, line-level diff (e.g. `'Würzburg' -> 'GENERIC_UNI'`).
@@ -25,7 +26,7 @@ tests/
   golden/<slug>.expected.txt      # frozen expected output
 ```
 
-Fixtures hold only the `affiliation_sources` block (all that `build()` reads),
+Fixtures hold only the `affiliation_sources` list (all that `build()` reads),
 so they stay small — the full multi-MB `conference_data.json` is not needed.
 
 ## Running
