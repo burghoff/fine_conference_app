@@ -23,7 +23,7 @@ Conference organizers often ship a large app that requires an install, an accoun
 - **Build your own schedule.** Add any session or talk to a personal *My Schedule* view, and attach notes to individual talks.
 - **Browse and search.** Separate tabs list every session and every talk, with full-text search across titles, authors, affiliations, and abstracts.
 - **Filter the program.** Narrow what you see by day, by session/talk type, and hide concluded items so only what's still ahead remains.
-- **Local storage that syncs.** Your schedule, notes, and preferences are saved in the browser's local storage so they persist between visits on that device. To move them to another computer or phone, copy a sync code from one device and paste it into another to merge the two schedules intelligently.
+- **Local storage that syncs.** Your schedule, notes, and preferences are saved in the browser's local storage so they persist between visits on that device. To sync them to another computer or phone, copy a sync code from one device and paste it into another.
 - **Mobile and desktop layouts.** On phones, the four tabs (Sessions, Talks, Search, Me) sit in a bottom bar. On wide screens, Me becomes a permanent, resizable side pane next to the program.
 
 ## Usage
