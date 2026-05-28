@@ -966,17 +966,24 @@ def build_conference_data(conference_name: str,
     log(f"[build] {len(sessions)} sessions, {len(talks)} talks")
     log(f"[build]   talks with an abstract page: {n_with_abstract}/{len(talks)}")
 
+    # Pool every affiliation source into one flat, de-duplicated, sorted list for
+    # the builder's affiliation map. Full-address lines are kept whole; the
+    # presider affiliations and institution bodies may be ';'-joined lists, so
+    # split them here at the source.
+    affiliation_pool: set[str] = set(pdf_affiliation_lines or [])
+    for _v in list(presider_aff_strings) + list(institution_strings):
+        for _piece in _v.split(";"):
+            _p = _piece.strip()
+            if _p:
+                affiliation_pool.add(_p)
+
     data = {
         "conference_name": conference_name or "",
         "sessions": sorted(sessions.values(), key=lambda s: (s["start_ts"] or "")),
         "talks":    sorted(talks, key=lambda t: (t["start_ts"] or "")),
         "session_types": SESSION_TYPE_REGISTRY,
         "talk_types":    TALK_TYPE_REGISTRY,
-        "affiliation_sources": {
-            "affiliation_full_lines":       sorted(pdf_affiliation_lines or []),
-            "presider_affiliation_strings": sorted(presider_aff_strings),
-            "institution_strings":          sorted(institution_strings),
-        },
+        "affiliation_sources": sorted(affiliation_pool),
     }
 
     # Optional curator credit. Only emit the block when a non-empty name is

@@ -1,7 +1,7 @@
 """Make a trimmed test fixture from a full conference_data.json.
 
-build_affiliation_map.build() reads ONLY the 'affiliation_sources' block, so a
-fixture needs nothing else. This extracts just that block, keeping fixtures tiny
+build_affiliation_map.build() reads ONLY the 'affiliation_sources' list, so a
+fixture needs nothing else. This extracts just that list, keeping fixtures tiny
 (KBs, not MBs) and the test surface honest.
 
 Usage:
@@ -23,12 +23,6 @@ from pathlib import Path
 
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 
-_KEYS = (
-    "affiliation_full_lines",
-    "presider_affiliation_strings",
-    "institution_strings",
-)
-
 
 def slug_from_filename(path: Path) -> str:
     stem = path.stem
@@ -47,17 +41,17 @@ def main() -> None:
 
     data = json.loads(args.data_json.read_text(encoding="utf-8"))
     src = data.get("affiliation_sources")
-    if not isinstance(src, dict):
-        src = data  # builder accepts the bare block too
-    trimmed = {k: (src.get(k) or []) for k in _KEYS}
+    if src is None:
+        src = data  # builder accepts the bare list too
+    # affiliation_sources is a single flat list of raw affiliation strings.
+    trimmed = sorted({s.strip() for s in src if s and s.strip()})
 
     slug = args.slug or slug_from_filename(args.data_json)
     FIXTURES_DIR.mkdir(parents=True, exist_ok=True)
     out = FIXTURES_DIR / f"{slug}.affiliation_sources.json"
-    out.write_text(json.dumps(trimmed, ensure_ascii=False, indent=1,
-                              sort_keys=True) + "\n", encoding="utf-8")
-    counts = ", ".join(f"{k}={len(trimmed[k])}" for k in _KEYS)
-    print(f"wrote {out}  ({counts})")
+    out.write_text(json.dumps(trimmed, ensure_ascii=False, indent=1) + "\n",
+                   encoding="utf-8")
+    print(f"wrote {out}  ({len(trimmed)} strings)")
     print(f"now run:  pytest -k {slug} --update-golden")
 
 

@@ -96,10 +96,10 @@ def discover_fixtures() -> list[str]:
                   for p in FIXTURES_DIR.glob("*.affiliation_sources.json"))
 
 
-def load_affiliation_sources(slug: str) -> dict:
-    """Load the trimmed affiliation_sources block for one conference. build()
-    accepts either the whole JSON or just this block, so the fixture only needs
-    to carry this block — not the multi-MB full conference_data.json."""
+def load_affiliation_sources(slug: str) -> list:
+    """Load the trimmed affiliation_sources list for one conference. build()
+    accepts either the whole JSON or just this list, so the fixture only needs
+    to carry this list — not the multi-MB full conference_data.json."""
     path = FIXTURES_DIR / f"{slug}.affiliation_sources.json"
     return json.loads(path.read_text(encoding="utf-8"))
 
