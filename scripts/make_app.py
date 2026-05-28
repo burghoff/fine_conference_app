@@ -21,11 +21,12 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-"""make_app.py — build one conference's app, from the ROOT directory.
+"""make_app.py — build one conference's app.
 
-This script lives in the ROOT directory (next to the shared
-build_conference_app.py / build_affiliation_map.py) and operates on a
-conference SUBDIRECTORY (or several) named on the command line:
+This script lives in `scripts/` (next to the shared build_conference_app.py /
+build_affiliation_map.py) and operates on a conference SUBDIRECTORY (or several)
+named on the command line. Conference subdirectories live in
+`<repo>/conferences/`, separate from the shared pipeline in `scripts/`:
 
     python make_app.py cleo2026
     python make_app.py cleo2025
@@ -34,11 +35,12 @@ conference SUBDIRECTORY (or several) named on the command line:
 
 When more than one subdirectory is given, the full build runs once per
 subdirectory in the order listed. The special argument 'all' (case-insensitive,
-and used on its own) expands to every valid conference subdirectory under the
-root, in sorted order — a subdirectory counts as a conference when it contains
-both a fetch*.py downloader and a process*.py processor. A failure in one
-conference is reported but does not stop the others; the run ends with a summary
-and a non-zero exit code if any conference failed.
+and used on its own) expands to every valid conference subdirectory found
+directly under `conferences/`, in sorted order — a subdirectory counts as a
+conference when it contains both a fetch*.py downloader and a process*.py
+processor. A failure in one conference is reported but does not stop the
+others; the run ends with a summary and a non-zero exit code if any conference
+failed.
 
 Each conference subdirectory is expected to contain:
   - exactly one downloader script whose name starts with "fetch"  (e.g.
@@ -51,7 +53,7 @@ Each conference subdirectory is expected to contain:
   - a data/ subdirectory where the downloader saves, and the processor reads,
     those input files.
 
-What a run does, for the chosen subdirectory <sub>:
+What a run does, for the chosen subdirectory <sub> (under `conferences/`):
 
   1. Decide whether to download (see FORCE_DOWNLOAD below). If downloading, run
      <sub>/fetch_*  (its own run_in_subprocess() re-spawns a clean process for
@@ -67,34 +69,39 @@ What a run does, for the chosen subdirectory <sub>:
      script then renames to the per-conference <sub>/conference_data_<sub>.json
      (e.g. conference_data_cleo2025.json) — the durable, stored artifact. Either
      way, the current data/ hash is (re)stored in <sub>/data/ for next time.
-  4. Copy that conference_data_<sub>.json up to the ROOT directory AS
+  4. Copy that conference_data_<sub>.json up to the scripts/ directory AS
      conference_data.json, where the shared build_conference_app.py expects its
      input (the builder resolves conference_data.json and build_affiliation_map.py
      relative to its OWN location, so the JSON must live beside it under that
      generic name).
-  5. Run build_conference_app.py in ROOT (it writes conference_app.html there).
+  5. Run build_conference_app.py in scripts/ (it writes conference_app.html
+     there).
   6. Move that conference_app.html into <sub>/, renamed to <sub>_app.html
      (e.g. cleo2026_app.html), move the affiliation_map.txt the builder wrote
-     in ROOT into <sub>/data/ as well, and clean up the staged JSON copy in ROOT.
+     in scripts/ into <sub>/data/ as well, and clean up the staged JSON copy in
+     scripts/.
 
 Assumed layout:
 
-    root/
-    |-- make_app.py                       <- this script
-    |-- build_affiliation_map.py
-    |-- build_conference_app.py
-    |-- cleo2025/
-    |   |-- fetch_program_cleo2025.py
-    |   |-- process_program_cleo2025.py
-    |   |-- data_requirements_cleo2025.txt
-    |   |-- conference_data_cleo2025.json   <- stored, per-conference JSON
-    |   `-- data/
-    `-- cleo2026/
-        |-- fetch_program_cleo2026.py
-        |-- process_program_cleo2026.py
-        |-- data_requirements_cleo2026.txt
-        |-- conference_data_cleo2026.json   <- stored, per-conference JSON
-        `-- data/
+    <repo-root>/
+    |-- scripts/
+    |   |-- make_app.py                       <- this script
+    |   |-- build_affiliation_map.py
+    |   |-- build_conference_app.py
+    |   `-- tests/
+    `-- conferences/
+        |-- cleo2025/
+        |   |-- fetch_program_cleo2025.py
+        |   |-- process_program_cleo2025.py
+        |   |-- data_requirements_cleo2025.txt
+        |   |-- conference_data_cleo2025.json   <- stored, per-conference JSON
+        |   `-- data/
+        `-- cleo2026/
+            |-- fetch_program_cleo2026.py
+            |-- process_program_cleo2026.py
+            |-- data_requirements_cleo2026.txt
+            |-- conference_data_cleo2026.json   <- stored, per-conference JSON
+            `-- data/
 
 FORCE_DOWNLOAD:
   - False (default): consult <sub>/data_requirements_<sub>.txt. If every required
@@ -144,8 +151,16 @@ import sys
 import importlib.util
 from pathlib import Path
 
-# ROOT is where this script now lives (next to the shared builder).
+# ROOT is where this script lives (next to the shared builder) — the
+# `scripts/` directory at the repo root. The staged JSON, the freshly built
+# HTML, and the affiliation map are all dropped here transiently before being
+# moved into the conference's subdirectory.
 ROOT = Path(__file__).resolve().parent
+
+# CONFERENCES_DIR is the sibling directory that holds every conference
+# subdirectory, e.g. <repo>/conferences/cleo2026/. Discovery iterates it, and
+# command-line subdirectory names are resolved relative to it.
+CONFERENCES_DIR = ROOT.parent / "conferences"
 
 BUILDER = ROOT / "build_conference_app.py"
 # The builder always reads a plainly-named conference_data.json from beside
@@ -199,8 +214,8 @@ def _parse_args() -> tuple[list[str], bool, bool]:
 
     One or more conference subdirectories may be named; they are built in the
     order given (see main(), which loops over them). The special argument 'all'
-    (case-insensitive) selects every valid conference subdirectory under ROOT
-    and must be the only positional given."""
+    (case-insensitive) selects every valid conference subdirectory under
+    CONFERENCES_DIR and must be the only positional given."""
     argv = sys.argv[1:]
     positionals = [a for a in argv if not a.startswith("-")]
     flags = [a for a in argv if a.startswith("-")]
@@ -232,7 +247,8 @@ def _parse_args() -> tuple[list[str], bool, bool]:
              f"(got {positionals!r}).")
 
     # 'all' (case-insensitive) is a special selector for every valid conference
-    # subdirectory under ROOT. It must be used on its own, not mixed with names.
+    # subdirectory under CONFERENCES_DIR. It must be used on its own, not mixed
+    # with names.
     if any(p.lower() == "all" for p in positionals):
         if len(positionals) > 1:
             _die("'all' selects every conference and cannot be combined with "
@@ -241,7 +257,7 @@ def _parse_args() -> tuple[list[str], bool, bool]:
         if not names:
             _die(f"'all' was requested but no valid conference subdirectories "
                  f"(each needing a fetch*.py and a process*.py) were found "
-                 f"under {ROOT}.")
+                 f"under {CONFERENCES_DIR}.")
         print(f"[make] 'all' matched {len(names)} conference(s): "
               f"{', '.join(names)}", flush=True)
         return names, force, force_proc
@@ -277,13 +293,16 @@ def _is_valid_conference(subdir: Path) -> bool:
 
 
 def _discover_conferences() -> list[str]:
-    """Return the names of all valid conference subdirectories under ROOT, sorted.
+    """Return the names of all valid conference subdirectories under
+    CONFERENCES_DIR, sorted.
 
     A subdirectory qualifies when _is_valid_conference() is true (it has both a
     fetch*.py and a process*.py). Hidden directories (names starting with '.')
     are skipped. This backs the 'all' command-line argument."""
+    if not CONFERENCES_DIR.is_dir():
+        return []
     names = sorted(
-        p.name for p in ROOT.iterdir()
+        p.name for p in CONFERENCES_DIR.iterdir()
         if p.is_dir() and not p.name.startswith(".")
         and _is_valid_conference(p)
     )
@@ -509,13 +528,14 @@ def _build_one(subdir_name: str, force_download: bool, force_process: bool) -> "
     global FORCE_PROCESS
     FORCE_PROCESS = force_process
 
-    subdir = (ROOT / subdir_name).resolve()
+    subdir = (CONFERENCES_DIR / subdir_name).resolve()
     if not subdir.is_dir():
         _die(f"conference subdirectory not found: {subdir}")
-    # Keep the resolved subdir inside ROOT (so 'cleo2026' works but '../x' or an
-    # absolute path can't wander off).
-    if ROOT not in subdir.parents and subdir != ROOT:
-        _die(f"{subdir_name!r} does not resolve to a subdirectory of {ROOT}.")
+    # Keep the resolved subdir inside CONFERENCES_DIR (so 'cleo2026' works but
+    # '../x' or an absolute path can't wander off).
+    if CONFERENCES_DIR not in subdir.parents:
+        _die(f"{subdir_name!r} does not resolve to a subdirectory of "
+             f"{CONFERENCES_DIR}.")
 
     data_dir = subdir / DATA_DIRNAME
     req_name = _requirements_name(subdir.name)

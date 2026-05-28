@@ -2765,7 +2765,7 @@ Pengcheng Laboratory, Shenzhen, Select One, China	PCL Shenzhen
 Penn State University	Penn State
 Penn State University, University Park, PA, United States	Penn State
 Pennslvania State University	Penn State
-Pennslvania State University, University Park, PA, United States	University Park
+Pennslvania State University, University Park, PA, United States	Penn State
 Pennsylvania State University	Penn State
 Pennsylvania State University, State college, PA, United States	Penn State
 Perioperative and Critical Care Theme, NIHR Biomedical Research Centre, Southampton, United Kingdom	NIHR Biomedical Research Centre
