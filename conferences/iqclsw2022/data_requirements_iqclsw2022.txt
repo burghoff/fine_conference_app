@@ -1,0 +1,64 @@
+# data_requirements_iqclsw2022.txt — IQCLSW 2022
+#
+# Structured manifest of the data files that the fetch (downloader) and process
+# scripts in this directory rely on. make_app.py reads this file to decide
+# whether a download can be skipped: when FORCE_DOWNLOAD is off, every file
+# marked "required = yes" below must already exist in data/ for the download to
+# be skipped; otherwise make_app runs the downloader.
+#
+# Format (simple, line-oriented; '#' starts a comment, blank lines ignored):
+#   - Each file is a block introduced by a header line "[file: <pattern>]".
+#   - <pattern> is a filename or a glob resolved relative to the data/
+#     subdirectory of THIS conference folder.
+#   - Inside a block, "key: value" lines give metadata. Recognized keys:
+#       required     yes | no   (default yes) — whether the file must be present
+#       produced_by  which script normally creates it (fetch / process / manual)
+#       description  one-line human description
+#       manual       how to obtain the file by hand if the downloader can't
+#   - Continuation: a "manual" value may wrap onto following indented lines.
+
+generated_for: iqclsw2022
+manual_steps_written: 2026-05-28
+
+[file: Program_IQCLSW2022.pdf]
+required: yes
+produced_by: fetch
+description: Full IQCLSW 2022 program PDF — cover page, day-by-day schedule
+  (Tuesday 23 August through Sunday 28 August 2022) with chairs, times, talk
+  titles and speakers, plus the numbered 1..32 poster catalog at the end. This
+  is the authoritative source for the SCHEDULE; per-talk affiliations and full
+  speaker names are not in the PDF and are recovered from TutorialSpeakers.html
+  for the keynote/invited/tutorial talks.
+manual: Open https://iqclsw.phys.ethz.ch/ in a browser, find the program PDF
+  link, and save it into this folder's data/ subdirectory as exactly
+  Program_IQCLSW2022.pdf . The current direct URL is
+  https://iqclsw.phys.ethz.ch/wp-content/uploads/2022/08/Program_IQCLSW2022_LIN_chair20220822.pdf
+  (right-click the link and "Save link as…"); the IQCLSW 2022 program is
+  archival, so this URL is expected to stay stable.
+
+[file: PosterSession.html]
+required: no
+produced_by: fetch
+description: Public poster-session page HTML — a single HTML table with three
+  columns (N°, Title, Authors). The PDF's contiguous 1..32 poster catalog is
+  the canonical source; this page is parsed only as a secondary cleaner
+  title/author separator when present, and the build still works without it.
+manual: Open https://iqclsw.phys.ethz.ch/poster-session/ in a browser. Use
+  "Save Page As…" and choose the "Webpage, HTML Only" option, saving into
+  data/ as exactly PosterSession.html .
+
+[file: TutorialSpeakers.html]
+required: no
+produced_by: fetch
+description: Public "Keynote, Invited and Tutorial speakers" page HTML — a
+  single HTML table with four columns (Name, Univ./Institute/Company, Type,
+  Title) where the affiliation cell carries a country-flag emoji. This is the
+  only source that ties each keynote/invited/tutorial talk to a FULL speaker
+  name and an AFFILIATION (the PDF only prints initial+surname and no
+  affiliations). The processor matches by surname against the PDF's talks to
+  upgrade them in place. Optional: without it the keynote/invited/tutorial
+  talks fall back to the PDF's terse "Initial. Surname" speaker text and have
+  no institution.
+manual: Open https://iqclsw.phys.ethz.ch/tutorial-speakers/ in a browser. Use
+  "Save Page As…" and choose the "Webpage, HTML Only" option, saving into
+  data/ as exactly TutorialSpeakers.html .

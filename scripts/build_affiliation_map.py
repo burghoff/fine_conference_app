@@ -167,6 +167,14 @@ def normalize(s: str) -> str:
                r'universiy|universityy|universitry|universitity|univerce|'
                r'uniwersity|niversity)\b',
                'university', s)
+    # Fold the "Univ." abbreviation to the full word — every "university of <X>"
+    # / "<X> university" anchor below then matches the abbreviated form for
+    # free, instead of needing a per-string RAW_OVERRIDE for each "Univ. of X"
+    # the source data uses. The trailing dot is consumed so the result is a
+    # clean " university " (or "university") boundary; "univ" without a dot is
+    # NOT touched (it's a legal abbreviation token in foreign forms like
+    # "Univ Politec.").
+    s = re.sub(r'\buniv\.', 'university', s)
     # Folks sometimes ASCII-fy the German umlaut as "ae" (Universitaet for
     # Universität); fold to the diacritic-stripped form normalize() already
     # produces from the accented spelling, so a single anchor catches both.
@@ -380,17 +388,20 @@ _ANCHORS_SRC: list = [
     ('university of michigan', 'Michigan'),
     # UT Austin campus. Separator-tolerant (_UC_SEP covers "at"/comma/space/
     # hyphen), so "...at Austin", "..., Austin", and the plain "Texas Austin"
-    # form all land here instead of the fallback's "U Texas Austin".
-    (r're:university of texas' + _UC_SEP + r'austin', 'UT Austin'),
+    # form all land here instead of the fallback's "U Texas Austin". The "of"
+    # is optional so the "University Texas at Austin" form (no "of", as some
+    # sources print it, e.g. via the "Univ. Texas at Austin" abbreviation) also
+    # hits this anchor instead of needing a per-string RAW_OVERRIDE.
+    (r're:university (?:of )?texas' + _UC_SEP + r'austin', 'UT Austin'),
     ('ut austin', 'UT Austin'),
     # UT Dallas campus — listed before the bare flagship fallback below.
-    (r're:university of texas' + _UC_SEP + r'dallas', 'UT Dallas'),
+    (r're:university (?:of )?texas' + _UC_SEP + r'dallas', 'UT Dallas'),
     ('ut dallas', 'UT Dallas'),
-    # Bare "University of Texas" with NO campus qualifier resolves to the
-    # flagship (UT Austin). Only Austin and Dallas campuses appear in the data,
-    # and both are caught by the campus anchors above, so this generic form is
-    # safe here as a last resort for the Texas system.
-    ('university of texas', 'UT Austin'),
+    # Bare "University of Texas" / "University Texas" with NO campus qualifier
+    # resolves to the flagship (UT Austin). Only Austin and Dallas campuses
+    # appear in the data, and both are caught by the campus anchors above, so
+    # this generic form is safe here as a last resort for the Texas system.
+    (r're:university (?:of )?texas\b', 'UT Austin'),
     (['university of central florida', 'ucf,', 'creol'], 'UCF'),
     ('university of florida', 'Florida'),
     (['university of arizona', r're:univ\.? of arizona'], 'Arizona'),
@@ -838,16 +849,19 @@ _ANCHORS_SRC: list = [
     # co-tutelles (ENS, PSL, CNRS, Sorbonne, Université Paris Cité) in varying
     # order, so without this specific anchor the generic Paris-Cité / Sorbonne /
     # CNRS anchors below would catch it inconsistently. Map the lab itself to
-    # "ENS Paris". Placed before those generic anchors so it wins. (No CLEO
-    # string contains this lab name — verified — so CLEO is unaffected.)
+    # "ENS Paris". Placed before those generic anchors so it wins.
     (r"re:laboratoire de physique de l'(ens|ecole normale superieure)",
      'ENS Paris'),
     (['universite paris cite', 'universite de paris', 'paris cite'], 'U Paris Cité'),
     ('sorbonne', 'Sorbonne'),
     # Grenoble Alpes must come BEFORE CEA-LETI so combined strings with both
-    # are attributed to Grenoble Alpes per ground truth.
+    # are attributed to Grenoble Alpes per ground truth. The "Univ." dotted
+    # abbreviation is folded to "university" upstream in normalize(), so a
+    # single "university grenoble alpes" anchor covers both spellings; the
+    # no-dot "Univ Grenoble Alpes" form (untouched by the folder) keeps its
+    # own anchor.
     ([
-        'universite grenoble alpes', 'univ. grenoble alpes', 'univ grenoble alpes',
+        'universite grenoble alpes', 'univ grenoble alpes',
         'university grenoble alpes', 'university of grenoble',
     ], 'Grenoble Alpes'),
     # CEA: combined CEA-Leti + CEA strings → CEA; pure CEA-LETI alone → CEA-Leti.
@@ -1124,9 +1138,15 @@ _ANCHORS_SRC: list = [
 
     # ---- China: top universities (specific city/name BEFORE generic) ------
     # Many Chinese universities have multiple full-name spellings and abbrev.
+    # HUST's Shenzhen satellite ("Shenzhen Huazhong University of Sci. and
+    # Technol. Research Institute") is a distinct branch from the Wuhan
+    # flagship — same parent name, different city, separate institute. Pin
+    # the Shenzhen variant first so the bare-Huazhong anchor below doesn't
+    # swallow it the way it would otherwise.
+    ('shenzhen huazhong', 'HUST Shenzhen'),
     ([
         'huazhong university of scien', 'huazhong univ of science',
-        'huazhong univ. of science', 'huazhong univ. of sci', 'hust,',
+        'huazhong university of sci', 'hust,',
     ], 'Huazhong'),
     ('wuhan national lab for optoelectronic', 'Wuhan National Lab for Optoelectronics'),
     (['tsinghua university', 'tsinghua,'], 'Tsinghua'),
@@ -1222,7 +1242,7 @@ _ANCHORS_SRC: list = [
     # their own anchors above, and everything else should fall through to the
     # fallback shortener, which keeps the leading institution name.
     ('nwpu', 'NWPU'),
-    (['university of electronic science and technology of china', 'university of electronic science and technology', 'univ. electronic sci. & tech. of china', 'univ of electronic science & tech china', 'uestc'], 'UESTC'),
+    (['university of electronic science and technology of china', 'university of electronic science and technology', 'university electronic sci. & tech. of china', 'univ of electronic science & tech china', 'uestc'], 'UESTC'),
     ([
         'university of science and technology of china',
         'university of science and technology of chin,', 'ustc,',
@@ -1421,10 +1441,14 @@ _ANCHORS_SRC: list = [
     # AIST (Japan's Natl. Inst. of Advanced Industrial Science and Technology).
     # Use \b word boundaries so the short "aist" token can't fire inside
     # "KAIST" (Korea) or "NAIST" (Nara), which are different institutions
-    # handled by their own anchors below.
-    ([r're:\baist\b\s*,', 'national institute of advanced industrial science and technology'], 'AIST Japan'),
-    # Abbreviated short-forms for AIST.
-    (['natl inst of adv industrial', 'natl. inst. adv. ind. sci', r're:\baist\b\s'], 'AIST Japan'),
+    # handled by their own anchors below — \b doesn't match between letters,
+    # so "kaist" / "naist" can't trigger this. The boundary anchor matches
+    # the bare token too ("AIST" / "AISt" with nothing after), so the special
+    # exact-match RAW_OVERRIDES for those forms are not needed.
+    ([r're:\baist\b',
+      'national institute of advanced industrial science and technology',
+      'natl inst of adv industrial', 'natl. inst. adv. ind. sci'],
+     'AIST Japan'),
     ([
         'nict ', 'nict,', 'nict network', 'advanced ict research institute',
         'national institute of information and communications technology',
@@ -1853,7 +1877,9 @@ _ANCHORS_SRC: list = [
     ('laval university', 'Laval'),
     ('university konstanz', 'Konstanz'),        # "University Konstanz" (no "of")
     ('universitat stuttgart', 'Stuttgart'),
-    (['univ. of sydney', 'univ of sydney'], 'Sydney'),
+    # "University of Sydney" already matched above; this entry keeps the
+    # no-dot "Univ of Sydney" abbreviation (which normalize() leaves alone).
+    ('univ of sydney', 'Sydney'),
     ('tohoku univ', 'Tohoku'),                  # "Tohoku Univ." abbreviation
     ('saitama univ', 'Saitama'),
     ('kassel universitat', 'Kassel'),
@@ -1908,13 +1934,12 @@ _ANCHORS_SRC: list = [
     ('stockholm university', 'Stockholm'),
     ('lund university', 'Lund'),
 
-    # ---- IQCLSW 2026 institutions ------------------------------------------
-    # Canonical short names for institutions appearing in the IQCLSW program.
-    # Each needle is specific enough not to collide with CLEO strings (verified
-    # against CLEO 2025/2026); where a needle DOES also occur in CLEO, the short
-    # name chosen is a strict improvement over CLEO's previous (long) form.
-    # Needles are matched against the normalized string (lowercased, diacritics
-    # and dash/apostrophe glyphs folded), so they are written in plain ASCII.
+    # ---- Additional curated institutions -----------------------------------
+    # Canonical short names for institutions that fell through the broader
+    # anchors above. Each needle is specific enough not to collide with the
+    # rest of the curated list. Needles are matched against the normalized
+    # string (lowercased, diacritics and dash/apostrophe glyphs folded), so
+    # they are written in plain ASCII.
     ('technical university vienna', 'TU Vienna'),
     # University of Leeds: the program writes it several long ways (with the
     # school suffix, as the Pollard Institute, etc.). All collapse to "Leeds".
@@ -1936,9 +1961,8 @@ _ANCHORS_SRC: list = [
     ('ihp-leibniz institut', 'IHP'),
     # Peter Grünberg Institute (all spellings: "Gruenberg"/"Grünberg"->"grunberg"
     # after diacritic folding, hyphenated or not) is part of Forschungszentrum
-    # Jülich; map every form there. This also makes CLEO consistent — CLEO 2025
-    # already uses "Forschungszentrum Jülich" while CLEO 2026 left two long
-    # "Peter[- ]Grünberg-Institute (PGI-N)" forms; both now collapse to it.
+    # Jülich; map every form there so the various long "Peter[- ]Grünberg-
+    # Institute (PGI-N)" spellings all collapse to it.
     (r're:peter[- ]gr(?:ue|u)nberg', 'Forschungszentrum Jülich'),
     ('paul drude institute', 'Paul Drude Institute'),
     # German-language form of the same institute (Paul-Drude-Institut für
@@ -1946,21 +1970,20 @@ _ANCHORS_SRC: list = [
     # dashes, so the needle is plain ASCII.
     ('paul-drude-institut', 'Paul Drude Institute'),
     ('mohammed vi polytechnic', 'Mohammed VI'),
-    # Wroclaw (program has the typo "Universityof"); match CLEO's "Wroclaw".
+    # Wroclaw (some sources use the typo "Universityof").
     ('wroclaw university', 'Wroclaw'),
     (r're:\binstitut universitaire de france\b', 'IUF'),
     ('celare quantum communications', 'Celare'),
     ('austrian institute of technology', 'AIT'),
     (['technical univeristy of dresden', 'technical university of dresden'], 'TU Dresden'),
     ('konstanz university', 'Konstanz'),
-    ('university of nottingham', 'U Nottingham'),   # matches CLEO's convention
+    ('university of nottingham', 'U Nottingham'),
     # "Dipartimento di Scienze, Università degli Studi Roma" = Roma Tre's
-    # science dept; and the explicit "Università Roma Tre" form. (No CLEO use.)
+    # science dept; and the explicit "Università Roma Tre" form.
     (['universita roma tre', 'universita degli studi roma'], 'Roma Tre'),
     # Note: "Institut Polytechnique de Paris" -> "IP Paris" and "Silicon Austria
     # Labs GmbH" -> "Silicon Austria Labs" are applied by editing their existing
-    # curated anchors earlier in this list (so they take effect for CLEO too,
-    # where the shorter forms are an improvement).
+    # curated anchors earlier in this list.
     ('de vinci higher education', 'De Vinci'),
     ('laser components germany', 'Laser Components'),
     ('vigo photonics', 'Vigo Photonics'),                # drops trailing "SA"
@@ -2289,11 +2312,19 @@ RAW_OVERRIDES: dict[str, str] = {
     'CNR': 'CNR Italy',
     'CNR - IFN': 'CNR-IFN',
     'CNR - ITAE': 'CNR-ITAE',
-    # Bare AIST label with stray casing ("AISt") and the plain all-caps form,
-    # which carry no comma/space for the boundary-anchored AIST patterns to
-    # catch. Map to the same canonical "AIST Japan" the spelled-out name uses.
-    'AISt': 'AIST Japan',
-    'AIST': 'AIST Japan',
+    # Bare institutional acronyms that arrive with no surrounding context for
+    # any ANCHOR to match. Each is pinned to the same canonical short the
+    # longer spelled-out forms resolve to elsewhere, so a single institution
+    # renders the same short name regardless of which source string carried it.
+    'TUW': 'TU Vienna',
+    'INO': 'CNR-INO',
+    'C2N': 'C2N Paris-Saclay',
+    # Some source forms attach the parent CNRS organisation rather than the
+    # specific lab — "CNRS - Université Montpellier" is really the IES
+    # (Institut d'Électronique et des Systèmes) Montpellier lab. The bare
+    # "CNRS" anchor would otherwise short this to the generic council label;
+    # pin it to the specific lab.
+    'CNRS - Université Montpellier': 'IES Montpellier',
     # Bare, location-less "Institute of Physics" — in this dataset it is the
     # alt-name of "Institute of Physics, Beijing, ..." (the CAS Institute of
     # Physics, co-affiliated with UCAS on the same talk), not a department of
@@ -2337,7 +2368,7 @@ def canonicalize(raw: str) -> str:
     # (result == raw, modulo a trailing period), retry on a copy with that
     # trailing country tail removed. This is strictly additive: any string the
     # existing anchors/overrides/fallback already shorten is returned before we
-    # get here, so curated maps (e.g. CLEO's) are byte-for-byte unchanged; we
+    # get here, so already-curated maps are byte-for-byte unchanged; we
     # only rescue strings that would otherwise have had no short form.
     if _norm_eq_raw(result, raw):
         stripped = _strip_trailing_country(raw)

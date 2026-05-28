@@ -3338,8 +3338,8 @@ ShanghaiTech University, Shanghai, China	ShanghaiTech
 ShanghaiTech University, Shanghai, shanghai, China	ShanghaiTech
 Shanghaitech University	ShanghaiTech
 Shanxi University	Shanxi
-Shenzhen Huazhong University of Science and Technology Research Institute	Huazhong
-Shenzhen Huazhong University of Science and Technology Research Institute, Shenzhen, China	Huazhong
+Shenzhen Huazhong University of Science and Technology Research Institute	HUST Shenzhen
+Shenzhen Huazhong University of Science and Technology Research Institute, Shenzhen, China	HUST Shenzhen
 Shenzhen Jufei Optoelectronics Co	Shenzhen Jufei Optoelectronics Co
 Shenzhen Jufei Optoelectronics Co, Shenzhen, China	Shenzhen Jufei Optoelectronics Co
 Shenzhen Technology University	Shenzhen Tech U
