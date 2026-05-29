@@ -86,6 +86,10 @@ fetcher downloads.
    - Does no network access — the fetcher is the only place that touches the
      network.
    - Hardcodes no titles, abstracts, names, or other program content.
+   - Assigns every session and talk a type from the standard taxonomy in
+     [Standard session and talk types](#standard-session-and-talk-types) below.
+     Do not invent new type names or colors — map the conference's real
+     program onto the seven canonical types.
 
 5. **Verify with `make_app.py`.** From the repo root:
 
@@ -116,6 +120,88 @@ fetcher downloads.
    including how `--update-golden` produces `.expected.new` proposal files when
    an existing conference's map would change so a human can review the diff
    before promoting it.
+
+## Standard session and talk types
+
+These seven types are the **recommended** taxonomy, and conferences should reuse
+them wherever they fit — the whole point is that a "Poster" or "Plenary" means
+the same thing (and looks the same) in every conference, so prefer mapping the
+real program onto these rather than inventing per-conference labels or colors.
+
+That said, the taxonomy is a recommendation, not a hard constraint. If a
+conference has content that genuinely does not fit any of the seven, you may
+carve out an additional type (with its own color token + RGB triple). Do so
+sparingly and only when the standard types would misrepresent the program;
+reusing an existing type is almost always the better call.
+
+### The model
+
+- **A talk is technical content.** Anything with technical substance is a talk,
+  even a lone plenary or keynote — emit it as a talk inside a singleton session
+  if it has no natural parent. Very rarely a non-technical item is a talk-row
+  (e.g. a coffee break listed inside an oral session); type those `Event`.
+- **A session is a container.** Either (a) a grouping of talks, or (b) a
+  non-technical event (ceremony, social, gala, meal, break, tour, exhibition).
+- **Talks match their parent session's type where one exists.** Poster talks sit
+  in a Poster session, tutorial talks in a Tutorial session, etc. The standard
+  oral grouping (`Technical`) is the exception: it holds `Invited` /
+  `Contributed` talks, which have no session-level equivalent.
+- **No ambiguous names.** Sharing a name across levels is fine (`Poster` session
+  / `Poster` talk); two *similar-but-different* names is the worst case and is
+  forbidden. That is why the oral grouping is `Technical`, not `Oral` (SPIE uses
+  "Oral" as a talk genre, which would collide).
+
+### The seven types
+
+`id` is the color token; it is also the value each session/talk's `color` field
+must carry. Ship the RGB triple for each token in the processor's
+`COLOR_PALETTE` (see the CLEO processors) so the builder can synthesize the CSS.
+
+| Type | `id` | fg | bg_light | bg_dark | Used by |
+|------|------|------|----------|---------|---------|
+| **Technical** | `blue` | `#2563eb` | `#e8efff` | `#1a233d` | sessions only — the default oral grouping |
+| **Plenary** | `orange` | `#ea580c` | `#ffedd5` | `#3b1d0a` | sessions + talks (flagship lectures) |
+| **Poster** | `teal` | `#0d9488` | `#d6f3ef` | `#102b27` | sessions + talks |
+| **Tutorial** | `fuchsia` | `#c026d3` | `#fae8ff` | `#3a0f3f` | sessions + talks (didactic) |
+| **Event** | `rose` | `#e11d48` | `#ffe1e8` | `#38161f` | sessions (+ rare talk-rows) — non-technical |
+| **Invited** | `indigo` | `#4f46e5` | `#e6e4ff` | `#1d1a3d` | talks only |
+| **Contributed** | `sky` | `#0284c7` | `#e0f2fe` | `#0c2a3d` | talks only |
+
+So `SESSION_TYPES` = {Technical, Plenary, Poster, Tutorial, Event} (≤5) and
+`TALK_TYPES` = {Invited, Contributed, Plenary, Poster, Tutorial, Event}.
+`blue`/`indigo`/`sky` are a deliberate "blue family" — Technical sessions and the
+Invited/Contributed talks inside them read as one coherent oral block.
+
+### Mapping real program kinds onto the seven
+
+Conference programs use many local labels. Fold them as follows; when in doubt,
+ask "does this carry technical content?" (→ talk) and "is this just a container
+or a non-technical event?" (→ session type).
+
+| Real-world kind | Type |
+|-----------------|------|
+| Oral track, symposium, technical session, workshop *with named child talks* | `Technical` (session); talks inside are `Invited` / `Contributed` |
+| Plenary lecture, keynote | `Plenary` (singleton session + the talk) |
+| Invited oral talk, **industry talk** (solicited) | `Invited` |
+| Contributed oral talk, **postdeadline** (late-breaking) | `Contributed` |
+| Poster session, poster blitz, poster talk | `Poster` |
+| Tutorial, **short course**, school lecture | `Tutorial` |
+| Panel / discussion *with no named talks* | `Event` |
+| Opening/closing ceremony, remarks, welcome reception, gala, banquet, networking, meal, coffee break, lab/city tour, registration, exhibition | `Event` |
+
+### Folding decisions (do not reintroduce these as separate types)
+
+- **Postdeadline → Contributed.** Late-breaking talks are Contributed; their
+  sessions are Technical. No dedicated postdeadline color.
+- **Industry talks → Invited.** They are solicited, so they read as Invited;
+  there is no separate Industry type.
+- **Short Course → Tutorial.** Short courses and tutorials are one didactic type.
+- **Keynote → Plenary.** A keynote is a flagship singleton talk.
+- **School / didactic lecture series → Tutorial**; the **research-talk grouping →
+  Technical**. (Watch conferences like IQCLSW that label these "School" /
+  "Workshop" — those local names must not leak into the types.)
+- **Workshop / Panel → split by content:** if it has named child talks, it is a
+  `Technical` session; if it is pure discussion with no talks, it is an `Event`.
 
 ## Login-required sources
 
