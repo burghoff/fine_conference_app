@@ -700,23 +700,23 @@ def _with_colors(entries: list[dict]) -> list[dict]:
     return out
 
 
+# Standard session/talk type taxonomy. The seven shared types; a conference only
+# surfaces the ones its program actually uses (the app hides count-0 types).
 SESSION_TYPE_REGISTRY = _with_colors([
     {"id": "blue",   "label": "Technical"},
-    {"id": "amber",  "label": "Symposia"},
     {"id": "orange", "label": "Plenary"},
-    {"id": "rose",   "label": "Postdeadline"},
+    {"id": "fuchsia","label": "Tutorial"},
     {"id": "teal",   "label": "Poster"},
-    {"id": "violet", "label": "Other Events"},
+    {"id": "rose",  "label": "Event"},
 ])
 
 TALK_TYPE_REGISTRY = _with_colors([
-    {"id": "sky",     "label": "Contributed"},
-    {"id": "indigo",  "label": "Invited"},
-    {"id": "fuchsia", "label": "Tutorial"},
-    {"id": "rose",    "label": "Postdeadline"},
     {"id": "orange",  "label": "Plenary"},
+    {"id": "indigo",  "label": "Invited"},
+    {"id": "sky",     "label": "Contributed"},
+    {"id": "fuchsia", "label": "Tutorial"},
     {"id": "teal",    "label": "Poster"},
-    {"id": "emerald", "label": "Short Course"},
+    {"id": "rose",   "label": "Event"},
 ])
 
 
@@ -725,11 +725,11 @@ def classify_session_color(session_type: str, session_title: str = "") -> str:
     title = (session_title or "").strip().lower()
     tokens = s.split()
     if "plenary" in title or "plenary" in s:        return "orange"
-    if "postdeadline" in title or "postdeadline" in s: return "rose"
     if "poster" in title or "poster" in s:          return "teal"
-    if "symposi" in s:                              return "amber"
+    if "postdeadline" in title or "postdeadline" in s: return "blue"
+    if "symposi" in s:                              return "blue"
     if "a&t" in s or "fs" in tokens or "s&i" in s:  return "blue"
-    return "violet"
+    return "rose"
 
 
 def classify_talk_color(talk_title: str, session_title: str,
@@ -739,11 +739,10 @@ def classify_talk_color(talk_title: str, session_title: str,
     stype = (session_type or "").lower()
     if "plenary" in st or "plenary" in stype:           return "orange"
     if "tutorial talk" in tt:                           return "fuchsia"
+    if "short course" in tt or "short course" in stype: return "fuchsia"
     if "invited talk" in tt:                            return "indigo"
     if "symposi" in stype:                              return "indigo"
-    if "postdeadline" in st or "postdeadline" in stype: return "rose"
     if "poster" in st or "poster" in stype:             return "teal"
-    if "short course" in tt or "short course" in stype: return "emerald"
     return "sky"
 
 
