@@ -1,0 +1,45 @@
+# data_requirements_spiepw2025.txt — SPIE Photonics West 2025
+#
+# Structured manifest of the data files that the fetch (downloader) and process
+# scripts in this directory rely on. make_app.py reads this file to decide
+# whether a download can be skipped: when FORCE_DOWNLOAD is off, every file
+# marked "required = yes" below must already exist in data/ for the download to
+# be skipped; otherwise make_app runs the downloader.
+#
+# SPIE publishes the full Photonics West 2025 program as a single "Technical
+# Program" PDF — the session-by-session schedule covering all four symposia
+# (BiOS, LASE, OPTO, Quantum West), with every talk's paper number, time,
+# title, and author/affiliation list. It contains NO abstracts; the technical
+# program is schedule + authorship only. The downloader
+# (fetch_program_spiepw2025.py) grabs that one PDF; the processor parses it
+# entirely offline.
+#
+# Format (simple, line-oriented; '#' starts a comment, blank lines ignored):
+#   - Each file is a block introduced by a header line "[file: <pattern>]".
+#   - <pattern> is a filename or a glob resolved relative to the data/
+#     subdirectory of THIS conference folder.
+#   - Inside a block, "key: value" lines give metadata. Recognized keys:
+#       required     yes | no   (default yes) — whether the file must be present
+#       produced_by  which script normally creates it (fetch / process / manual)
+#       description  one-line human description
+#       manual       how to obtain the file by hand if the downloader can't
+#   - Continuation: a "manual" value may wrap onto following indented lines.
+
+generated_for: spiepw2025
+manual_steps_written: 2026-05-29
+
+[file: PW25-Technical-Program.pdf]
+required: yes
+produced_by: fetch
+description: The SPIE Photonics West 2025 "Technical Program" PDF — the sole
+  source. ~724 pages covering all four symposia (BiOS, LASE, OPTO, Quantum
+  West): per-conference session schedules with each talk's paper number, time,
+  title, and author list with affiliations. No abstracts.
+manual: The downloader fetches this from a Wayback Machine snapshot of SPIE's
+  PW25 Technical Program PDF using the raw-bytes ("id_") modifier. If that
+  snapshot is gone, obtain the program PDF by hand: visit the SPIE Photonics
+  West 2025 page (spie.org/conferences-and-exhibitions/photonics-west, 2025
+  archive) and download the Technical Program PDF, or retrieve the original
+  URL from the Wayback Machine at
+  https://web.archive.org/web/2025*/https://www.spie.org/documents/ConferencesExhibitions/Programs/2025/PW25-Technical-Program.pdf
+  Save it into data/ as PW25-Technical-Program.pdf.
