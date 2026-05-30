@@ -2535,14 +2535,18 @@ function renderTimeGrouped(container, items, opts = {}) {
     connectorIds.add(sid);
   }
 
+  const _locOf = (it) => effectiveLocation(it) || "";
+  const _byLoc = (a, b) =>
+    _locOf(a).localeCompare(_locOf(b), undefined, { numeric: true });
+
   const reorderBucket = (bucket) => {
     if (bucket.length < 2) return bucket;
     const sessionIdsHere = new Set();
     for (const it of bucket) {
       if (!it.session_id) sessionIdsHere.add(it.id);
     }
-
-    if (sessionIdsHere.size === 0) return bucket;
+    
+    if (sessionIdsHere.size === 0) return [...bucket].sort(_byLoc);
     const childrenOf = {};   
     for (const it of bucket) {
       if (it.session_id && sessionIdsHere.has(it.session_id)) {
@@ -2562,9 +2566,7 @@ function renderTimeGrouped(container, items, opts = {}) {
       (connectorIds.has(it.id) ? sessionsConn : sessionsNoConn).push(it);
     }
 
-    const _locOf = (it) => effectiveLocation(it) || "";
-    const _byLoc = (a, b) =>
-      _locOf(a).localeCompare(_locOf(b), undefined, { numeric: true });
+    front.sort(_byLoc);
     sessionsNoConn.sort(_byLoc);
     sessionsConn.sort(_byLoc);
     const back = [];

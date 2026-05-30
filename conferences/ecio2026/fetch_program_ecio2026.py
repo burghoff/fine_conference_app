@@ -53,13 +53,26 @@ by the date encoded in its filename. This way the fetcher keeps working when
 ECIO publishes an updated version of either PDF. The invited-speakers page,
 in contrast, lives at a fixed URL and is fetched directly.
 
-Contacts the network only; launches no browser. The processor
-(process_program_ecio2026.py) runs entirely offline against what we save here.
+Finally, we render and save the three per-day Optica schedule pages
+
+    ECIO26_OpticaMonday.html / …Tuesday.html / …Wednesday.html
+
+from Optica's event site. These mirror the full program and, unlike the PDFs,
+carry the COMPLETE author list (with affiliations) and the abstract for every
+talk. That schedule is a JavaScript single-page app behind bot protection, so
+this part drives a real headed Chromium via Playwright (switching to "Detailed
+View" and expanding every "Continue Reading" link before saving the rendered
+HTML) rather than a plain HTTP fetch. See `_fetch_optica_schedule`.
+
+Contacts the network via urllib for the PDFs/HTML pages and via a headed
+Chromium for the Optica schedule. The processor (process_program_ecio2026.py)
+runs entirely offline against what we save here.
 """
 
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -151,6 +164,142 @@ DATE_RE = re.compile(r"_(\d{1,2})_(\d{1,2})\.pdf$", re.IGNORECASE)
 # Polite UA — some WP installs 403 the default urllib UA.
 UA = "Mozilla/5.0 (ecio2026-fetch; fine-conference-app)"
 
+# ---------------------------------------------------------------------------
+# Optica schedule pages (browser-rendered).
+#
+# The full ECIO program is also published on Optica's event site as a per-day
+# schedule. Unlike the PDFs, each talk cell there carries the COMPLETE author
+# list (with affiliations) and the abstract — the richest content source for
+# the conference. The schedule is a JavaScript single-page app (the day is
+# selected by the URL hash) sitting behind Radware bot protection, so plain
+# urllib can't read it; we drive a real Chromium via Playwright instead.
+#
+# For each day we: load the page, switch the view toggle to "Detailed View",
+# click every "Continue Reading" link so each abstract's full text is expanded
+# in the DOM, then save the rendered HTML. The processor parses these offline.
+#
+# The bot wall passes automatically for a headed (non-headless) browser with a
+# realistic UA; if a CAPTCHA ever appears we leave the window open and wait so
+# the user can solve it. A persistent browser profile (kept outside the repo)
+# carries any clearance cookie across runs.
+OPTICA_SCHEDULE_URL = (
+    "https://www.optica.org/events/topical_meetings/"
+    "european_conference_on_integrated_optics_(ecio)/schedule/#/"
+)
+# Day -> saved filename. The day names are the schedule's own hash routes, not
+# program content.
+OPTICA_DAYS = {
+    "Monday": "ECIO26_OpticaMonday.html",
+    "Tuesday": "ECIO26_OpticaTuesday.html",
+    "Wednesday": "ECIO26_OpticaWednesday.html",
+}
+# Real-browser UA for the headed Chromium (the bot wall blocks the headless
+# default UA). Run headed so the user can solve a CAPTCHA if one ever appears.
+OPTICA_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+)
+OPTICA_PROFILE_DIR = Path.home() / ".cache" / "ecio2026_optica_profile"
+# How long to wait (seconds) for a human to clear a bot-wall / CAPTCHA before
+# giving up on a day. Generous because solving it is a manual step.
+OPTICA_CAPTCHA_WAIT_S = 180
+
+
+def _bootstrap_playwright() -> None:
+    """Ensure the 'playwright' package and its Chromium browser are installed.
+    Mirrors the CLEO fetchers' bootstrap so a fresh checkout self-provisions."""
+    try:
+        import playwright  # noqa: F401
+        from playwright.sync_api import sync_playwright  # noqa: F401
+    except ImportError:
+        print("[setup] Installing the 'playwright' Python package…")
+        subprocess.check_call(
+            [sys.executable, "-m", "pip", "install", "--quiet",
+             "playwright>=1.40"])
+    # Installing the browser is idempotent and a no-op when already present.
+    subprocess.check_call(
+        [sys.executable, "-m", "playwright", "install", "chromium"])
+
+
+def _fetch_optica_schedule() -> tuple[int, list[str]]:
+    """Render and save the per-day Optica schedule pages.
+
+    Returns (saved_count, failed_filenames). Never raises for a single day's
+    failure — it logs, records the filename, and moves on, so a flaky day or an
+    unsolved CAPTCHA doesn't abort the whole download. The PDFs remain the
+    pipeline's required inputs; these pages are optional enrichment."""
+    _bootstrap_playwright()
+    import time
+    from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
+
+    OPTICA_PROFILE_DIR.mkdir(parents=True, exist_ok=True)
+    saved = 0
+    failed: list[str] = []
+    print("[info] rendering Optica schedule pages via headed Chromium "
+          "(a browser window will open)…")
+    with sync_playwright() as pw:
+        ctx = pw.chromium.launch_persistent_context(
+            str(OPTICA_PROFILE_DIR),
+            headless=False,
+            user_agent=OPTICA_UA,
+            viewport={"width": 1400, "height": 1000},
+            args=["--disable-blink-features=AutomationControlled"],
+        )
+        try:
+            page = ctx.pages[0] if ctx.pages else ctx.new_page()
+            for day, fname in OPTICA_DAYS.items():
+                target = DATA_DIR / fname
+                try:
+                    page.goto(OPTICA_SCHEDULE_URL + day,
+                              wait_until="domcontentloaded", timeout=60000)
+                    # Bot wall: a headed browser normally passes, but if the
+                    # Radware interstitial shows, wait for the user to clear it.
+                    waited = 0
+                    while ("perfdrive" in page.url
+                           or "captcha" in page.title().lower()):
+                        if waited == 0:
+                            print(f"[warn]   {day}: bot-wall/CAPTCHA detected — "
+                                  f"please solve it in the open browser window "
+                                  f"(waiting up to {OPTICA_CAPTCHA_WAIT_S}s)…")
+                        time.sleep(3)
+                        waited += 3
+                        if waited >= OPTICA_CAPTCHA_WAIT_S:
+                            raise PWTimeout("bot wall not cleared in time")
+                    # Wait for the schedule to render its talk rows.
+                    page.wait_for_selector("li.presentation", timeout=45000)
+                    time.sleep(2)
+                    # Switch to Detailed View so every cell shows its full meta.
+                    try:
+                        page.get_by_text("Detailed View",
+                                         exact=True).click(timeout=8000)
+                        time.sleep(2)
+                    except PWTimeout:
+                        print(f"[warn]   {day}: 'Detailed View' toggle not "
+                              f"found; saving the default view.")
+                    # Expand every truncated abstract ("Continue Reading").
+                    expanded = page.evaluate(
+                        "() => { let c = 0;"
+                        " document.querySelectorAll("
+                        "'a.presentation__description-expand').forEach(a => {"
+                        " if (/Continue Reading/i.test(a.innerText)) {"
+                        " a.click(); c++; } }); return c; }")
+                    time.sleep(2)
+                    html_text = page.content()
+                    target.write_bytes(html_text.encode("utf-8"))
+                    npres = page.evaluate(
+                        "() => document.querySelectorAll("
+                        "'li.presentation').length")
+                    size_kb = target.stat().st_size / 1024
+                    print(f"[ok]   saved {fname} ({size_kb:,.1f} KB; "
+                          f"{npres} talks, {expanded} abstracts expanded).")
+                    saved += 1
+                except Exception as e:  # noqa: BLE001 — log & continue per day
+                    print(f"[warn]   {day}: could not save {fname}: {e}")
+                    failed.append(fname)
+        finally:
+            ctx.close()
+    return saved, failed
+
 
 def _fetch_text(url: str) -> str:
     req = urllib.request.Request(url, headers={"User-Agent": UA})
@@ -232,6 +381,18 @@ def main() -> None:
         size_kb = target.stat().st_size / 1024
         print(f"[ok]   saved {target.name} ({size_kb:,.1f} KB).")
         saved_any = True
+
+    # Render + save the per-day Optica schedule pages (browser-driven). These
+    # are optional enrichment, so a failure here is a warning, not fatal.
+    print("-" * 72)
+    try:
+        opt_saved, opt_failed = _fetch_optica_schedule()
+        if opt_saved:
+            saved_any = True
+        failed.extend(opt_failed)
+    except Exception as e:  # noqa: BLE001 — never let enrichment abort the run
+        print(f"[warn] Optica schedule fetch failed entirely: {e}")
+        failed.extend(OPTICA_DAYS.values())
 
     print()
     print("=" * 72)
