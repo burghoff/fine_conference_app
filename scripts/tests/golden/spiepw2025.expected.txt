@@ -505,7 +505,7 @@ Crosslight Software Inc. (Canada)	Crosslight Software
 Crystal Diagnostics (United States)	Crystal Diagnostics
 Ctr. Diagnostico Italiano (Italy)	Ctr Diagnostico Italiano
 Ctr. Hospitalier National d'Opthalmologie des Quinze-Vingts (France)	Ctr Hospitalier National d'Opthalmologie des Quinze-Vingts
-Ctr. Hospitalier National d'Opthalmologie des Quinze-Vingts, Institut National de la Santé et de la Recherche Médicale (France)	Ctr Hospitalier National d'Opthalmologie des Quinze-Vingts
+Ctr. Hospitalier National d'Opthalmologie des Quinze-Vingts, Institut National de la Santé et de la Recherche Médicale (France)	INSERM
 Ctr. Hospitalier Univ. Vaudois, Univ. de Lausanne (Switzerland)	Ctr Hospitalier
 Ctr. Hospitalier de l'Univ. de Montréal (Canada)	Ctr Hospitalier de l'
 Ctr. Lasers Intenses et Applications (France)	Ctr Lasers Intenses et Applications
@@ -527,7 +527,7 @@ Ctr. de Nanosciences et de Nanotechnologies, Univ. Paris-Saclay (France)	Paris-S
 Ctr. de Nanosciences et de Nanotechnologies, Univ. Paris-Saclay, CNRS (France)	Paris-Saclay
 Ctr. de Recherche CERVO (Canada)	Ctr de Recherche CERVO
 Ctr. de Recherche de l'Univ. Laval Robert-Giffard (Canada)	Ctr de Recherche de l'
-Ctr. de Recherche en Cancérologie de Marseille, Institut National de la Santé et de la Recherche Médicale, Aix-Marseille Univ., CNRS (France)	CNRS
+Ctr. de Recherche en Cancérologie de Marseille, Institut National de la Santé et de la Recherche Médicale, Aix-Marseille Univ., CNRS (France)	INSERM
 Ctr. de Recherche sur les Ions, les Matériaux et la Photonique (France)	Ctr de Recherche sur les Ions
 Ctr. de Tecnologia da Informacao Renato Archer (Brazil)	Ctr de Tecnologia da Informacao Renato Archer
 Ctr. de Tecnología Nanofotónica de Valencia (Spain)	Ctr de Tecnología Nanofotónica de Valencia
@@ -677,7 +677,7 @@ Ecole Normale Supérieure de Lyon (France)	ENS Paris
 Ecole Polytechnique (France)	Ecole Polytechnique
 Ecole Polytechnique Fédérale de Lausanne (Switzerland)	EPFL
 Ecole Polytechnique, CEA (France)	IP Paris
-Ecole Supérieure de Physique et de Chimie Industrielles de la Ville de Paris (France)	Ecole Supérieure de Physique et de Chimie Industrielles de la Ville de Paris
+Ecole Supérieure de Physique et de Chimie Industrielles de la Ville de Paris (France)	ESPCI Paris
 Ecole normale supérieure - CNRS (France)	CNRS
 Ecole normale supérieure - PSL (France)	ENS Paris
 EdgeWave GmbH (Germany)	EdgeWave
@@ -709,7 +709,7 @@ Erik Zucker Consulting (United States)	Erik Zucker Consulting
 Erlangen Graduate School in Advanced Optical Technologies (SAOT) (Germany)	SAOT Erlangen
 Escola Politécnica da Univ. Federal da Bahia (Brazil)	Escola Politécnica da
 EssilorLuxottica Smart Eyewear Lab (Italy)	EssilorLuxottica Smart Eyewear Lab
-Eunice Kennedy Shriver National Institute of Child Health and Human Development (United States)	Eunice Kennedy Shriver National Institute of Child Health and Human Development
+Eunice Kennedy Shriver National Institute of Child Health and Human Development (United States)	NICHD
 European Institute for Biomedical Imaging Research (Austria)	European Institute for Biomedical Imaging Research
 European Laboratory for Non-Linear Spectroscopy (Italy)	LENS
 European Molecular Biology Lab. (Germany)	European Molecular Biology Lab
@@ -1109,13 +1109,13 @@ Institut Für Photonik, Leibniz Univ. Hannover (Germany)	Leibniz Hannover
 Institut Jean Lamour (France)	Institut Jean Lamour
 Institut Lafayette (France)	Institut Lafayette
 Institut Langevin (France)	Institut Langevin
-Institut Langevin ESPCI-Uni PSL (France)	Institut Langevin ESPCI-Uni PSL
-Institut Langevin, Ecole Supérieure de Physique et de Chimie Industrielles de la Ville de Paris (France)	Institut Langevin
-Institut Langevin, Ecole Supérieure de Physique et de Chimie Industrielles de la Ville de Paris, Univ. PSL, CNRS (France)	CNRS
+Institut Langevin ESPCI-Uni PSL (France)	ESPCI Paris
+Institut Langevin, Ecole Supérieure de Physique et de Chimie Industrielles de la Ville de Paris (France)	ESPCI Paris
+Institut Langevin, Ecole Supérieure de Physique et de Chimie Industrielles de la Ville de Paris, Univ. PSL, CNRS (France)	ESPCI Paris
 Institut Maupertuis (France)	Institut Maupertuis
 Institut National Polytechnique de Toulouse (France)	Institut National Polytechnique de Toulouse
 Institut National de la Recherche Scientifique (Canada)	INRS
-Institut National de la Santé et de la Recherche Médicale (France)	Institut National de la Santé et de la Recherche Médicale
+Institut National de la Santé et de la Recherche Médicale (France)	INSERM
 Institut National des Sciences Appliquées de Lyon (France)	Institut National des Sciences Appliquées de Lyon
 Institut NÉEL (France)	Institut NÉEL
 Institut NÉEL, CNRS (France)	CNRS
@@ -1123,8 +1123,8 @@ Institut Photovoltaïque d'Ile-de-France (France)	Institut Photovoltaïque d'Ile
 Institut Polytechnique de Paris (France)	IP Paris
 Institut Polytechnique de Paris, CNRS (France)	CNRS
 Institut Univ. de France (France)	Institut
-Institut d'Electronique de Microélectronique et de Nanotechnologie (France)	Institut d'Electronique de Microélectronique et de Nanotechnologie
-Institut d'Electronique de Microélectronique et de Nanotechnologie, Ecole Centrale de Lille (France)	Institut d'Electronique de Microélectronique et de Nanotechnologie
+Institut d'Electronique de Microélectronique et de Nanotechnologie (France)	IEMN
+Institut d'Electronique de Microélectronique et de Nanotechnologie, Ecole Centrale de Lille (France)	IEMN
 Institut d'Optique Graduate School (France)	Institut d'Optique
 Institut d'Électronique et des Systèmes, Univ. de Montpellier, CNRS (France)	CNRS
 Institut de Chimie Moléculaire et des Matériaux d'Orsay (France)	Institut de Chimie Moléculaire et des Matériaux d'Orsay
@@ -1138,7 +1138,7 @@ Institut de Recherche de Chimie Paris, CNRS (France)	CNRS
 Institut de Recherche pour le Développement, Geoazur (France)	Institut de Recherche pour le Développement
 Institut de Sciences des Matériaux de Mulhouse (France)	Institut de Sciences des Matériaux de Mulhouse
 Institut de la Vision (France)	Institut de la Vision
-Institut de la Vision, Institut National de la Santé et de la Recherche Médicale, Sorbonne Univ. (France)	Sorbonne
+Institut de la Vision, Institut National de la Santé et de la Recherche Médicale, Sorbonne Univ. (France)	INSERM
 Institut de la Vision, Sorbonne Univ. (France)	Sorbonne
 Institut de recherche mathematique de Rennes (France)	Institut de recherche mathematique de Rennes
 Institut des Nanotechnologies de Lyon (France)	Institut des Nanotechnologies de Lyon
@@ -1218,7 +1218,7 @@ Institute of Molecular and Cell Biology, A*STAR Agency for Science, Technology a
 Institute of Nanoscience and Nanotechnology (Greece)	Institute of Nanoscience and Nanotechnology
 Institute of Nanoscience and Nanotechnology, National Ctr. for Scientific Research "Demokritos" (Greece)	Institute of Nanoscience and Nanotechnology
 Institute of Nuclear Physics, Polish Academy of Sciences (Poland)	Polish Academy
-Institute of Organic Chemistry and Biochemistry of the CAS (Czech Republic)	Institute of Organic Chemistry and Biochemistry of the CAS
+Institute of Organic Chemistry and Biochemistry of the CAS (Czech Republic)	IOCB
 Institute of Photonic Technologies, Friedrich-Alexander-Universität Erlangen-Nürnberg (Germany)	FAU
 Institute of Photonics and Electronics of the ASCR, v.v.i. (Czech Republic)	Institute of Photonics and Electronics of the ASCR
 Institute of Photonics and Electronics of the CAS, v.v.i. (Czech Republic)	Institute of Photonics and Electronics of the CAS
@@ -1473,7 +1473,7 @@ Lab. des Technologies de la Microélectronique (France)	Lab des Technologies de 
 Lab. for Laser Energetics, Univ. of Rochester (United States)	Rochester
 Lab. for Telecommunications Sciences (United States)	Lab for Telecommunications Sciences
 Lab. of Therapeutic Applications of Ultrasound (France)	Lab of Therapeutic Applications of Ultrasound
-Lab. of Therapeutic Applications of Ultrasound, INSERM (France)	Lab of Therapeutic Applications of Ultrasound
+Lab. of Therapeutic Applications of Ultrasound, INSERM (France)	INSERM
 Lab. pour l'Utilisation des Lasers Intenses (France)	Lab pour l'Utilisation des Lasers Intenses
 Lab. pour l'Utilisation des Lasers Intenses, CNRS (France)	CNRS
 LabPON Laboratorium Pathologie Oost-Nederland (Netherlands)	LabPON Laboratorium Pathologie Oost-Nederland
@@ -1620,7 +1620,7 @@ Max-IR Labs., LLC (United States)	Max-IR Labs
 Max-Planck-Institut für Biochemie (Germany)	Max-Planck-Institut für Biochemie
 Max-Planck-Institut für Biophysikalische Chemie (Germany)	Max-Planck-Institut für Biophysikalische Chemie
 Max-Planck-Institut für Immunbiologie und Epigenetik (Germany)	Max-Planck-Institut für Immunbiologie und Epigenetik
-Max-Planck-Institut für Multidisziplinäre Naturwissenschaften (Germany)	Max-Planck-Institut für Multidisziplinäre Naturwissenschaften
+Max-Planck-Institut für Multidisziplinäre Naturwissenschaften (Germany)	MPI Multidisc Sci
 Max-Planck-Institut für Quantenoptik (Germany)	MPQ
 Max-Planck-Institut für Struktur und Dynamik der Materie (Germany)	Max-Planck-Institut für Struktur und Dynamik der Materie
 Max-Planck-Institut für die Physik des Lichts (Germany)	Max-Planck-Institut für die Physik des Lichts
@@ -1802,7 +1802,7 @@ National Institute for Fusion Research (Japan)	National Institute for Fusion Res
 National Institute for Materials Science (Japan)	National Institute for Materials Science
 National Institute for Materials Science, Tsukuba, Japan (Japan)	National Institute for Materials Science
 National Institute of Advanced Industrial Science and Technology (Japan)	AIST Japan
-National Institute of Biomedical Imaging and Bioengineering (United States)	National Institute of Biomedical Imaging and Bioengineering
+National Institute of Biomedical Imaging and Bioengineering (United States)	NIBIB
 National Institute of Information and Communications Technology (Japan)	NICT
 National Institute of Science and Technology (United States)	National Institute of Science and Technology
 National Institute of Standards and Technologies (United States)	NIST
@@ -2444,7 +2444,7 @@ Technische Hochschule Lübeck (Germany)	Technische Hochschule Lübeck
 Technische Hochschule Mittelhessen (Germany)	Technische Hochschule Mittelhessen
 Technische Univ. Berlin (Germany)	TU Berlin
 Technische Univ. Braunschweig (Germany)	TU Braunschweig
-Technische Univ. Chemnitz (Germany)	Chemnitz
+Technische Univ. Chemnitz (Germany)	TU Chemnitz
 Technische Univ. Clausthal (Germany)	TU Clausthal
 Technische Univ. Darmstadt (Germany)	TU Darmstadt
 Technische Univ. Delft (Netherlands)	TU Delft
@@ -2452,9 +2452,9 @@ Technische Univ. Dortmund (Germany)	TU Dortmund
 Technische Univ. Eindhoven (Netherlands)	TU Eindhoven
 Technische Univ. Graz (Austria)	TU Graz
 Technische Univ. Ilmenau (Germany)	TU Ilmenau
-Technische Univ. München (Germany)	TU München
-Technische Univ. München (Germany) Shi-Wei Chu, National Taiwan Univ. (Taiwan)	NTU Taiwan
-Technische Univ. Wien (Austria)	TU Wien
+Technische Univ. München (Germany)	TU Munich
+Technische Univ. München (Germany) Shi-Wei Chu, National Taiwan Univ. (Taiwan)	TU Munich
+Technische Univ. Wien (Austria)	TU Vienna
 Technische Universität Berlin, Institute of Solid State Physics (Germany)	TU Berlin
 Technische Universität Dresden, Institut für Fertigungstechnik (Germany)	TU Dresden
 Technische Universität Wien (Austria)	TU Vienna
@@ -3149,7 +3149,7 @@ WaveLord Co., Ltd. (Korea, Republic of)	WaveLord
 Wavepackets LLC (Japan)	Wavepackets
 Waymo, LLC (United States)	Waymo
 Wayne State Univ. (United States)	Wayne State
-Weierstrass-Institut für Angewandte Analysis und Stochastik (Germany)	Weierstrass-Institut für Angewandte Analysis und Stochastik
+Weierstrass-Institut für Angewandte Analysis und Stochastik (Germany)	WIAS Berlin
 Weill Cornell Medicine (United States)	Cornell
 Weizmann Institute of Science (Israel)	Weizmann
 Wellman Ctr. for Photomedicine (United States)	Wellman Ctr for Photomedicine
@@ -3214,7 +3214,7 @@ Yu, Univ. of Arkansas (United States)	Arkansas
 Yuan Ze Univ. (Taiwan)	Yuan Ze
 Yuzuncu Yil Univ. (Turkey)	Yuzuncu Yil
 ZEISS Research Microscopy Solutions (Germany)	ZEISS Research Microscopy Solutions
-Zentralinstitut für Translationale Krebsforschung, Technische Univ. München (Germany)	Zentralinstitut für Translationale Krebsforschung
+Zentralinstitut für Translationale Krebsforschung, Technische Univ. München (Germany)	TU Munich
 Zentrum für Mechatronik und Automatisierungstechnik gGmbH (Germany)	Zentrum für Mechatronik und Automatisierungstechnik gGmbH
 Zentrum für Medizinische Physik und Biomedizinische Technik, Medizinische Univ. Wien (Austria)	Zentrum für Medizinische Physik und Biomedizinische Technik
 Zentrum für Optische Quantentechnologien (Germany)	Zentrum für Optische Quantentechnologien

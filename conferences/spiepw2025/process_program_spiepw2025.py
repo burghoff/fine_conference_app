@@ -175,6 +175,9 @@ BREAK_TAIL = re.compile(
 MARKETING = re.compile(r"^(See full details and updates|spie\.org/pw|"
                        r"This program is current as of|Add events to MySchedule|"
                        r"OPEN TO ALL)", re.IGNORECASE)
+# "ON-DEMAND POSTERS" — a no-time online-only poster section (its header is NOT
+# followed by a date/time/room line). These are excluded entirely.
+ON_DEMAND = re.compile(r"on.?demand\s+posters", re.IGNORECASE)
 
 # talk-title trailing markers -> talk type token
 MARKERS = [
@@ -298,8 +301,16 @@ def parse_people(block: str) -> list[tuple[str, list[str]]]:
     # ';' between them, so the lines arrive space-joined: "...(United States)
     # Jane Doe, ...". Re-insert the ';' where a country marker is immediately
     # followed by a new capitalized name, so each becomes its own group.
-    block = re.sub(r"(\([A-Z][a-z][^)]*\))\s+(?=[A-ZÀ-Þ][A-Za-zà-ÿ'’-]+[-\s,])",
-                   r"\1; ", block)
+    # A new person after a country marker: either "(Country) Firstname Last…" or
+    # an initial-led "(Country) T. Joshua Pfefer". The initial alternative is
+    # needed because a name beginning with an initial (period) would otherwise
+    # not match the plain-word pattern and the author would merge into the
+    # affiliation. Company suffixes ("Co.", "Inc.") stay protected: they have no
+    # space-or-comma right after the first word and no initial pattern.
+    block = re.sub(
+        r"(\([A-Z][a-z][^)]*\))\s+"
+        r"(?=(?:[A-ZÀ-Þ]\.\s*)+[A-ZÀ-Þ]|[A-ZÀ-Þ][A-Za-zà-ÿ'’-]+[-\s,])",
+        r"\1; ", block)
     out: list[tuple[str, list[str]]] = []
     for g in block.split(";"):
         g = _norm(g)
@@ -414,6 +425,76 @@ def _smart_title(t: str, acr: dict[str, str]) -> str:
     return " ".join(out)
 
 
+# Compact building abbreviations for the short location shown on bubbles.
+_BLDG_SHORT = {
+    "Moscone South": "MS", "Moscone West": "MW", "Moscone North": "MN",
+    "Moscone Center": "Moscone", "InterContinental Hotel": "IC Hotel",
+}
+
+
+def _short_level(lvl: str) -> str:
+    """Compact a floor/area descriptor: 'Level 1 Lobby'->'L1 Lobby',
+    'Level 2'->'L2', '5th Floor'->'L5', 'Upper Mezz'->'Upper Mezz.', etc."""
+    s = lvl.strip()
+    m = re.match(r"(?i)^level\s+(\d+)(?:\s+lobby)?$", s)   # "Level 1 Lobby"->"L1"
+    if m:
+        return f"L{m.group(1)}"
+    m = re.match(r"(?i)^(\d+)(?:st|nd|rd|th)\s+floor$", s)
+    if m:
+        return f"L{m.group(1)}"
+    if re.match(r"(?i)^lower\s+mezz", s):
+        return "L Mezz"
+    if re.match(r"(?i)^upper\s+mezz", s):
+        return "U Mezz"
+    if re.match(r"(?i)^exhibit\s+level$", s):
+        return "Exhibit"
+    return s
+
+
+def _short_location(loc: str) -> str:
+    """Build the compact bubble location, e.g.
+        'Moscone South, Room 151 (Upper Mezz)'  -> 'MS 151 (U Mezz)'
+        'Moscone West, Room 2003 (Level 2)'     -> 'MW 2003 (L2)'
+        'Moscone South, Room 101 (Level 1 Lobby)' -> 'MS 101 (L1)'
+        'InterContinental Hotel, InterContinental Ballroom B (5th Floor)'
+                                                -> 'IC Hotel, Ballroom B (L5)'
+    Returns '' when there's nothing to shorten."""
+    if not loc:
+        return ""
+    lvl = ""
+    m = re.match(r"^(.*?)\s*\(([^()]*)\)\s*$", loc)
+    if m:
+        main, lvl = m.group(1).strip(), _short_level(m.group(2).strip())
+    else:
+        main = loc.strip()
+    segs = [s.strip() for s in main.split(",") if s.strip()]
+    if not segs:
+        return ""
+    bshort = _BLDG_SHORT.get(segs[0], segs[0])
+    space = ", ".join(segs[1:])
+    space = re.sub(r"(?i)^room\s+", "", space)        # "Room 151" -> "151"
+    space = re.sub(r"(?i)^intercontinental\s+", "", space)  # de-dup ballroom prefix
+    if bshort in ("MS", "MW", "MN") and re.fullmatch(r"[\d/]+[A-Za-z]?", space):
+        core = f"{bshort} {space}"                      # "MS 151"
+    elif space:
+        core = f"{bshort}, {space}"                     # "IC Hotel, Ballroom B"
+    else:
+        core = bshort
+    return core + (f" ({lvl})" if lvl else "")
+
+
+def _clean_location(loc: str) -> str:
+    """Tidy a room/location string. The source PDF occasionally mis-prints one
+    (e.g. "Moscone West, Room 155 (Upper Mezz))" with a doubled ')'); collapse
+    repeated parentheses and balance a stray trailing ')'."""
+    loc = _norm(loc)
+    loc = re.sub(r"\){2,}", ")", loc)
+    loc = re.sub(r"\({2,}", "(", loc)
+    while loc.count(")") > loc.count("("):
+        loc = re.sub(r"\s*\)\s*$", "", loc)
+    return loc.strip()
+
+
 def _paren_open(buf: list[str]) -> bool:
     """True when the accumulated buffer has an unclosed '(' — i.e. an
     affiliation's country marker wrapped across a line ("... (United" / "States)")
@@ -457,6 +538,7 @@ class Parser:
         self.author_buf: list[str] = []         # talk authors, accumulating
         self.meta_buf: list[str] = []           # conf chair/committee, accumulating
         self.cur_talk: dict | None = None
+        self.skip_ondemand = False     # inside an excluded "ON-DEMAND POSTERS" block
 
     # -- finalizers -----------------------------------------------------------
     def _finalize_talk(self) -> None:
@@ -558,6 +640,7 @@ class Parser:
     # -- session creation -----------------------------------------------------
     def _open_session(self, title: str, month: int, day: int,
                       start: str, end: str, location: str) -> None:
+        location = _clean_location(location)
         title = _norm(title)
         is_poster = title.upper().startswith("POSTER")
         # strip a leading "SESSION N:" label from the displayed title; the final
@@ -566,15 +649,13 @@ class Parser:
         disp_raw = _norm(m.group(1).strip() if m else title)
         start_ts = _to_iso(2025, month, day, start)
         end_ts = _to_iso(2025, month, day, end)
-        # Plenary / hot-topics / joint sessions are reprinted verbatim inside
-        # many conference sections and must collapse to one session across
-        # conferences; every other session belongs to its own conference, so we
-        # scope its key by conference number (co-located poster blocks from
-        # different conferences then stay distinct).
-        tu = title.upper()
-        shared = ("PLENARY" in tu or "HOT TOPIC" in tu or "JOINT SESSION" in tu)
-        scope = "" if shared else self.conf_num
-        key = f"{scope}|{tu}|{start_ts}|{location.lower()}"
+        # Within a conference, a session is keyed by its (normalized title, time,
+        # room). Cross-conference reprints (plenary / hot-topics / joint / focus
+        # sessions printed in EVERY participating conference's pages) are merged
+        # afterwards in run() by their normalized title — keying on disp_raw here
+        # (whitespace-folded) rather than the raw wrapped header makes that merge
+        # robust to the different line wrapping each reprint uses.
+        key = f"{self.conf_num}|{disp_raw}|{start_ts}|{location.lower()}"
         self.cur_session_date = (month, day)
         if key not in self.sessions:
             sid = f"S{len(self.session_order) + 1}"
@@ -585,6 +666,11 @@ class Parser:
                 "start_ts": start_ts,
                 "end_ts": end_ts,
                 "location": location,
+                # Compact form for bubbles; the builder shows this in lists and
+                # the full `location` in detail views. Omitted when it wouldn't
+                # actually be shorter.
+                **({"short_location": _short_location(location)}
+                   if location and _short_location(location) != location else {}),
                 "talk_ids": [],
                 "tags": self._session_tags(is_poster),
                 "_talk_nums": set(),
@@ -633,6 +719,7 @@ class Parser:
             self.conf_num = m.group(1)
             self.conf_title = ""
             self.cur_session_key = None
+            self.skip_ondemand = False
             self.mode = "conf_title"
             self.conf_title_buf = []
             self.header_buf = []
@@ -667,6 +754,7 @@ class Parser:
             self._finalize_talk()
             self._finalize_chair()
             self._flush_meta()
+            self.skip_ondemand = False
             self.mode = "idle"
             self.header_buf = []
             return
@@ -681,6 +769,7 @@ class Parser:
             self._open_session(title, MONTHS.get(hm.group(3), 1), int(hm.group(2)),
                                hm.group(4), hm.group(5), _norm(hm.group(6)))
             self.header_buf = []
+            self.skip_ondemand = False
             self.mode = "in_session"
             return
 
@@ -695,6 +784,7 @@ class Parser:
             self._open_session(title, MONTHS.get(sm.group(2), 1), int(sm.group(1)),
                                sm.group(3), sm.group(4), _norm(sm.group(5)))
             self.header_buf = []
+            self.skip_ondemand = False
             self.mode = "in_session"
             return
 
@@ -705,6 +795,8 @@ class Parser:
             return
 
         tm = TALK.match(s)
+        if tm and self.skip_ondemand:
+            return                       # talk inside an excluded on-demand block
         if tm and self.cur_session_key is not None:
             self._finalize_talk()
             self._finalize_chair()
@@ -737,6 +829,17 @@ class Parser:
             self.header_buf = []
             if self.mode not in ("sess_chair",):
                 self.mode = "in_session" if self.cur_session_key else "idle"
+            return
+
+        # An "ON-DEMAND POSTERS" header (no date/time line follows it) starts an
+        # online-only poster block we exclude entirely: skip its talks until the
+        # next real boundary (conference / day / session), which clears the flag.
+        if _headerish(s) and ON_DEMAND.search(s):
+            self._finalize_talk()
+            self._finalize_chair()
+            self.skip_ondemand = True
+            self.header_buf = []
+            self.mode = "in_session"
             return
 
         # ---- generic / continuation line --------------------------------
@@ -847,20 +950,42 @@ def run(pdf_path: Path) -> dict:
                 corpus.append(v.split(": ", 1)[1] if ": " in v else v)
     acr = learn_acronyms(corpus)
 
-    # Drop duplicate EMPTY sessions. A handful of plenary-style headers (e.g.
-    # an evening "focus" plenary) are reprinted across many conference sections
-    # but carry their talks only in the un-parseable marketing layout, so they
-    # arrive here with 0 talks and one copy per conference. A 0-talk session has
-    # no conference-specific content, so collapsing identical ones loses nothing.
-    sessions = []
-    seen_empty: set[tuple] = set()
+    # Merge cross-conference reprinted sessions. A special session (an evening
+    # plenary, hot-topics, joint, or "focus" session) is printed in EACH
+    # participating conference's pages; because talks are de-duplicated globally
+    # by paper number, each reprint holds a DIFFERENT subset of the talks (and
+    # some reprints hold none). Collapse every group of sessions sharing the same
+    # (normalized title, start, room) into one, unioning their talks and
+    # redirecting those talks' session_id. POSTER sessions are excluded: each
+    # conference runs its own poster session concurrently in the shared poster
+    # hall, so identical (title, start, room) there is co-located-but-distinct
+    # and stays per-conference.
+    merged_away: set[str] = set()
+    primary: dict[tuple, dict] = {}
     for key in p.session_order:
         sess = p.sessions[key]
-        if not sess["talk_ids"]:
-            sig = (sess["_raw_title"], sess["start_ts"], sess["location"].lower())
-            if sig in seen_empty:
-                continue
-            seen_empty.add(sig)
+        if sess["_is_poster"]:
+            continue
+        sig = (sess["_disp_raw"], sess["start_ts"], sess["location"].lower())
+        keep = primary.get(sig)
+        if keep is None:
+            primary[sig] = sess
+            continue
+        for tid in sess["talk_ids"]:
+            num = tid[len("T-"):]
+            if num not in keep["_talk_nums"]:
+                keep["_talk_nums"].add(num)
+                keep["talk_ids"].append(tid)
+            t = p.talks.get(num)
+            if t is not None:
+                t["session_id"] = keep["id"]
+        merged_away.add(sess["id"])
+
+    sessions = []
+    for key in p.session_order:
+        sess = p.sessions[key]
+        if sess["id"] in merged_away:
+            continue
         sess["talk_ids"].sort(key=lambda tid: p.talks[tid.replace("T-", "", 1)]
                               ["start_ts"] if tid.replace("T-", "", 1) in p.talks
                               else "")

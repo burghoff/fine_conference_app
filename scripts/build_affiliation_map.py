@@ -290,6 +290,21 @@ _ANCHORS_SRC: list = [
     ('university of texas health science ctr. at houston', 'UTHealth Houston'),
     ('university of texas school of dentistry', 'UTHealth Houston'),
 
+    # ---- Well-known institutes whose full name is long but has a standard
+    # acronym the generic shortener can't derive. ----
+    (['sante et de la recherche medicale', r're:\binserm\b'], 'INSERM'),
+    (['microelectronique et de nanotechnologie', r're:\biemn\b'], 'IEMN'),
+    ('national institute of child health', 'NICHD'),
+    ('national institute of biomedical imaging', 'NIBIB'),
+    (['physique et de chimie industrielles', r're:\bespci\b'], 'ESPCI Paris'),
+    ('american institute for manufacturing integrated photonics', 'AIM Photonics'),
+    # NOTE: IQUIST and QuICS are research centers hosted INSIDE a university, so
+    # they are LATE_ANCHORS (low priority) — when the parent university (UIUC /
+    # Maryland) is also in the string, it wins; the center acronym is only used
+    # for a standalone mention.
+    ('organic chemistry and biochemistry of the cas', 'IOCB'),
+    (['transformative meta-optical systems', r're:\btmos\b'], 'TMOS'),
+
     # ---- US national labs (specific names before generic) ------------------
     ('los alamos national lab', 'LANL'),
     ('lawrence livermore', 'LLNL'),
@@ -738,13 +753,14 @@ _ANCHORS_SRC: list = [
     # ---- Germany -----------------------------------------------------------
     (['max planck institute for the science of light', 'max-planck institute for the science of light', 'max-planck-inst physik des lichts'], 'MPI Light'),
     ('max planck institute of microstructure', 'MPI Microstructure'),
-    ('max planck institute for multidisciplinary sciences', 'MPI Multidisc Sci'),
+    (['max planck institute for multidisciplinary sciences',
+      'multidisziplinare naturwissenschaften'], 'MPI Multidisc Sci'),
     ([
         'max-planck-institut fur quantenoptik',
         'max planck institute of quantum optics', 'mpq,',
     ], 'MPQ'),
     ('max plank for multidisciplinary sciences', 'MPI Multidisc Sci'),
-    (['max born institute', 'max-born-institut'], 'Max Born'),
+    (['max born institute', 'max-born institute', 'max-born-institut'], 'Max Born'),
     ('max planck', 'Max Planck'),
     ('fraunhofer hhi', 'Fraunhofer HHI'),
     ('fraunhofer ilt', 'Fraunhofer ILT'),
@@ -764,6 +780,9 @@ _ANCHORS_SRC: list = [
     ], 'LMU Munich'),
     ([
         'technical university of munich', 'technische universitat munchen',
+        # "Technische Univ. München" arrives as "technische university munchen"
+        # (Univ.->university folded, ü->u diacritic-stripped by normalize()).
+        'technische university munchen',
         'tu munich',
     ], 'TU Munich'),
     ([
@@ -817,7 +836,7 @@ _ANCHORS_SRC: list = [
     ('marvel fusion', 'MARVEL Fusion GmbH'),
     ('mpi corporation', 'MPI Corporation'),
     ('mpi light', 'MPI Light'),
-    (['weierstraß-institut', 'weierstrass institute', 'wias berlin'], 'WIAS Berlin'),
+    (['weierstraß-institut', 'weierstrass-institut', 'weierstrass institute', 'wias berlin'], 'WIAS Berlin'),
     ('paderborn', 'Paderborn'),
     # German city Münster (accent-folded to "munster"), but NOT Ireland's
     # "Munster Technological University" (Cork) — the bare substring would grab
@@ -834,7 +853,7 @@ _ANCHORS_SRC: list = [
     # institutions handled by their own anchors above/below and are untouched.
     (['friedrich-alexander', 'friedrich alexander', 'fau,'], 'FAU'),
     ('ihp gmbh', 'IHP'),
-    ('chemnitz', 'Chemnitz University of Technology'),
+    ('chemnitz', 'TU Chemnitz'),
     ('brandenburgische technische', 'BTU Cottbus'),
     ('rheinland-pfalzische', 'RPTU'),
     ([
@@ -1083,6 +1102,9 @@ _ANCHORS_SRC: list = [
     # ---- Austria -----------------------------------------------------------
     ([
         'tu wien', 'tu vienna', 'technische universitat wien',
+        # the "Univ." abbreviation folds to "university" in normalize(), so the
+        # German "Technische Univ. Wien" arrives as "technische university wien".
+        'technische university wien',
         'vienna university of technology',
     ], 'TU Vienna'),
     (['tu graz', 'graz university of technology'], 'TU Graz'),
@@ -2057,6 +2079,13 @@ _LATE_ANCHORS_SRC: list = [
     # useless bare label "University" (e.g. "…, Beijing Information Science
     # and Technology University, Beijing, China"). The fallback shortener
     # extracts the real institution name instead.
+
+    # Research centers hosted inside a university: low priority so the parent
+    # university wins when it's present in the string (e.g. "IQUIST, University
+    # of Illinois at Urbana-Champaign" -> UIUC), but a standalone mention of the
+    # center still resolves to its acronym.
+    (['illinois quantum information science and technology', r're:\biquist\b'], 'IQUIST'),
+    ('joint center for quantum information and computer science', 'QuICS'),
 ]
 
 
