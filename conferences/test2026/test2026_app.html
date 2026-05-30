@@ -297,10 +297,6 @@ body.me-resizing .bubble {
   
   color: inherit;
 }
-.bubble-sep {
-  margin: 0 .4em;
-  opacity: .7;
-}
 
 .bubble-title {
   font-size: calc(14px * var(--fs)); line-height: 1.25; font-weight: 600;
@@ -2055,13 +2051,26 @@ function makeBubble(item, opts = {}) {
     "data-kind": isTalk ? "talk" : "session",
     "data-bubble-id":  item.id,
     "data-session-id": isTalk ? (item.session_id || "") : "",
-    onclick: () => {
+    onclick: (e) => {
 
       if (wrap._lpFired) { wrap._lpFired = false; return; }
+
+      if (inAddZone(e.clientX, e.clientY)) { toggleScheduled(item.id); return; }
       if (expandable) { toggleSessionExpanded(item.id); return; }
       navigate(isTalk ? `talk:${item.id}` : `session:${item.id}`);
     },
   });
+
+  function inAddZone(x, y) {
+    const btn = wrap.querySelector(".schedule-btn");
+    if (!btn) return false;
+    const br = btn.getBoundingClientRect();
+    if (!br.width) return false;
+    const wr = wrap.getBoundingClientRect();
+    const pad = Math.max(0, wr.right - br.right);
+    return x >= br.left - pad && x <= br.right + pad
+        && y >= br.top  - pad && y <= br.bottom + pad;
+  }
 
   if (expandable || isTalk) {
     const detailView = isTalk ? `talk:${item.id}` : `session:${item.id}`;
@@ -2072,8 +2081,9 @@ function makeBubble(item, opts = {}) {
       if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; }
     };
     wrap.addEventListener("pointerdown", (e) => {
-      
+
       if (e.target.closest(".schedule-btn")) return;
+      if (inAddZone(e.clientX, e.clientY)) return;
       sx = e.clientX; sy = e.clientY;
       wrap._lpFired = false;
       cancel();
@@ -2114,7 +2124,7 @@ function makeBubble(item, opts = {}) {
   const hasByline = !!subBody && subBody.trim() !== "" && subBody !== "&nbsp;";
   const locPrefix = chipText
     ? `<span class="bubble-loc">${esc(chipText)}</span>` +
-      (hasByline ? `<span class="bubble-sep">·</span>` : "")
+      (hasByline ? " · " : "")   
     : "";
   const subHTML = locPrefix + (subBody || "");
   if (subHTML) {
@@ -2446,10 +2456,23 @@ function _getBylineObserver(root) {
   return obs;
 }
 
+function _bylineNearViewport(subEl, root, margin) {
+  const r = subEl.getBoundingClientRect();
+  if (r.width === 0 && r.height === 0) return false;   
+  const rr = root.getBoundingClientRect();
+  return r.bottom >= rr.top - margin && r.top <= rr.bottom + margin;
+}
+
 function observeBylineForFit(subEl) {
   const root = _bylineScrollRoot(subEl);
   if (!root) return;
-  _getBylineObserver(root).observe(subEl);
+  const obs = _getBylineObserver(root);   
+
+  if (_bylineNearViewport(subEl, root, 200)) {
+    _bylineVisible.get(root).add(subEl);
+    _fitIfStale(subEl);
+  }
+  obs.observe(subEl);
 }
 
 function disconnectBylineObservers(specificRoot) {
@@ -4000,33 +4023,33 @@ function renderTopbarExtras(tab, top) {
       "aria-label": "Copy sync code",
       onclick: doCopy,
     }, "⧉"));
-  } else if (tab === "sessions" && top.view === "list"
-             && !canResetTab(tab) && expandableSessionIds().length) {
+  } else if (tab === "sessions" && top.view === "list") {
 
-    slot.appendChild(el("button", {
-      class: "icon-btn",
-      title: "Expand all sessions",
-      "aria-label": "Expand all sessions",
-      html: '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" '
-          + 'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
-          + 'stroke-linejoin="round" aria-hidden="true">'
-          + '<path d="M5 8.5 12 14l7-5.5"></path>'
-          + '<path d="M5 14.5 12 20l7-5.5"></path></svg>',
-      onclick: expandAllSessions,
-    }));
-  } else if (canResetTab(tab)) {
-
-    slot.appendChild(el("button", {
-      class: "icon-btn",
-      title: "Reset this tab",
-      "aria-label": "Reset to top of this section",
-      html: '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" '
-          + 'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
-          + 'stroke-linejoin="round" aria-hidden="true">'
-          + '<path d="M3 11.5 12 4l9 7.5"></path>'
-          + '<path d="M5.5 9.7V20h13V9.7"></path></svg>',
-      onclick: resetTab,
-    }));
+    if ((state.expandedSessions || []).length) {
+      slot.appendChild(el("button", {
+        class: "icon-btn",
+        title: "Collapse all sessions",
+        "aria-label": "Collapse all sessions",
+        html: '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" '
+            + 'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+            + 'stroke-linejoin="round" aria-hidden="true">'
+            + '<path d="M5 9.5 12 4l7 5.5"></path>'
+            + '<path d="M5 15.5 12 10l7 5.5"></path></svg>',
+        onclick: collapseAllSessions,
+      }));
+    } else if (expandableSessionIds().length) {
+      slot.appendChild(el("button", {
+        class: "icon-btn",
+        title: "Expand all sessions",
+        "aria-label": "Expand all sessions",
+        html: '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" '
+            + 'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+            + 'stroke-linejoin="round" aria-hidden="true">'
+            + '<path d="M5 8.5 12 14l7-5.5"></path>'
+            + '<path d="M5 14.5 12 20l7-5.5"></path></svg>',
+        onclick: expandAllSessions,
+      }));
+    }
   }
 }
 
@@ -4984,6 +5007,8 @@ function render() {
   const place = () => {
     if (!(anchor && restoreListAnchor(anchor))) setLeftScrollTop(target);
   };
+
+  place();
   requestAnimationFrame(() => {
     place();
     requestAnimationFrame(() => {
@@ -5025,7 +5050,10 @@ function rerenderPreservingAnchor() {
 
 function navigate(view) {
   snapshotScroll();
+
+  _replaceNav();
   state.tabStacks[state.activeTab].push({ view, scrollY: 0 });
+  _pushNav();   
   saveState();
   render();
 }
@@ -5039,13 +5067,57 @@ function back() {
   }
 }
 
-function canResetTab(tab) {
-  const stack = state.tabStacks[tab];
-  if (tab === "me") return !!(stack && stack.length > 1);
-  if (stack && stack.length > 1) return true;
-  if (tab === "sessions" && (state.expandedSessions || []).length) return true;
-  if (tab === "search" && (state.searchQuery || "").trim()) return true;
-  return false;
+let _navIdx = 0;   
+const _cloneNav = (o) => JSON.parse(JSON.stringify(o));
+
+function _navSnapshot() {
+  return { tab: state.activeTab, stacks: _cloneNav(state.tabStacks) };
+}
+
+function _applyNavSnapshot(snap) {
+  if (!snap) return;                 
+  state.activeTab = snap.tab;
+  state.tabStacks = _cloneNav(snap.stacks);
+  saveState();
+  render();
+}
+
+function _pushNav() {
+  _navIdx++;
+  try { history.pushState({ fcaIdx: _navIdx, fcaSnap: _navSnapshot() }, ""); }
+  catch (_) {}
+}
+
+function _replaceNav() {
+  try { history.replaceState({ fcaIdx: _navIdx, fcaSnap: _navSnapshot() }, ""); }
+  catch (_) {}
+}
+
+function canGoBack() {
+  const stack = state.tabStacks[state.activeTab];
+  return !!(stack && stack.length > 1);
+}
+
+window.addEventListener("popstate", (e) => {
+  const st = e.state;
+  _navIdx = (st && typeof st.fcaIdx === "number") ? st.fcaIdx : 0;
+  _applyNavSnapshot(st && st.fcaSnap);
+});
+
+function seedBackHistory() {
+  const tab = state.activeTab;
+  const depth = (state.tabStacks[tab] || []).length;
+  const snapAt = (d) => {
+    const stacks = _cloneNav(state.tabStacks);
+    stacks[tab] = stacks[tab].slice(0, d);
+    return { tab, stacks };
+  };
+  _navIdx = 0;
+  try { history.replaceState({ fcaIdx: 0, fcaSnap: snapAt(1) }, ""); } catch (_) {}
+  for (let d = 2; d <= depth; d++) {
+    _navIdx++;
+    try { history.pushState({ fcaIdx: _navIdx, fcaSnap: snapAt(d) }, ""); } catch (_) {}
+  }
 }
 
 function leftScroller() {
@@ -5116,27 +5188,19 @@ function cssEsc(s) {
   return String(s).replace(/["\\\]]/g, "\\$&");
 }
 
-function resetTab() {
-  const tab = state.activeTab;
-  if (!canResetTab(tab)) return;
+function collapseAllSessions() {
+  if (!(state.expandedSessions || []).length) return;
 
-  const onRootList = state.tabStacks[tab].length === 1;
-  const willKeepList = (tab === "sessions" || tab === "talks");
-  const anchor = (onRootList && willKeepList) ? captureListAnchor() : null;
+  const anchor = captureListAnchor();
 
-  const stack = state.tabStacks[tab];
-  stack.length = 1;
+  state.expandedSessions = [];
 
-  if (tab === "sessions" && (state.expandedSessions || []).length) {
-    state.expandedSessions = [];
-  }
-  
-  if (tab === "search") state.searchQuery = "";
-
+  const stack = state.tabStacks[state.activeTab];
   stack[0].scrollY = leftScrollTop();
   stack[0].scrollAnchor = anchor || null;
 
   saveState();
+  _replaceNav();   
   render();
 
   if (anchor) {
@@ -5162,6 +5226,7 @@ function expandAllSessions() {
   snapshotScroll();
   state.expandedSessions = ids;
   saveState();
+  _replaceNav();   
   render();
 
   if (anchor) {
@@ -5175,9 +5240,14 @@ function expandAllSessions() {
 function switchTab(tab) {
 
   if (tab === "me" && isWide()) return;
-  if (tab === state.activeTab) return;
+  const stack = state.tabStacks[tab];
+  const drilledIn = !!(stack && stack.length > 1);
+  if (tab === state.activeTab && !drilledIn) return;   
   snapshotScroll();
+  _replaceNav();                 
   state.activeTab = tab;
+  if (drilledIn) stack.length = 1;   
+  _pushNav();                    
   saveState();
   render();
 }
@@ -5192,18 +5262,24 @@ function searchFor(query, mode) {
 
 function focusSearch() {
   snapshotScroll();
-  state.activeTab = "search";
   const stack = state.tabStacks["search"];
+
+  const changed = state.activeTab !== "search" || (stack && stack.length > 1);
+  if (changed) _replaceNav();    
+  state.activeTab = "search";
   if (stack && stack.length > 1) stack.length = 1;
+  if (changed) _pushNav();
   saveState();
   render();
-  requestAnimationFrame(() => {
+  const focusIt = () => {
     const input = $("#search-input");
-    if (input) {
+    if (input && document.activeElement !== input) {
       input.focus();
       input.select();
     }
-  });
+  };
+  focusIt();
+  requestAnimationFrame(focusIt);
 }
 
 document.addEventListener("pointerdown", (e) => {
@@ -5221,10 +5297,16 @@ document.addEventListener("keydown", (e) => {
   focusSearch();
 });
 
-$("#back-btn").addEventListener("click", back);
+$("#back-btn").addEventListener("click", () => {
+  if (_navIdx > 0) history.back();
+  else if (canGoBack()) back();
+});
 
-$$("#tabbar .tab-btn").forEach(b => b.addEventListener("click",
-  () => switchTab(b.dataset.tab)));
+$$("#tabbar .tab-btn").forEach(b => b.addEventListener("click", () => {
+  const t = b.dataset.tab;
+  if (t === "search" && isWide()) focusSearch();
+  else switchTab(t);
+}));
 $("#show-past").addEventListener("change", e => {
   state.showPast = e.target.checked;
   saveState();
@@ -5239,6 +5321,8 @@ function onLeftScroll() {
   clearTimeout(_scrollSaveTimer);
   _scrollSaveTimer = setTimeout(() => {
     snapshotScroll();
+
+    _replaceNav();
     saveState();
   }, 350);
 }
@@ -5377,6 +5461,7 @@ applyFontScale();
 initMeResize();
 initMePaneScroll();
 render();
+seedBackHistory();  
 
 const TIME_BOUNDARIES_MS = (() => {
   const set = new Set();
