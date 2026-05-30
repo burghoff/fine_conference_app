@@ -24,6 +24,14 @@ All such content must be **extracted at runtime** from files in `data/`. The
 processor reads those files when it runs; the fetcher (or the user) puts them
 there. **Nothing of substance from the program goes into the Python source.**
 
+This includes **comments, docstrings, and examples**. Do not paste a real paper
+title, abstract, author name, or affiliation into a comment to illustrate a
+parser — even a fragment, even "just as an example." Program text is copyrighted
+wherever it lives, and a docstring in tracked source is just as public as a
+string literal. When you need to show the shape of an input line in a comment,
+use **invented placeholders** (`SESSION N: <SESSION TITLE>`, `Author(s): <Name>,
+<Aff> (<Country>)`) — never a line copied from the actual program.
+
 This is not a stylistic preference. Conference programs — titles, abstracts,
 author lists — are typically copyrighted by the conference and its publisher.
 Embedding any of that in tracked source code turns the repository into an

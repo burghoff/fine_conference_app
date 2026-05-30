@@ -9,7 +9,7 @@ FEMTOPRINT SA	FEMTOPRINT SA
 IHP	IHP
 IST Austria	IST Austria
 LIGENTEC SA	Ligentec
-Lightium AG	Lightium AG
+Lightium AG	Lightium
 Luceda Photonics	Luceda Photonics
 Luxtelligence SA	Luxtelligence SA
 Marvell Technologies (formerly Polariton Technologies AG)	Marvell

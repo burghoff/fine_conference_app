@@ -249,6 +249,47 @@ _UC_SEP = r'(?:\s*,\s*|\s+at\s+|\s*-\s*|\s+)'
 # ---------------------------------------------------------------------------
 
 _ANCHORS_SRC: list = [
+    # ---- Disambiguation: DIFFERENT institutions that share a city/name and
+    # would otherwise collapse to the same short via the generic shortener
+    # (e.g. "Miami University" in Ohio vs "University of Miami" in Florida).
+    # Each is pinned to its standard distinct short. Placed first so a specific
+    # "<Place> University of Technology/Science…" wins over a later, broader
+    # anchor for the bare flagship (e.g. NTUST before the NTU-Taiwan anchor).
+    ('american university in cairo', 'AUC'),
+    ('national technical university of athens', 'NTUA'),
+    ('auckland university of technology', 'AUT'),
+    ('cyprus university of technology', 'CUT'),
+    ('fukui university of technology', 'Fukui Tech'),
+    ('university of jinan', 'UJN'),  # Shandong — distinct from Jinan Univ. (Guangzhou)
+    # Miami: "University of Miami" (FL) and "Miami University" (Ohio) are
+    # different schools; "Miami" alone is ambiguous, so pin each distinctly.
+    # "U Miami" is kept verbatim (see _POLISH_KEEP) rather than reduced to "Miami".
+    ('university of miami', 'U Miami'),   # Florida
+    ('miami university', 'Miami Ohio'),   # Ohio
+    ('national taiwan university of science and technology', 'NTUST'),
+    ('national taiwan university of sport', 'NTU Sport'),
+    ('missouri university of science and technology', 'Missouri S&T'),
+    ('queensland university of technology', 'QUT'),  # vs Univ. of Queensland
+    ('shenzhen university of information technology', 'SZIIT'),  # vs Shenzhen Univ.
+    # Vrije Universiteit Amsterdam (VU) — distinct from Univ. of Amsterdam (UvA),
+    # which keeps the bare "Amsterdam". Covers the Dutch spelling and the folded
+    # "Vrije University Amsterdam" form (normalize turns "Univ." -> "university").
+    (['vrije universiteit amsterdam', 'vrije university amsterdam'], 'VU Amsterdam'),
+    ('george washington', 'GW'),  # GWU (DC) — must beat the "washington university" -> WashU anchor
+    ('tokyo university of technology', 'Tokyo Technology'),  # vs Univ. of Tokyo
+    # University of Texas system: the broad "University of Texas" anchor folds
+    # every campus to UT Austin, so pin the distinct ones first.
+    ('university of texas m.d. anderson', 'MD Anderson'),
+    ('university of texas, md anderson', 'MD Anderson'),
+    ('university of texas md anderson', 'MD Anderson'),
+    ('university of texas at arlington', 'UT Arlington'),
+    ('university of texas at san antonio', 'UTSA'),
+    ('university of texas southwestern', 'UT Southwestern'),
+    ('university of texas medical branch', 'UTMB'),
+    ('university of texas health science ctr. at san antonio', 'UT Health San Antonio'),
+    ('university of texas health science ctr. at houston', 'UTHealth Houston'),
+    ('university of texas school of dentistry', 'UTHealth Houston'),
+
     # ---- US national labs (specific names before generic) ------------------
     ('los alamos national lab', 'LANL'),
     ('lawrence livermore', 'LLNL'),
@@ -438,7 +479,19 @@ _ANCHORS_SRC: list = [
     # "urbana" and a "champa…" token, so it can't fire on "University of
     # Illinois Chicago" or the bare "University of Illinois".
     ([r're:university of illinois.*\burbana\b.*\bchampa', 'university of illinois,', 'univ of illinois at urbana'], 'UIUC'),
-    (['university of illinois at chicago', 'uic,'], 'UIC'),
+    # UIC (Chicago campus) must precede the bare-Illinois fallback below so it
+    # isn't swallowed by it. Covers the "at chicago" and bare "illinois chicago"
+    # spellings and the "UIC," initialism.
+    (['university of illinois at chicago', 'university of illinois chicago', 'uic,'], 'UIC'),
+    # Bare "University of Illinois" (no campus qualifier) -> the flagship UIUC.
+    # The Urbana-Champaign and Chicago campus anchors above already win for those
+    # spellings; only the campus-less form reaches here.
+    ('university of illinois', 'UIUC'),
+    # The Beckman Institute for Advanced Science and Technology is UIUC's; its
+    # affiliation strings often omit "University of Illinois", and the name is
+    # unambiguous (distinct from Caltech's "Beckman Institute" and City of Hope's
+    # "Beckman Research Institute"), so map the full phrase to UIUC.
+    ('beckman institute for advanced science and technology', 'UIUC'),
     ('uiuc', 'UIUC'),
     ('purdue', 'Purdue'),
     ('university of minnesota', 'Minnesota'),
@@ -783,7 +836,7 @@ _ANCHORS_SRC: list = [
     ('ihp gmbh', 'IHP'),
     ('chemnitz', 'Chemnitz University of Technology'),
     ('brandenburgische technische', 'BTU Cottbus'),
-    ('rheinland-pfalzische', 'Rheinland-Pfälzische Technische Universität'),
+    ('rheinland-pfalzische', 'RPTU'),
     ([
         'christian-albrechts-universitat', 'christian-albrechts',
         'kiel university', 'university of kiel',
@@ -916,9 +969,10 @@ _ANCHORS_SRC: list = [
     # ("Politechnico" misspelling is folded to "Politecnico" in normalize().)
     ('politecnico di milano', 'PoliMi'),
     ('politecnico di torino', 'PoliTo'),
+    # PoliBa (Politecnico di Bari), distinct from Università di Bari ("Bari").
     ([
         'politecnico di bari', 'polytechnic university of bari',
-    ], 'Polytechnic University of Bari'),
+    ], 'PoliBa'),
     (["scuola superiore sant'anna", "sant'anna"], "Scuola Superiore Sant'Anna"),
     ('sapienza', 'Sapienza'),
     ('universita cattolica del sacro cuore', 'Università Cattolica del Sacro Cuore'),
@@ -987,10 +1041,10 @@ _ANCHORS_SRC: list = [
     (['delft university of technology', 'tu delft'], 'TU Delft'),
     ('university of twente', 'Twente'),
     (['university of amsterdam', 'university amsterdam'], 'Amsterdam'),
-    ('institute: amsterdam medical', 'Institute: Amsterdam Medical Center'),
+    ('institute: amsterdam medical', 'Amsterdam UMC'),
     ('the hague university', 'The Hague University'),
     ('photon design', 'Photon Design'),
-    ('lionix bv international', 'Lionix BV International'),
+    ('lionix bv international', 'LioniX International'),
 
     # ---- Belgium -----------------------------------------------------------
     ('ku leuven', 'KU Leuven'),
@@ -1080,7 +1134,7 @@ _ANCHORS_SRC: list = [
     ('lodz university of technology', 'Lodz University of Technology'),
     ([
         'uniwersytet mikolaja kopernika', 'nicolaus copernicus',
-    ], 'Uniwersytet Mikolaja Kopernika W Toruniu'),
+    ], 'Nicolaus Copernicus'),
     ('polish academy', 'Polish Academy'),
     ('vilnius university', 'Vilnius University'),
     # FTMC's English name; place before bare 'vilnius,' so it wins for the
@@ -1129,7 +1183,7 @@ _ANCHORS_SRC: list = [
     ('tomsk state university of control systems', 'TUSUR'),
     ('tomsk state university', 'Tomsk State University'),
     ('v.e. zuev institute', 'V.E. Zuev Institute of Atmospheric Optics'),
-    ('kutateladze inst', 'Kutateladze Inst Thermophys SB RAS'),
+    ('kutateladze inst', 'Kutateladze Institute'),
     ('orel state university', 'Orel State University'),
     ('university of nizhny novgorod', 'University of Nizhny Novgorod'),
     ('russian quantum', 'Russian Quantum Ctr'),
@@ -1431,7 +1485,7 @@ _ANCHORS_SRC: list = [
     ('bunkyo university', 'Bunkyo University'),
     ('tamagawa university', 'Tamagawa'),
     ('hanseo university', 'Hanseo University'),
-    ('toyota tech', 'Toyota Tech Inst'),
+    ('toyota tech', 'Toyota Technological Institute'),
     ('toyota central r&d', 'Toyota Central R&D Labs Inc'),
     ('toyota research institute of north america', 'Toyota Research Institute of North America'),
     ('nihon university', 'Nihon University'),
@@ -1544,7 +1598,7 @@ _ANCHORS_SRC: list = [
         'institute of high performance computing', 'q.inc',
         'quantum innovation centre',
     ], 'A*STAR'),
-    ('maritime', 'Maritime Port Auth SG'),
+    ('maritime', 'Maritime Port Authority'),
     ('singtel', 'Singtel'),
     ('singapore telecommunications', 'Singapore Telecommunications Limited (Singtel)'),
     (['national space technology and information center', 'nstic'], 'NSTIC Singapore'),
@@ -1558,7 +1612,7 @@ _ANCHORS_SRC: list = [
     # section, AFTER the Taiwan anchors (NTU Taiwan / NYCU / NTHU) and the
     # Athens anchor (NTUA) have already run, so they can't capture those.
     (['nanyang technological institute', r're:\bntu\b'], 'NTU Singapore'),
-    ('university of the philippines', 'University of the Philippines - Visayas'),
+    ('university of the philippines', 'UP Visayas'),
     ('de la salle', 'De La Salle University'),
     ('commission on higher education', 'Commission on Higher Education'),
     ('asian institute of technology', 'AIT'),
@@ -1579,7 +1633,7 @@ _ANCHORS_SRC: list = [
     (['iit indore', 'indian institute of technology indore', 'indian institute of technology (iit) indore', r're:indian institu[t]?e of technology \(iit\) indore'], 'IIT Indore'),
     ([
         'iit jodhpur', 'indian institute of technology jodhpur',
-    ], 'Indian Inst Tech Jodhpur'),
+    ], 'IIT Jodhpur'),
     ([
         'indian institute of technology ropar', 'iit ropar',
     ], 'Indian Institute of Technology Ropar'),
@@ -1824,7 +1878,7 @@ _ANCHORS_SRC: list = [
     (['av incorporated', 'av inc.'], 'AV Inc.'),
 
     # ---- Ad-hoc rarities ---------------------------------------------------
-    ('uniwersytet mikolaja', 'Uniwersytet Mikolaja Kopernika W Toruniu'),
+    ('uniwersytet mikolaja', 'Nicolaus Copernicus'),
     ([
         'aerospace, mechanical engineering, university of notre dame',
         'notre dame',
@@ -2125,18 +2179,94 @@ COMMON_REGION_TOKENS = {
 }
 
 
+# University-designator words: the English word and "Univ"/"Univ." abbreviation
+# the source uses heavily, plus the foreign stems (accented and accent-free).
+# Ordered longest-first so the alternation prefers the full foreign stem before
+# the bare "univ". The trailing dot is matched separately ("\.?") in the regex.
+_UNIV_WORD = (r'(?:université|universität|università|universidade|universidad|'
+              r'universiteit|universite|universitat|universita|university|univ)')
+# Connective after a leading designator ("University OF X", "Univ. DE X").
+_UNIV_CONN = r'(?:of|de|del|della|di|do|da|der|des|du)'
+_UNIV_TOKEN_RE = re.compile(
+    r'(?i)^(?P<before>.*?)\s*\b' + _UNIV_WORD + r'\b\.?\s*'
+    r'(?P<conn>(?:' + _UNIV_CONN + r')\s+)?(?P<after>.*)$')
+
+# Generic university qualifiers: when one of these is all that precedes the
+# designator, the distinctive name is what FOLLOWS ("Technische University
+# Berlin" -> "Berlin"), not the qualifier itself.
+_GENERIC_QUALIFIER = {
+    'technische', 'technical', 'technological', 'polytechnic', 'polytechnical',
+    'politecnico', 'politecnica', 'pontificia', 'pontifical', 'pontificie',
+}
+
+
 def _strip_university_word(segment: str) -> str:
-    """Strip trailing/leading 'university' to derive a place-only short name."""
-    s = segment.strip()
-    # "University of X" -> "X"
-    m = re.match(r'^(?:the\s+)?university of\s+(.+)$', s, re.IGNORECASE)
-    if m:
-        return m.group(1).strip()
-    # "X University" -> "X"
-    m = re.match(r'^(.+?)\s+university$', s, re.IGNORECASE)
-    if m:
-        return m.group(1).strip()
+    """Reduce a university name to its distinctive place/proper-noun part.
+
+    Splits on the university designator and keeps the recognizable name, per
+    house style:
+        "University of Michigan"              -> "Michigan"
+        "Michigan State University"           -> "Michigan State"
+        "Konkuk Univ."                        -> "Konkuk"
+        "Univ. de Montpellier"                -> "Montpellier"
+        "AGH Univ. of Science and Technology" -> "AGH"
+        "Eulji University School of Medicine" -> "Eulji"
+    Rule: text BEFORE the designator wins when present (it's the institution's
+    name); otherwise the text AFTER it (the "University of X" shape). Guards
+    "University College X", a distinct institution type, from being cut down.
+    """
+    s = re.sub(r'^the\s+', '', segment.strip(), flags=re.IGNORECASE)
+    # German closed compounds ("Universitätsklinikum/Universitätsmedizin/
+    # UniversitätsSpital Bonn") — the designator is glued to a noun, so the
+    # word-boundary split below can't see it. Keep the distinctive name before
+    # the compound if any ("Charité Universitätsmedizin Berlin" -> "Charité"),
+    # else the city/name after it ("Universitätsklinikum Bonn" -> "Bonn").
+    m = re.match(r'(?i)^(?P<before>.*?)\s*\buniversit[äa]ts\S*\s*(?P<after>.*)$', s)
+    if m and (m.group('before').strip() or m.group('after').strip()):
+        return (m.group('before').strip(' ,-') or m.group('after').strip())
+    m = _UNIV_TOKEN_RE.match(s)
+    if not m:
+        return s
+    before = m.group('before').strip(' ,-')
+    after = m.group('after').strip()
+    # Italian "Università degli Studi di X" and the "Studi di X" tail -> X.
+    after = re.sub(r"(?i)^(?:degli\s+studi\s+|studi\s+)(?:di|del|della|dell'?)\s+",
+                   '', after).strip()
+    # "University College X" / "Univ. College X" — keep as-is (not "College X").
+    if not before and re.match(r'college\b', after, re.IGNORECASE):
+        return s
+    # "before" is normally the institution's name ("Michigan State University" ->
+    # "Michigan State"), EXCEPT when it's only a generic qualifier ("Technische"/
+    # "Polytechnic"/"Pontificia ... University X"), where the distinctive part is
+    # what follows.
+    if before.lower() in {'technische', 'technical', 'technological'} and after:
+        return 'TU ' + after          # standard short for technical universities
+    if before and before.lower() not in _GENERIC_QUALIFIER:
+        return before
+    if after:
+        return after
+    return before or s
+
+
+def _strip_parens(s: str) -> str:
+    """Remove every parenthetical group, e.g. a "(United States)" /
+    "(Korea, Republic of)" country tail or an embedded "(China)". Repeated so
+    nested/adjacent groups all go. Keeps the short name free of parentheses."""
+    prev = None
+    while prev != s:
+        prev = s
+        s = re.sub(r'\s*\([^()]*\)', '', s).strip()
     return s
+
+
+def _final_clean(s: str) -> str:
+    """Final tidy of a short name: no parentheses, no commas, no periods —
+    only internal hyphens and ampersands survive as punctuation."""
+    s = _strip_parens(s)
+    s = s.replace(',', ' ')
+    s = s.replace('.', '')                    # "Co." -> "Co", "I.D." -> "ID"
+    s = re.sub(r'\s+', ' ', s).strip()
+    return s.strip(' -')
 
 
 def _strip_legal_suffix(s: str) -> str:
@@ -2157,6 +2287,11 @@ def _strip_legal_suffix(s: str) -> str:
         r'k\.?k\.?', r'oy', r'ab', r'a/s', r's\.p\.a\.?', r'spa',
         r'oyj', r'asa', r'nv', r'n\.v\.?', r'sas', r's\.a\.s\.?',
         r'co\.', r'company',
+        # German registered association / Mexican civil association / Czech &
+        # Polish Ltd / professional corp — trailing entity tags, not part of the
+        # institution name.
+        r'e\.?\s*v\.?', r'a\.?\s*c\.?', r'p\.?\s*c\.?',
+        r's\.?\s*r\.?\s*o\.?', r'sp\.?\s*z\s*o\.?\s*o\.?', r's\.l\.?',
     )
     # Require a separator (comma, space, or start) before the designator so it
     # can't chew into a real word — e.g. "s.a." must not match the "sa" in
@@ -2238,6 +2373,11 @@ def fallback_shorten(raw: str) -> str:
     if acr:
         return acr
 
+    # Remove any parenthetical (country tail like "(United States)" /
+    # "(Korea, Republic of)", or an embedded "(China)") before anything else, so
+    # no short name ever carries parentheses and a "(Country, qualifier)" tail
+    # can't survive the comma-split below as a stray "Republic of)" fragment.
+    raw = _strip_parens(raw)
     raw = _strip_legal_suffix(raw)
     parts = [p.strip() for p in raw.split(',') if p.strip()]
 
@@ -2282,15 +2422,11 @@ def fallback_shorten(raw: str) -> str:
     # survives until now (it's the tail of parts[0]). Strip it here so
     # "HyperLight Corp." -> "HyperLight", "Metalenz Inc" -> "Metalenz", etc.
     inst = _strip_legal_suffix(inst)
-    # Convert "University of X" -> "U X" if it's a simple form (one or two words).
-    m = re.match(r'^(?:the\s+)?university of\s+(.+)$', inst, re.IGNORECASE)
-    if m:
-        place = m.group(1).strip()
-        # Cap to ~2 words to keep it short ("Bristol", "Western Australia").
-        words = place.split()
-        if len(words) <= 3:
-            return 'U ' + ' '.join(words)
-    return inst
+    # Reduce a university designator to its place/proper-noun ("University of
+    # Michigan" -> "Michigan", "Konkuk Univ." -> "Konkuk") and strip any
+    # remaining stray punctuation.
+    inst = _strip_university_word(inst)
+    return _final_clean(inst)
 
 
 # ---------------------------------------------------------------------------
@@ -2346,7 +2482,59 @@ RAW_OVERRIDES: dict[str, str] = {
 # Main canonicalization
 # ---------------------------------------------------------------------------
 
+# Curated labels kept verbatim by _polish — the bare place name would be
+# ambiguous, so the disambiguating "U " prefix is deliberately preserved.
+_POLISH_KEEP = {'U Miami'}
+
+
+def _polish(short: str) -> str:
+    """Enforce house style on a final short label, whatever produced it (anchor,
+    override, or fallback). General pass, not a per-string fix:
+      - no parentheses ("Konkuk Univ. (Korea" / "X (Country)" never survive);
+      - drop the university designator to a place name ("Ain Shams University" ->
+        "Ain Shams", "University of Huddersfield" -> "Huddersfield");
+      - drop a lone "U " / " U" affix in favor of the place ("U Chicago" ->
+        "Chicago", "American U" -> "American"); acronym prefixes like "UC", "UT",
+        "TU", "UMass" (no following space) are untouched;
+      - strip stray commas/abbreviation dots (hyphens and '&' are kept).
+    Idempotent: labels already in good form pass through unchanged."""
+    if short.strip() in _POLISH_KEEP:
+        return short.strip()
+    s = _strip_parens(short)
+    # Drop a leading "<Label>:" prefix ("Institute: Amsterdam Medical Center" ->
+    # "Amsterdam Medical Center") and a leading lowercase article.
+    s = re.sub(r'^[A-Za-z][\w.&-]*:\s+', '', s)
+    s = re.sub(r'(?i)^the\s+', '', s)
+    s = _strip_university_word(s)
+    # Drop any remaining standalone "Univ"/"Univ." abbreviation token (a mid-name
+    # one the leading/trailing rules don't reach, e.g. "Azienda Ospedaliera Univ.
+    # Careggi"). Only the abbreviation — the full word "University" is left for
+    # the College guard above to protect.
+    s = re.sub(r'\bUniv\.?\b', '', s, flags=re.IGNORECASE)
+    s = _strip_legal_suffix(s)         # "Aloe Semiconductor Inc." -> "Aloe Semiconductor"
+    # A standalone "U" token is the "University" abbreviation ("U Chicago",
+    # "Leibniz U Hannover", "American U") — drop it for the place name. Multi-
+    # letter acronyms ("UC", "NYU", "VU") have no word boundary and are untouched.
+    s = re.sub(r'\bU\b', '', s)
+    # Expand the "Nat"/"Natl" abbreviation that some short forms carry
+    # ("Seoul Nat" -> "Seoul National", "Hefei Natl Lab" -> "Hefei National Lab").
+    s = re.sub(r'(?i)\bnatl?\b', 'National', s)
+    out = _final_clean(s)
+    # Never collapse to nothing: a degenerate input that is only a legal tag
+    # ("A.C.") keeps its parenthesis-free, comma-free original rather than ''.
+    return out or _final_clean(_strip_parens(short)) or short.strip()
+
+
 def canonicalize(raw: str) -> str:
+    out = _polish(_canonicalize(raw))
+    if out.strip():
+        return out
+    # Degenerate input (only a legal tag like "A.C.") polished to nothing — keep
+    # the parenthesis/comma-free original so the label is never empty.
+    return _final_clean(_strip_parens(raw)) or raw.strip()
+
+
+def _canonicalize(raw: str) -> str:
     if raw in RAW_OVERRIDES:
         return RAW_OVERRIDES[raw]
     norm = normalize(raw)

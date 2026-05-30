@@ -25,15 +25,15 @@ Department of Electrical Engineering, Technion-Israel Institute of Technology (I
 Department of Electrical and Computer Engineering, Princeton University (USA)	Princeton
 Department of Electrical and Computer Engineering, Technical University of Munich (Germany)	TU Munich
 Department of Electrical and Computer Engineering, University of Waterloo (Canada)	Waterloo
-Department of Electrical and Electronic Engineering, Ariel University (Israel)	Ariel U
+Department of Electrical and Electronic Engineering, Ariel University (Israel)	Ariel
 Department of Electronic and Electrical Engineering, University College London (UK)	UCL
 Department of Electronics and Telecommunications, Politecnico di Torino (Italy)	PoliTo
 Department of Materials Science and Engineering, University of Delaware (USA)	Delaware
 Department of Physics, Humboldt University (Germany)	Humboldt
 Department of Physics, Konstanz University (Germany)	Konstanz
-Dipartimento di Fisica “E. Fermi”, Università di Pisa (Italy)	U Pisa
+Dipartimento di Fisica “E. Fermi”, Università di Pisa (Italy)	Pisa
 Dipartimento di Fisica, Politecnico di Milano (Italy)	PoliMi
-Dipartimento di Fisica, Universitá di Pisa (Italy)	U Pisa
+Dipartimento di Fisica, Universitá di Pisa (Italy)	Pisa
 Dipartimento di Scienze, Università degli Studi Roma (Italy)	Roma Tre
 ETH Zurich (Switzerland)	ETH Zürich
 Ernst Ruska-Centre for Microscopy and Spectroscopy with Electrons (Germany)	Ernst Ruska Centre
@@ -57,7 +57,7 @@ Infineon Technologies (Austria)	Infineon Technologies
 Institut Prime, Université de Poitiers (France)	Institut Prime
 Institut Universitaire de France – IUF (France)	IUF
 Institut für Biophysik, Goethe Universität Frankfurt (Germany)	Institut für Biophysik
-Institut für Halbleiter und Festkörperphysik, Johannes Kepler Universität (Austria)	Johannes Kepler University
+Institut für Halbleiter und Festkörperphysik, Johannes Kepler Universität (Austria)	Johannes Kepler
 Institute for Quantum Electronics and Quantum Center, ETH Zürich (Switzerland)	ETH Zürich
 Institute for Quantum Electronics, Department pf Physics, ETH Zürich (Switzerland)	ETH Zürich
 Institute for Quantum Electronics, ETH Zurich (Switzerland)	ETH Zürich
@@ -119,7 +119,7 @@ Sapienza Univ. of Rome, Department of Physics (Italy)	Sapienza
 School of Applied and Engineering Physics, Mohammed VI Polytechnic University (Morocco)	Mohammed VI
 School of Electronic and Electrical Engineering, University of Leeds (UK)	Leeds
 School of Engineering, RMIT University (Australia)	RMIT
-School of Physics and Astronomy, The University of Nottingham (UK)	U Nottingham
+School of Physics and Astronomy, The University of Nottingham (UK)	Nottingham
 Scientific IT Services, ETH Zurich (Switzerland)	ETH Zürich
 Shanghai Institute of Microsystem and Information Technology, Chinese Academy of Sciences (China)	SIMIT
 Silicon Austria Labs (Austria)	Silicon Austria Labs
@@ -146,7 +146,7 @@ University of Regensburg (Germany)	Regensburg
 University of Würzburg (Germany)	Würzburg
 University of Würzburg, Physikalisches Institut, Lehrstuhl für Technische Physik (Germany)	Würzburg
 Università Roma Tre, Department of Sciences (Italy)	Roma Tre
-Università di Pisa, Department of Physics (Italy)	U Pisa
+Università di Pisa, Department of Physics (Italy)	Pisa
 Université Laval – Canada & Télécom Paris – France	Laval
 Université Paris-Saclay, CNRS, Centre de Nanosciences et de Nanotechnologies (France)	C2N Paris-Saclay
 Vigo Photonics SA (Poland)	Vigo Photonics
