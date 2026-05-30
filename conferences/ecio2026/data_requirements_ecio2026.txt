@@ -141,3 +141,52 @@ description: Lab-and-company-visit page HTML — lists each lab tour and
 manual: Open https://www.ecio-conference.org/lab-and-company-visit/ in a
   browser and Save Page As… "Webpage, HTML Only" into data/ as exactly
   ECIO26_LabTours.html .
+
+# The three Optica schedule pages below are the richest enrichment source: the
+# full ECIO program is mirrored on Optica's event site as a per-day schedule
+# whose "Detailed View" cells carry the COMPLETE author list (with each
+# author's affiliation) AND the abstract for every talk — neither of which the
+# detailed-schedule PDF renders. The processor cross-references them by session
+# code + talk title to fill author lists and abstracts on the PDF-derived oral
+# talks, and to populate the poster sessions the PDF leaves empty (the wide
+# grid lists no individual posters). All three are optional: missing them just
+# reverts oral talks to PDF-only authorship and leaves the poster sessions
+# empty. They are browser-rendered (a JavaScript single-page app behind bot
+# protection), so the fetcher drives a headed Chromium via Playwright rather
+# than a plain HTTP download; the manual fallback below reproduces those steps
+# by hand.
+
+[file: ECIO26_OpticaMonday.html]
+required: no
+produced_by: fetch
+description: Optica schedule — Monday. Rendered HTML of the Monday program
+  (oral sessions M1A–M3C plus Poster Blitz 1.1/1.2), with full author lists,
+  affiliations, and abstracts in every talk cell.
+manual: Open https://www.optica.org/events/topical_meetings/european_conference_on_integrated_optics_(ecio)/schedule/#/Monday
+  in a browser. Toggle the view selector from "Compact View" to "Detailed
+  View", then click EVERY "Continue Reading" link so all abstracts are
+  expanded. Save Page As… "Webpage, HTML Only" into data/ as exactly
+  ECIO26_OpticaMonday.html . (If a Radware "are you a bot" / CAPTCHA page
+  appears, solve it once; a normal headed browser session passes.)
+
+[file: ECIO26_OpticaTuesday.html]
+required: no
+produced_by: fetch
+description: Optica schedule — Tuesday. Rendered HTML of the Tuesday program
+  (oral sessions T1A–T2C plus Poster Blitz 2.1/2.2), with full author lists,
+  affiliations, and abstracts in every talk cell.
+manual: Open https://www.optica.org/events/topical_meetings/european_conference_on_integrated_optics_(ecio)/schedule/#/Tuesday
+  in a browser. Switch to "Detailed View", click EVERY "Continue Reading"
+  link, then Save Page As… "Webpage, HTML Only" into data/ as exactly
+  ECIO26_OpticaTuesday.html .
+
+[file: ECIO26_OpticaWednesday.html]
+required: no
+produced_by: fetch
+description: Optica schedule — Wednesday. Rendered HTML of the Wednesday
+  program (oral sessions W1A–W3B), with full author lists, affiliations, and
+  abstracts in every talk cell.
+manual: Open https://www.optica.org/events/topical_meetings/european_conference_on_integrated_optics_(ecio)/schedule/#/Wednesday
+  in a browser. Switch to "Detailed View", click EVERY "Continue Reading"
+  link, then Save Page As… "Webpage, HTML Only" into data/ as exactly
+  ECIO26_OpticaWednesday.html .

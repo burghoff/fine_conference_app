@@ -1,23 +1,307 @@
+AIT Austrian Institute of Technology	AIT
+AMO GmbH	AMO
+AMOtronics UG	AMOtronics UG
 Albis Optoelectronics	Albis Optoelectronics
-Aylight AG	Aylight
+Alpes Lasers	Alpes Lasers
+Aluvia Photonics B.V.	Aluvia Photonics
+Aristoteleio Panepistimio Thessalonikis	Thessaloniki
+Austrian Institute of Technology	AIT
+Aylight	Aylight
+Beihang University	Beihang
+Beihang university	Beihang
+Beijing University of Posts & Telecom	Beijing
+Beijing University of Posts and Telecommunications	BUPT
+Ben-Gurion University of the Negev	Ben-Gurion
+C2N	C2N Paris-Saclay
+C2N-CNRS	CNRS
 CCRAFT	CCRAFT
-COMSOL Multiphysics GmbH	Comsol Multiphysics
+CEA LETI	CEA LETI
+CEA Leti	CEA Leti
+CEA-LETI	CEA-Leti
+CEA-Leti	CEA-Leti
+CNRS	CNRS
+COMSOL	Comsol Multiphysics
+CRHEA	CRHEA
+CROMA	CROMA
+CSEM	CSEM
+Caltech	Caltech
+Cardiff University	Cardiff
+Casmir Institute	Casmir Institute
+Celare Quantum Communication	Celare Quantum Communication
+Center for Interdisciplinary Research And Innovation	Center for Interdisciplinary Research And Innovation
+Center for Interdisciplinary Research and Innovation	Center for Interdisciplinary Research and Innovation
+Center for Interdisciplinary Research and Innovation (CIRI)	CIRI
+Centre National Recherche Scientifique	Centre National Recherche Scientifique
+Centre Suisse d'Electronique et de Micro	CSEM
+Centre de Nanosciences et de Nanotechnol	Centre de Nanosciences et de Nanotechnol
+Centre de Nanosciences et de Nanotechnologies	C2N Paris-Saclay
+Centre de Nanosciences et de Nanotechnologies, Université Paris-Saclay, CNRS	C2N Paris-Saclay
+Centre des Nanosciences et des Nanotechnologies	Centre des Nanosciences et des Nanotechnologies
+Centre for Nanosciences and Nanotechnology, CNRS, Universite Paris-Saclay, UMR 9001	Paris-Saclay
+Chalmers University of Technology	Chalmers
+Changzhou Smartcore Optoelectronic Limited	Changzhou Smartcore Optoelectronic
+China Academy of Science	China Academy of Science
+Chinese Academy of Sciences	CAS
+Chinese University of Hong Kong	CUHK
+Chongqing University	CQU
+Chungnam National University	Chungnam National
+City University of Hong Kong	CityU HK
 Coherent	Coherent
-CyberRidge	CyberRidge
+Coherent Corp. Zürich	Coherent
+Colorado School of Mines	Colorado School of Mines
+Columbia University	Columbia
+Cornell University	Cornell
+Cyber Ridge	Cyber Ridge
+Cycle GmbH	Cycle
+Daegu Gyeongbuk Institute of Science & Technology	Daegu Gyeongbuk Institute of Science & Technology
+Daegu Gyeongbuk Institute of Science and Technology	Daegu Gyeongbuk Institute of Science and Technology
+Danmarks Tekniske Universitet	DTU
+Deeplight SA	DeepLight SA/GmbH
+Delft University of technology	TU Delft
+Department of Informatics - Aristoteleio Panepistimio Thessalonikis	Thessaloniki
+Department of Materials Science and Engineering	Department of Materials Science and Engineering
+Department of Physics - Aristoteleio Panepistimio Thessalonikis	Thessaloniki
+Department of Physics, College of Science and Humanities, Shaqra University, Shaqra, Kingdom of Saudi Arabia	Shaqra
+Deutsches Elektronen-Synchrotron	Deutsches Elektronen-Synchrotron
+Dublin City University	Dublin City
+EPFL	EPFL
+ETH	ETH Zürich
 ETH Zurich	ETH Zürich
-FEMTOPRINT SA	FEMTOPRINT SA
+ETH Zürich	ETH Zürich
+ETHZ	ETH Zürich
+Ecole Centrale de Lyon	Ecole Centrale de Lyon
+Ecole Polytechnique Fédèrale de Lausanne	EPFL
+Ecole militaire polytechnique	Ecole militaire polytechnique
+Eidgenössische Technische Hochschule Zür	ETH Zürich
+Eindhoven University of Technology	TU Eindhoven
+Enlightra	Enlightra
+FEMTO-ST	FEMTO-ST
+Faculty of Electrical Engineering, University of Ljubljana	Ljubljana
+Femto-ST	Femto-ST
+Femtoprint	Femtoprint
+Ferdinand-Braun-Institut (FBH)	FBH
+Fields at Work GmbH	Fields at Work
+Forschungszentrum Jülich GmbH	Forschungszentrum Jülich
+Foundation for Research on Information Technologies in Society (IT'IS)	Foundation for Research on Information Technologies in Society
+Fraunhofer HHI	Fraunhofer HHI
+Fraunhofer IAF	Fraunhofer
+Fraunhofer IZM	Fraunhofer
+Fraunhofer Institute for Applied Optics and Precision Engineering IOF	Fraunhofer
+Friedrich-Schiller-Universität Jena	Jena
+Gent University	Gent
+Ghent University	Ghent
+Ghent University - imec	imec
+HPE	HPE
+Harvard	Harvard
+Harvard University	Harvard
+Heinz Nixdorf Institute	Heinz Nixdorf Institute
+Helmholtz-Zentrum Dresden-Rossendorf (HZDR)	HZDR
+Heriot-Watt University Edinburgh Campus	Heriot-Watt
+IBM Research	IBM
+IBM Research Europe - Zurich	IBM
+IBM Zurich	IBM
+IDLab, Department of Information Technology, Ghent University - imec	imec
 IHP	IHP
+III V Lab	III V Lab
+III-V Lab	III-V Lab
+IMEC	imec
+IMT Bucharest	IMT Bucharest
+INTEC, Ghent University-imec	imec
+IPAG CNRS	CNRS
+IREC	IREC
 IST Austria	IST Austria
+Indian Institute of Science	IISc Bangalore
+Indian Institute of Technology Bombay	IIT Bombay
+Indian Institute of Technology Delhi	IIT Delhi
+Indian Institute of Technology Madras	IIT Madras
+Institucio Catalana de Recercai Estudis Avancats (ICREA), Passeig Lluis Companys 23	ICREA
+Institut d’Electronique, Microélectronique et Nanotechnologie	Institut d’Electronique
+Institut für Hochfrequenztechnik	Institut für Hochfrequenztechnik
+Institute for Complex Systems, National Research Council (ISC-CNR), Via dei Taurini 19	Institute for Complex Systems
+Institute for Photonic Quantum Systems	Institute for Photonic Quantum Systems
+Institute of Chemical Physics	Institute of Chemical Physics
+Institute of Southwestern Communication	Institute of Southwestern Communication
+Instituto de Investigación en Ingeniería de Aragón (I3A), Universidad de Zaragoza	Instituto de Investigación en Ingeniería de Aragón
+International Iberian Nanotech Lab	International Iberian Nanotech Lab
+Interuniversity Microelectronics Center	Interuniversity Microelectronics Center
+Interuniversity Microelectronics Centre	Interuniversity Microelectronics Centre
+Jet Propulsion Laboratory	JPL
+KOREA ADVANCED MATERIALS Co., Ltd	KOREA ADVANCED MATERIALS
+KTH Royal Institute of Technology	KTH
+KU LeuveCelestijnenlaan 200D, Belgium	KU LeuveCelestijnenlaan 200D
+Karlsruhe Institute of Technology (KIT)	KIT
+Karlsruher Institut für Technologie	Karlsruher Institut für Technologie
+Keio University	Keio
+Kongju National University	Kongju National
+Konkuk University	Konkuk
+Korea Advanced Inst of Science & Tech	Korea Advanced Inst of Science & Tech
+Korea Advanced Institute of Science and Technology	KAIST
+Koç Universitesi	Koç Universitesi
+Kungliga Tekniska Hogskolan	Kungliga Tekniska Hogskolan
+LAAS CNRS	CNRS
+LICB	LICB
 LIGENTEC SA	Ligentec
+LIGENTEC SA.	Ligentec
+Laboratoire Interdisciplinaire Carnot de Bourgogne	Bourgogne
+Laboratoire Kastler Brossel	Laboratoire Kastler Brossel
+Laboratoire PhLAM	Laboratoire PhLAM
+Laboratoire Photonique Numérique et Nanosciences (LP2N)	LP2N
+Laboratoire XLIM	XLIM
+Lepto GmbH	Lepto
+Ligentec	Ligentec
+Ligentec SA	Ligentec
+Lightium	Lightium
 Lightium AG	Lightium
+LioniX International	LioniX International
+LioniX International BV	LioniX International
+Lubianskii, Technische Universität Munchen	TU Munich
 Luceda Photonics	Luceda Photonics
+Ludwig-Maximillians-Universität Munchen	Ludwig-Maximillians
+Lumiphase AG, Laubisrütistrasse 44, Switzerland	Lumiphase
+Luxtelligence	Luxtelligence
 Luxtelligence SA	Luxtelligence SA
-Marvell Technologies (formerly Polariton Technologies AG)	Marvell
+MLU Halle-Wittenberg	MLU Halle-Wittenberg
+Massachusetts Institute of Technology	MIT
+Mbryonics Ltd. Galway Ireland	Mbryonics Ltd Galway Ireland
+Menhir Photonics	Menhir Photonics
 Menhir Photonics AG	Menhir Photonics
+Microliquid	Microliquid
+Military University of Technology	Military
+Miraex SA	Miraex SA
+Munster Technological University	Munster Technological
+NIST Boulder	NIST
+Nanobiosensors and Bioanalytical Applications Group, Catalan Institute of Nanoscience and Nanotechnology (ICN2)	Nanobiosensors and Bioanalytical Applications Group
+National Key Laboratory of Materials for Integrated Circuits, Shanghai Institute of Microsystem and Information Technology	SIMIT
+National Nanofab Center	National Nanofab Center
+National Research Council Canada	NRC Canada
+National Taipei University	National Taipei
+National Taiwan Ocean University	National Taiwan Ocean
+National research council	National research council
+New York University Abu Dhabi	NYU
+Niels Bohr Institute, University of Copenhagen	Copenhagen
+Nokia Bell Labs	Nokia Bell Labs
+Northeast Normal University	Northeast Normal
+Nottingham Trent University	Nottingham Trent
+Now with: Infineon Technologies AG	Now with: Infineon Technologies
+OST - Eastern Switzerland University of Applied Sciences	OST - Eastern Switzerland
+Ohio State University	Ohio State
+Optoelectronics Research Centre	Optoelectronics Research Centre
+PICAdvanced, S.A.	PICAdvanced
+Paderborn University	Paderborn
+Paul Scherrer Institut	PSI
+Peking University	Peking
+Photon Bridge	Photon Bridge
+Photonic Research Group, Department of Information Technology, Ghent University - imec	imec
+Photonics Research Group (UGent - IMEC)	imec
+Physical Research Laboratory	Physical Research Laboratory
+Physics and Chemistry of Nanostructures	Physics and Chemistry of Nanostructures
 Point Cloud	Point Cloud
-Politechnico di Milano	PoliMi
+Polariton (part of Marvell)	Marvell
+Polariton Technologies AG	Polariton Technologies
+Politecnico Di Milano	PoliMi
+Politecnico di Bari - DEI	PoliBa
+Politecnico di Milano	PoliMi
+Politecnico di Torino	PoliTo
+Polytechnico di Milano	Polytechnico di Milano
+PsiQuantum	PsiQuantum
+Punjab Engineering College (Deemed to be University)	Punjab Engineering College
+Q.ANT GmbH	QANT
+QphoX	QphoX
 QuEra	QuEra
+Queen's University	Queen’s
+Queen’s University Belfast	Queen’s
+RMIT University	RMIT
+RWTH Aachen University	RWTH Aachen
+Republic of Korea Navy	Republic of Korea Navy
+Royal Melbourne Institute of Technology University	RMIT
+STMicroelectronics	STMicro
+Sandia National Laboratories	Sandia
+School of Electrical Engineering and Computer Science	School of Electrical Engineering and Computer Science
+Scuola Superiore Sant'Anna	Scuola Superiore Sant'Anna
+SemiNex Corporation	SemiNex
+Shanghai Jiao Tong University	SJTU
+SiPhotonIC ApS	SiPhotonIC ApS
+Sichuan University	Sichuan
+Silicon Austria Labs	Silicon Austria Labs
+Silicon Austria Labs GmbH	Silicon Austria Labs
+Silterra	SilTerra
+Silterra Malaysia	SilTerra Malaysia
+Stanford University	Stanford
+Swinburne University of Technology	Swinburne
+TOPTICA Photonics AG	Toptica
+TU Delft	TU Delft
+TU Wien	TU Vienna
+Tampere University	Tampere
+Technical University of Denmark	DTU
+Technical University of Eindhoven	TU Eindhoven
+Technical University of Munich	TU Munich
+Technische Universiteit Eindhoven	TU Eindhoven
+Technische Universität Munchen	TU Munich
+Telecom Paris, Institut Polytechnique de Paris	IP Paris
+Thales Research and Technology	Thales
+The Chinese University of Hong Kong	CUHK
+The Chinese University of Hong Kong (Shenzhen)	CUHK Shenzhen
+The Ohio State University	Ohio State
+Toptica Eagleyard	Toptica
+Trinity College Dublin	Trinity College Dublin
+Tsinghua University	Tsinghua
+Twente University	Twente
+Tyndall National Institute	Tyndall
+Tyndall National Institute, University of Cork	Tyndall
 UCLA	UCLA
-Vario-Optics AG	Vario-Optics
+UCSB	UC Santa Barbara
+UGent	Ghent
+UGent, IMEC	imec
+UPV	UPV
+UPVfab	UPVfab
+UiT The Arctic University of Norway	UiT The Arctic
+Univ. Grenoble Alpes	Grenoble Alpes
+Universidad Politécnica de Madrid	Politecnica de Madrid
+Universidad Politécnica de Valencia, Valencia, Spain	Politécnica de Valencia
+Universidad de Malaga	Malaga
+Universidad de Málaga	Málaga
+Universidade de Aveiro	Aveiro
+Universita degli Studi di Firenze	Firenze
+Universitat Politècnica de València	Politecnica de Valencia
+Universitat Politècnica de València (UPV)	Politecnica de Valencia
+Universite Paris-Saclay	Paris-Saclay
+Universiteit Gent	Gent
+Universiteit Twente	Twente
+Universitie Bourgogne Europe	Universitie Bourgogne Europe
+University College London	UCL
+University of Bath	Bath
+University of California Los Angeles	UCLA
+University of Central Florida, CREOL	UCF
+University of Dublin Trinity College	Dublin Trinity College
+University of Ioannina	Ioannina
+University of Konstanz	Konstanz
+University of Minnesota	Minnesota
+University of Pennsylvania	UPenn
+University of Science and Technology of China	USTC
+University of Southampton	Southampton
+University of Stuttgart	Stuttgart
+University of Sydney	Sydney
+University of Twente	Twente
+University of Vigo	Vigo
+University of Wisconsin Madison	Wisconsin
+University of York	York
+Universitàt Politècnica de València	Politecnica de Valencia
+Universitá di Pavia	Pavia
+Universität Paderborn	Paderborn
+Université Bourgogne Europe, CNRS, Laboratoire Interdisciplinaire Carnot de Bourgogne ICB UMR	Bourgogne
+Université Grenoble Alpes, CEA-LETI, Minatec	Grenoble Alpes
+Université de Bordeaux	Bordeaux
+Université de Lyon, Institut des Nanotechnologies de Lyon, INSA Lyon, CNRS, UMR 5270	INSA Lyon
+Uniwersytet Warszawski	Uniwersytet Warszawski
+VLC Photonics S.L.	VLC Photonics
+Varian Semiconductor, Applied Materials	Varian Semiconductor
 Xanadu	Xanadu
+Yeditepe University	Yeditepe
 Zurich Instruments	Zurich Instruments
+iPRONICS Programmable Photonics S.L.	iPRONICS Programmable Photonics
+imec	imec
+the Chinese University of Hong Kong]	CUHK
+vario-optics	vario-optics
+École Centrale de Lyon	Ecole Centrale de Lyon
+École Polytechnique Fédérale de Lausanne	EPFL
+École polytechnique fédérale de Lausanne	EPFL
