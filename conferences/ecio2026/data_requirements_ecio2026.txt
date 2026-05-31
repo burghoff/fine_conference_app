@@ -190,3 +190,25 @@ manual: Open https://www.optica.org/events/topical_meetings/european_conference_
   in a browser. Switch to "Detailed View", click EVERY "Continue Reading"
   link, then Save Page As… "Webpage, HTML Only" into data/ as exactly
   ECIO26_OpticaWednesday.html .
+
+# The the conference planner / the conference planner planner is the only public ECIO source that
+# lists each technical session's PRESIDER(s). The fetcher drives a headless
+# Chromium, expands every day/session/"See More…" control (like the CLEO 2026
+# fetcher), and saves the fully-expanded DOM. The processor keys the presider
+# map by session code (M1B, T2A, W3B, …) — the same code the PDF uses — and
+# attaches presider + affiliation to the matching session. Optional: missing
+# this file just leaves every session without a presider. (We deliberately do
+# NOT download the planner's Program+Abstracts PDF/CSV — the PDFs above are the
+# authoritative program; the planner is used only for presiders.)
+
+[file: ECIO26_planner_expanded.html]
+required: no
+produced_by: fetch
+description: Fully-expanded the conference planner planner DOM (outerHTML). Source of the
+  per-session presider names + affiliations.
+manual: Open https://ecio2026.abstractcentral.com/planner.jsp in a browser,
+  wait for the program to render, then expand EVERY day row, every session row
+  (the "+" icons), and click every "See More…" link until nothing is
+  collapsed. Save the live DOM (e.g. via the browser console:
+  copy(document.documentElement.outerHTML)) into data/ as exactly
+  ECIO26_planner_expanded.html , prefixed with a "<!DOCTYPE html>" line.

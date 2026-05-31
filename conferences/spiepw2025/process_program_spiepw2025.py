@@ -392,9 +392,21 @@ def _recase_token(core: str, acr: dict[str, str]) -> str:
     alpha = re.sub(r"[^A-Za-z]", "", core).lower()
     if re.fullmatch(r"[ivxlcdm]{2,}", alpha):       # roman numeral (II, XVIII)
         return core.upper()
-    # ordinary word: Capitalize each alpha run (keeps hyphens/slashes intact)
-    return re.sub(r"[A-Za-z]+",
-                  lambda m: m.group(0)[:1].upper() + m.group(0)[1:].lower(), core)
+    # Recase each alpha RUN independently (keeps hyphens/slashes intact), looking
+    # each one up in the learned acronyms first. This restores acronyms buried in
+    # a slash/hyphen compound the corpus never wrote as a whole: a session's
+    # "AR/VR/XR" keeps each learned segment (AR, VR, XR) uppercase even though the
+    # talk titles only ever spelled out "AR/VR" or "AR/VR/MR". Runs with no learned
+    # casing fall back to ordinary Capitalization.
+    def _run(m: re.Match) -> str:
+        seg = m.group(0)
+        u = seg.upper()
+        if u in acr:
+            return acr[u]
+        if u.endswith("S") and u[:-1] in acr:
+            return acr[u[:-1]] + "s"
+        return seg[:1].upper() + seg[1:].lower()
+    return re.sub(r"[A-Za-z]+", _run, core)
 
 
 def _smart_title(t: str, acr: dict[str, str]) -> str:
@@ -910,6 +922,42 @@ class Parser:
         sess["tags"].insert(0, {"key": "Format", "value": fmt})
 
 
+def _union_session_talks(talks: dict, keep: dict, sess: dict) -> None:
+    """Move sess's talks into keep (de-duplicated by paper number) and redirect
+    those talks' session_id to keep. Shared by the cross-conference reprint merge
+    and the co-located poster merge."""
+    for tid in sess["talk_ids"]:
+        num = tid[len("T-"):]
+        if num not in keep["_talk_nums"]:
+            keep["_talk_nums"].add(num)
+            keep["talk_ids"].append(tid)
+        t = talks.get(num)
+        if t is not None:
+            t["session_id"] = keep["id"]
+
+
+def _combine_poster_tags(group: list[dict]) -> None:
+    """Rebuild the surviving (first) poster session's tags by unioning each tag
+    key's values across the whole co-located group, joined into a comma-separated
+    list in first-seen order. SPIE runs every conference's poster session in one
+    shared hall at one time, so the merged session credits all of them: the
+    Conference tag becomes "<num: title>, <num: title>, ..." and Symposium likewise
+    when the posters span symposia. De-duplication is by FULL value — conference
+    titles themselves contain commas, so a comma-split would corrupt them."""
+    keep = group[0]
+    values: dict[str, list[str]] = {}
+    order: list[str] = []
+    for sess in group:
+        for t in sess["tags"]:
+            k, v = t["key"], t["value"]
+            if k not in values:
+                values[k] = []
+                order.append(k)
+            if v not in values[k]:
+                values[k].append(v)
+    keep["tags"] = [{"key": k, "value": ", ".join(values[k])} for k in order]
+
+
 def run(pdf_path: Path) -> dict:
     import pdfplumber
     p = Parser()
@@ -954,10 +1002,8 @@ def run(pdf_path: Path) -> dict:
     # by paper number, each reprint holds a DIFFERENT subset of the talks (and
     # some reprints hold none). Collapse every group of sessions sharing the same
     # (normalized title, start, room) into one, unioning their talks and
-    # redirecting those talks' session_id. POSTER sessions are excluded: each
-    # conference runs its own poster session concurrently in the shared poster
-    # hall, so identical (title, start, room) there is co-located-but-distinct
-    # and stays per-conference.
+    # redirecting those talks' session_id. POSTER sessions are handled by their
+    # own merge below.
     merged_away: set[str] = set()
     primary: dict[tuple, dict] = {}
     for key in p.session_order:
@@ -969,15 +1015,36 @@ def run(pdf_path: Path) -> dict:
         if keep is None:
             primary[sig] = sess
             continue
-        for tid in sess["talk_ids"]:
-            num = tid[len("T-"):]
-            if num not in keep["_talk_nums"]:
-                keep["_talk_nums"].add(num)
-                keep["talk_ids"].append(tid)
-            t = p.talks.get(num)
-            if t is not None:
-                t["session_id"] = keep["id"]
+        _union_session_talks(p.talks, keep, sess)
         merged_away.add(sess["id"])
+
+    # Poster sessions get a parallel merge. SPIE schedules every conference's
+    # poster session into the SAME room at the SAME time — physically one big
+    # poster hall — yet prints each under its own conference number. Collapse all
+    # posters sharing (start, room) into one (ignoring the per-conference title),
+    # unioning their talks and combining the per-conference Symposium/Conference
+    # tags into comma-separated lists so the survivor credits every participating
+    # conference (see _combine_poster_tags). Distinct one-off poster events
+    # (award talks, "poster pop", review sessions) sit at a unique time+room, so
+    # they form singleton groups and pass through untouched.
+    poster_groups: dict[tuple, list[dict]] = {}
+    poster_order: list[tuple] = []
+    for key in p.session_order:
+        sess = p.sessions[key]
+        if not sess["_is_poster"]:
+            continue
+        sig = (sess["start_ts"], sess["location"].lower())
+        if sig not in poster_groups:
+            poster_groups[sig] = []
+            poster_order.append(sig)
+        poster_groups[sig].append(sess)
+    for sig in poster_order:
+        group = poster_groups[sig]
+        keep = group[0]
+        for sess in group[1:]:
+            _union_session_talks(p.talks, keep, sess)
+            merged_away.add(sess["id"])
+        _combine_poster_tags(group)
 
     sessions = []
     for key in p.session_order:

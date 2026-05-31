@@ -123,6 +123,14 @@ INPUT_OPTICA_HTML = [
     DATA_DIR / "ECIO26_OpticaTuesday.html",
     DATA_DIR / "ECIO26_OpticaWednesday.html",
 ]
+# the conference planner planner DOM (outerHTML) captured by the fetcher after every day,
+# session, and "See More…" control has been expanded. This is the only ECIO
+# source that publishes the per-session PRESIDER(s); the detailed-schedule PDF
+# and the Optica pages don't render them. The processor keys this by the same
+# session code the PDF uses (M1B, T2A, W3B, …) and attaches presider +
+# affiliation to the matching session. `required: no` — when the file is
+# absent the sessions simply carry no presider. See `_parse_planner_presiders`.
+INPUT_PLANNER_HTML = DATA_DIR / "ECIO26_planner_expanded.html"
 OUTPUT_JSON = SCRIPT_DIR / "conference_data.json"
 
 
@@ -450,12 +458,17 @@ def _discover_room_cols(rows: list[dict]) -> dict[int, str]:
 
 
 # Pattern for the plenary row's cell text: "Plenary Session N, Prof. Dr. X,
-# <room>". The (?P<room>...) capture is greedy to swallow embedded
-# parentheses in room names like "HG F30 (Plenary Auditorium)".
+# <speaker affiliation>, <room>". The speaker's affiliation sits between the
+# name and the room, so the ROOM is the LAST comma-separated segment — anchoring
+# (?P<room>...) to the end (and letting the optional (?P<affiliation>...) soak up
+# the middle, commas and all) keeps an affiliation like "EPFL" out of the room.
+# Room names ("HG F30 (Plenary Auditorium)") carry parentheses but no comma.
 _PLENARY_ROW_RE = re.compile(
     r"^Plenary\s+Session\s+(?P<n>\d+)\s*,\s*"
     r"(?P<honorific>(?:Prof\.?\s+Dr\.?|Dr\.?|Prof\.?)\s+)?"
-    r"(?P<speaker>[^,]+?)\s*,\s*(?P<room>.+)$"
+    r"(?P<speaker>[^,]+?)\s*,\s*"
+    r"(?:(?P<affiliation>.*),\s*)?"
+    r"(?P<room>[^,]+?)\s*$"
 )
 
 
@@ -1562,6 +1575,154 @@ def _extract_cell_lines(
 
 
 # =============================================================================
+# Chemical-formula subscripting in titles.
+#
+# The detailed-schedule PDF renders stoichiometric subscripts as baseline-offset
+# glyphs, which pdfplumber emits either glued ("Al2O3", "BaTiO3") or — more
+# often — split off behind a stray space ("Si 3 N 4", "Al 2 O 3", "LiNbO 3",
+# "Pb(Zr,Ti)O 3", "CuInP 2 S 6", "VO 2"). Either way the digits read as ordinary
+# text in the app. We re-render them as proper Unicode subscripts (Si₃N₄, Al₂O₃,
+# …). The app HTML-escapes titles, so <sub> tags would show literally — Unicode
+# subscript glyphs are the portable choice and render in every view (lists,
+# search, headers, detail).
+#
+# Detection is conservative: a span is only rewritten when it parses end-to-end
+# as a chemical formula (valid element symbols and/or a parenthesised subgroup,
+# each optionally followed by a count) AND it actually carries a count digit AND
+# it is "formula-shaped" (a two-letter element, OR a subgroup, OR ≥2 element
+# units). That last guard is what keeps a lone token like "P2" / "S6" / "C2"
+# from being mangled while still catching real two-element compounds (VO₂, CO₂)
+# and the many lowercase-bearing ones (Si₃N₄, Al₂O₃, LiNbO₃, ZrO₂, …). Counts
+# may sit directly after their element or behind a single stray space (the PDF
+# artifact); a space is only "bridged" to the next unit when that unit itself
+# carries a count, so "Si 3 N 4 Hybrid" never swallows the "H" of "Hybrid".
+# =============================================================================
+# All IUPAC element symbols (1- and 2-letter). Membership is case-sensitive at
+# the call site (symbol must start uppercase, second letter lowercase).
+_ELEMENT_SYMBOLS = {
+    "H", "He", "Li", "Be", "B", "C", "N", "O", "F", "Ne", "Na", "Mg", "Al",
+    "Si", "P", "S", "Cl", "Ar", "K", "Ca", "Sc", "Ti", "V", "Cr", "Mn", "Fe",
+    "Co", "Ni", "Cu", "Zn", "Ga", "Ge", "As", "Se", "Br", "Kr", "Rb", "Sr",
+    "Y", "Zr", "Nb", "Mo", "Tc", "Ru", "Rh", "Pd", "Ag", "Cd", "In", "Sn",
+    "Sb", "Te", "I", "Xe", "Cs", "Ba", "La", "Ce", "Pr", "Nd", "Pm", "Sm",
+    "Eu", "Gd", "Tb", "Dy", "Ho", "Er", "Tm", "Yb", "Lu", "Hf", "Ta", "W",
+    "Re", "Os", "Ir", "Pt", "Au", "Hg", "Tl", "Pb", "Bi", "Po", "At", "Rn",
+    "Fr", "Ra", "Ac", "Th", "Pa", "U", "Np", "Pu", "Am", "Cm", "Bk", "Cf",
+    "Es", "Fm", "Md", "No", "Lr", "Rf", "Db", "Sg", "Bh", "Hs", "Mt", "Ds",
+    "Rg", "Cn", "Nh", "Fl", "Mc", "Lv", "Ts", "Og",
+}
+_SUBSCRIPT_DIGITS = {str(d): chr(0x2080 + d) for d in range(10)}
+
+
+def _to_subscript(digits: str) -> str:
+    return "".join(_SUBSCRIPT_DIGITS.get(c, c) for c in digits)
+
+
+def _parse_formula_unit(s: str, i: int) -> dict | None:
+    """Parse ONE formula unit at s[i]: a parenthesised subgroup '(…)' (which
+    must contain a letter — '(001)' Miller indices are rejected) or an element
+    symbol, each optionally followed by a count. The count may sit directly
+    after the unit or behind a single stray space (the PDF's split-subscript
+    artifact). Returns {kind, text, count, end} or None."""
+    n = len(s)
+    if i >= n:
+        return None
+    if s[i] == "(":
+        j = s.find(")", i)
+        if j == -1:
+            return None
+        inner = s[i + 1:j]
+        if not re.search(r"[A-Za-z]", inner):
+            return None  # e.g. "Si(001)" — crystal orientation, not a subgroup
+        text = s[i:j + 1]
+        end = j + 1
+        kind = "group"
+    else:
+        sym = None
+        if (i + 1 < n and s[i].isupper() and s[i + 1].islower()
+                and s[i:i + 2] in _ELEMENT_SYMBOLS):
+            sym = s[i:i + 2]
+        elif s[i] in _ELEMENT_SYMBOLS:  # single-letter symbol (uppercase)
+            sym = s[i]
+        if sym is None:
+            return None
+        text = sym
+        end = i + len(sym)
+        kind = "elem"
+    # Optional count, allowing at most one bridging space.
+    k = end
+    spaces = 0
+    while k < n and s[k] == " ":
+        k += 1
+        spaces += 1
+    count = ""
+    if spaces <= 1:
+        m = re.match(r"\d+", s[k:])
+        if m:
+            count = m.group(0)
+            end = k + len(count)
+    return {"kind": kind, "text": text, "count": count, "end": end}
+
+
+def _try_parse_formula(s: str, start: int):
+    """Greedily parse a run of formula units beginning at s[start]. Adjacent
+    units always chain; a unit reached across a single space only chains when
+    it carries its own count (so 'Si 3 N 4 Hybrid' stops before 'Hybrid').
+    Returns (units, end_index) or None."""
+    u = _parse_formula_unit(s, start)
+    if not u:
+        return None
+    units = [u]
+    end = u["end"]
+    n = len(s)
+    while end < n:
+        if s[end] == " ":
+            nu = _parse_formula_unit(s, end + 1)
+            if nu and nu["count"]:
+                units.append(nu)
+                end = nu["end"]
+                continue
+            break
+        nu = _parse_formula_unit(s, end)
+        if nu:
+            units.append(nu)
+            end = nu["end"]
+            continue
+        break
+    return units, end
+
+
+def _subscriptize_formulas(title: str) -> str:
+    """Rewrite chemical-formula subscripts in `title` as Unicode subscripts,
+    collapsing the PDF's split digits ('Si 3 N 4' -> 'Si₃N₄'). Non-formula
+    text is returned unchanged. See the module section header for the rules."""
+    if not title:
+        return title
+    out: list[str] = []
+    i = 0
+    n = len(title)
+    while i < n:
+        ch = title[i]
+        if ch == "(" or ch.isupper():
+            res = _try_parse_formula(title, i)
+            if res:
+                units, end = res
+                has_count = any(u["count"] for u in units)
+                n_elem = sum(1 for u in units if u["kind"] == "elem")
+                has_two = any(u["kind"] == "elem" and len(u["text"]) == 2
+                              for u in units)
+                has_group = any(u["kind"] == "group" for u in units)
+                if has_count and (has_two or has_group or n_elem >= 2):
+                    out.append("".join(
+                        u["text"] + _to_subscript(u["count"]) for u in units))
+                    i = end
+                    continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
+# =============================================================================
 # Title / speaker post-processing.
 # =============================================================================
 
@@ -1972,6 +2133,116 @@ _INV_TITLE_QUOTE_RE = re.compile(f"[{_INV_QUOTE_CHARS}]")
 _INV_STRIP_QUOTES_RE = re.compile(
     f"^[{_INV_QUOTE_CHARS}]+|[{_INV_QUOTE_CHARS}]+$")
 _INV_SECTION_HEADER_RE = re.compile(r"^SC\d+\b")
+
+
+# =============================================================================
+# the conference planner planner — per-session PRESIDER extraction
+#
+# The ECIO program is also published on a the conference planner (the conference planner) planner
+# at https://ecio2026.abstractcentral.com/planner.jsp . Its expanded DOM is the
+# only public ECIO source that lists each technical session's presider(s). Each
+# session header paragraph looks like:
+#
+#   <p class="pagecontents"><strong><b>M1B. Light Emitters</b></strong><br>
+#     Presider(s): Raphael Butte (École Polytechnique Fédérale de Lausanne)<br>
+#     8:30 AM - 10:15 AM; Room HG E1.1</p>
+#
+# The leading code (M1B, T2A, W3B, …) is the SAME code the detailed-schedule PDF
+# uses for that session, so we key the presider map by it and attach the
+# presider to the matching session at emission time.
+# =============================================================================
+_PLANNER_HEADER_RE = re.compile(
+    r'<p class="pagecontents"><strong><b>(?P<codetitle>.*?)</b></strong>'
+    r'(?P<rest>.*?)</p>', re.S)
+_PLANNER_PRESIDER_RE = re.compile(
+    r"Presider\(s\):\s*(?P<raw>.*?)<br", re.S | re.I)
+
+
+def _planner_strip_tags(s: str) -> str:
+    """HTML fragment -> plain text: drop tags, unescape entities, collapse
+    whitespace. Used for the planner's session-code and presider strings."""
+    s = re.sub(r"<[^>]+>", "", s)
+    s = html.unescape(s)
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def _parse_planner_presiders(raw: str) -> list[dict]:
+    """Split a presider string 'Name (Aff) and Name2 (Aff2)' into
+    [{name, affiliation}, …]. Separators (',', '&', ' and ') only split at
+    paren-depth 0 so an affiliation like '(Korea Adv Inst of Sci & Tech)' or
+    '(Univ of Science and Technology)' is never torn apart. Mirrors the CLEO
+    2026 presider parser."""
+    if not raw:
+        return []
+    parts: list[str] = []
+    buf = ""
+    depth = 0
+    i, n = 0, len(raw)
+    while i < n:
+        ch = raw[i]
+        if ch == "(":
+            depth += 1; buf += ch; i += 1; continue
+        if ch == ")":
+            depth = max(0, depth - 1); buf += ch; i += 1; continue
+        if depth == 0:
+            if ch == ",":
+                if buf.strip():
+                    parts.append(buf.strip())
+                buf = ""; i += 1; continue
+            if ch == "&":
+                if buf.strip():
+                    parts.append(buf.strip())
+                buf = ""; i += 1; continue
+            if raw[i:i + 5].lower() == " and ":
+                if buf.strip():
+                    parts.append(buf.strip())
+                buf = ""; i += 5; continue
+        buf += ch; i += 1
+    if buf.strip():
+        parts.append(buf.strip())
+
+    out: list[dict] = []
+    for p in parts:
+        m = re.match(r"^(.*?)\s*\((.*)\)\s*$", p)
+        if m:
+            out.append({"name": m.group(1).strip(),
+                        "affiliation": m.group(2).strip()})
+        else:
+            out.append({"name": p.strip(), "affiliation": ""})
+    return out
+
+
+def _load_planner_presiders(path: Path) -> dict[str, dict]:
+    """Parse the expanded planner DOM into {session_code: {presider,
+    presider_aff}} where both values are '; '-joined and positionally aligned.
+    Missing file (or no presider on a session) yields no entry — non-fatal, the
+    session just carries no presider."""
+    if not path.exists():
+        log(f"[planner] {path.name} absent — no presiders will be attached.")
+        return {}
+    text = path.read_text(encoding="utf-8", errors="replace")
+    out: dict[str, dict] = {}
+    for m in _PLANNER_HEADER_RE.finditer(text):
+        codetitle = _planner_strip_tags(m.group("codetitle"))
+        if "." not in codetitle:
+            continue  # non-coded event header (Opening Ceremony, Coffee, …)
+        code = re.sub(r"\s+", "", codetitle.split(".", 1)[0])
+        pm = _PLANNER_PRESIDER_RE.search(m.group("rest"))
+        if not pm:
+            continue
+        raw = _planner_strip_tags(pm.group("raw"))
+        if not raw:
+            continue
+        presiders = _parse_planner_presiders(raw)
+        if not presiders:
+            continue
+        out[code] = {
+            "presider": "; ".join(p["name"] for p in presiders),
+            "presider_aff": "; ".join(p["affiliation"] for p in presiders),
+        }
+    log(f"[planner] parsed presiders for {len(out)} session(s) "
+        f"from {path.name}.")
+    return out
 
 
 def _inv_strip_tags(s: str) -> str:
@@ -3029,6 +3300,11 @@ def main() -> None:
     log("[info] loading optional web-enrichment pages …")
     enrich = _load_web_enrichment()
 
+    # Per-session presiders parsed from the the conference planner planner DOM. Keyed by
+    # session code (M1B, T2A, …) — the same code the PDF skeleton emits as a
+    # session id — so attaching them below is a direct dict lookup. Optional.
+    planner_presiders = _load_planner_presiders(INPUT_PLANNER_HTML)
+
     import pdfplumber
     log(f"[info] reading {INPUT_PDF.name} …")
     with pdfplumber.open(INPUT_PDF) as pdf:
@@ -3121,6 +3397,15 @@ def main() -> None:
             s_obj["location"] = room
         if topic:
             s_obj["topic"] = topic
+        # Attach the planner-sourced presider(s), if any, keyed by session id
+        # (== the planner's session code). The builder shortens presider_aff
+        # and backfills any missing affiliation from papers the presider
+        # authored, so we emit the RAW affiliation string here.
+        pres = planner_presiders.get(sess["id"])
+        if pres and pres.get("presider"):
+            s_obj["presider"] = pres["presider"]
+            if pres.get("presider_aff"):
+                s_obj["presider_aff"] = pres["presider_aff"]
         sessions_out.append(s_obj)
 
         # ---- Collect this session's talks
@@ -3610,6 +3895,24 @@ def main() -> None:
                 talk_obj["abstract"] = t_abstract
             talks_out.append(talk_obj)
             s_obj["talk_ids"].append(tid)
+
+    # ---- Render chemical-formula subscripts in every title ------------------
+    # A single chokepoint over the finished session/talk titles, so it catches
+    # titles from every source (PDF harvest, Optica enrichment, plenary/
+    # workshop/industry pages) uniformly. Non-formula titles are unchanged.
+    n_formula_fixed = 0
+    for coll in (sessions_out, talks_out):
+        for obj in coll:
+            t = obj.get("title")
+            if not t:
+                continue
+            fixed = _subscriptize_formulas(t)
+            if fixed != t:
+                obj["title"] = fixed
+                n_formula_fixed += 1
+    if n_formula_fixed:
+        log(f"[ok] rendered chemical-formula subscripts in "
+            f"{n_formula_fixed} title(s).")
 
     # ---- Assemble final JSON ------------------------------------------------
     data = {

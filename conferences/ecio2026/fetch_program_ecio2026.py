@@ -64,9 +64,23 @@ this part drives a real headed Chromium via Playwright (switching to "Detailed
 View" and expanding every "Continue Reading" link before saving the rendered
 HTML) rather than a plain HTTP fetch. See `_fetch_optica_schedule`.
 
-Contacts the network via urllib for the PDFs/HTML pages and via a headed
-Chromium for the Optica schedule. The processor (process_program_ecio2026.py)
-runs entirely offline against what we save here.
+We also save the fully-expanded the conference planner / the conference planner planner DOM,
+
+    ECIO26_planner_expanded.html   the planner.jsp page DOM captured AFTER every
+                                   day, session, and "See More…" control has
+                                   been expanded.
+
+The planner is the only public ECIO source that lists each technical session's
+PRESIDER(s) — neither the detailed-schedule PDF nor the Optica pages render
+them. Like the CLEO 2026 fetcher, we drive a headless Chromium via Playwright,
+click every '+' (day and session) and every "See More…" link, then save the
+expanded DOM for the processor to parse offline. We deliberately do NOT download
+the planner's Program+Abstracts PDF/CSV — the PDFs above are the authoritative
+program; the planner is used only for presiders.
+
+Contacts the network via urllib for the PDFs/HTML pages and via Chromium for the
+Optica schedule (headed) and the the conference planner planner (headless). The processor
+(process_program_ecio2026.py) runs entirely offline against what we save here.
 """
 
 from __future__ import annotations
@@ -203,6 +217,231 @@ OPTICA_PROFILE_DIR = Path.home() / ".cache" / "ecio2026_optica_profile"
 # How long to wait (seconds) for a human to clear a bot-wall / CAPTCHA before
 # giving up on a day. Generous because solving it is a manual step.
 OPTICA_CAPTCHA_WAIT_S = 180
+
+
+# ---------------------------------------------------------------------------
+# the conference planner planner (browser-rendered).
+#
+# The ECIO program is ALSO published on a the conference planner / the conference planner planner.
+# That planner is the only public ECIO source that lists each technical
+# session's PRESIDER(s) — neither the detailed-schedule PDF nor the Optica pages
+# render presiders. The planner is a legacy GWT app whose day rows, session
+# rows, and "See More…" links must each be clicked to reveal their content, so
+# (like the CLEO 2026 fetcher) we drive a headless Chromium and expand
+# everything before saving the fully-expanded DOM. The processor parses the
+# saved HTML offline for the per-session presider map. We deliberately do NOT
+# download the planner's "Program + Abstracts" PDF/CSV — the PDFs above are the
+# authoritative program source; the planner is used only for presiders.
+PLANNER_URL = "https://ecio2026.abstractcentral.com/planner.jsp"
+PLANNER_OUTPUT_HTML = DATA_DIR / "ECIO26_planner_expanded.html"
+# Persistent Chromium profile for the planner, kept outside the repo.
+PLANNER_PROFILE_DIR = Path.home() / ".cache" / "ecio2026_planner_profile"
+
+
+def _planner_pending_ids(page) -> dict:
+    """ids of every still-expandable planner element. Working with stable ids
+    (not positional locators) avoids the 'every other one' re-indexing bug when
+    a click flips plus.gif -> minus.gif. 'hourglasses' are sessions mid-load
+    (icon swapped to hourglass.png while GWT fetches the talk list)."""
+    return page.evaluate(r"""
+        () => {
+            const grab = sel => Array.from(document.querySelectorAll(sel)).map(el => el.id);
+            return {
+                day_pluses:     grab('img[id^="DAY:"][src*="plus"]'),
+                session_pluses: grab('img[id^="SES:"][src*="plus"]'),
+                see_more:       grab('[id^="LEVELSHOWNORECORDS:"]'),
+                hourglasses:    grab('img[id^="SESSION:"][src*="hourglass"]'),
+            };
+        }""")
+
+
+def _planner_count_hourglasses(page) -> int:
+    return page.evaluate(
+        "() => document.querySelectorAll("
+        "'img[id^=\"SESSION:\"][src*=\"hourglass\"]').length")
+
+
+def _planner_wait_hourglasses(page, *, max_wait_ms=15000, poll_ms=400) -> int:
+    """Block until no session shows an hourglass, OR the count stops decreasing
+    for ~2s (stalled), OR max_wait_ms elapses. Returns the final count."""
+    waited = 0
+    last = _planner_count_hourglasses(page)
+    if last == 0:
+        return 0
+    stall = 0
+    while waited < max_wait_ms:
+        page.wait_for_timeout(poll_ms)
+        waited += poll_ms
+        now = _planner_count_hourglasses(page)
+        if now == 0:
+            return 0
+        if now < last:
+            last = now
+            stall = 0
+        else:
+            stall += 1
+            if stall * poll_ms >= 2000:
+                return now
+    return last
+
+
+def _planner_click_batch(page, ids, *, wait_after_ms=0) -> tuple[int, int]:
+    """Fire mousedown+mouseup+click on each id in one round-trip (legacy GWT
+    widgets sometimes bind to mousedown/up rather than click)."""
+    if not ids:
+        return 0, 0
+    res = page.evaluate(r"""
+        (ids) => {
+            const opts = {bubbles:true,cancelable:true,view:window,button:0,buttons:0,composed:true};
+            const fire = (el) => {
+                el.dispatchEvent(new MouseEvent('mousedown', opts));
+                el.dispatchEvent(new MouseEvent('mouseup',   opts));
+                el.dispatchEvent(new MouseEvent('click',     opts));
+            };
+            let clicked=0, missing=0;
+            for (const id of ids) {
+                const el = document.getElementById(id);
+                if (!el) { missing++; continue; }
+                try { fire(el); clicked++; } catch(e) { missing++; }
+            }
+            return {clicked, missing};
+        }""", ids)
+    if wait_after_ms:
+        page.wait_for_timeout(wait_after_ms)
+    return res["clicked"], res["missing"]
+
+
+def _planner_expand_everything(page, max_outer_rounds=8) -> None:
+    """Click every '+' (DAY and SES) and every 'See More…' using batched JS
+    clicks, refreshing the id snapshot before each phase so we never depend on
+    positional locators against a mutating DOM. Sessions are expanded in small
+    batches with a hourglass-settle wait between them, then a one-at-a-time
+    mop-up handles any stragglers. Ported from the CLEO 2026 fetcher."""
+    for outer in range(max_outer_rounds):
+        p = _planner_pending_ids(page)
+        nd, ns, nm, nh = (len(p["day_pluses"]), len(p["session_pluses"]),
+                          len(p["see_more"]), len(p["hourglasses"]))
+        print(f"[planner]   [expand {outer+1}] DAY+={nd} SES+={ns} "
+              f"SeeMore={nm} Hourglass={nh}")
+        if nd + ns + nm + nh == 0:
+            page.wait_for_timeout(500)
+            return
+        if nh and not (nd or ns or nm):
+            _planner_wait_hourglasses(page)
+            continue
+        if p["day_pluses"]:
+            _planner_click_batch(page, p["day_pluses"], wait_after_ms=500)
+        for _ in range(50):
+            sm_ids = page.evaluate(
+                "() => Array.from(document.querySelectorAll("
+                "'[id^=\"LEVELSHOWNORECORDS:\"]')).map(el => el.id)")
+            if not sm_ids:
+                break
+            _planner_click_batch(page, sm_ids, wait_after_ms=1200)
+        ses_ids = page.evaluate(
+            "() => Array.from(document.querySelectorAll("
+            "'img[id^=\"SES:\"][src*=\"plus\"]')).map(el => el.id)")
+        if ses_ids:
+            BATCH = 10
+            for i in range(0, len(ses_ids), BATCH):
+                _planner_click_batch(page, ses_ids[i:i + BATCH],
+                                     wait_after_ms=200)
+                _planner_wait_hourglasses(page, max_wait_ms=20000)
+            page.wait_for_timeout(500)
+    # One-at-a-time mop-up of any leftover pluses / stuck hourglasses.
+    for _ in range(6):
+        p = _planner_pending_ids(page)
+        ns, nh = len(p["session_pluses"]), len(p["hourglasses"])
+        if p["day_pluses"]:
+            _planner_click_batch(page, p["day_pluses"], wait_after_ms=500)
+        if p["see_more"]:
+            _planner_click_batch(page, p["see_more"], wait_after_ms=1200)
+        if not (ns or nh):
+            break
+        for pid in p["session_pluses"]:
+            _planner_click_batch(page, [pid], wait_after_ms=200)
+            _planner_wait_hourglasses(page, max_wait_ms=20000)
+        still = page.evaluate(
+            "() => Array.from(document.querySelectorAll("
+            "'img[id^=\"SESSION:\"][src*=\"hourglass\"]')).map(el => el.id)")
+        for hid in still:
+            waited = 0
+            while waited < 25000:
+                present = page.evaluate(
+                    "(id) => { const el = document.getElementById(id);"
+                    " return !!(el && /hourglass/.test(el.src)); }", hid)
+                if not present:
+                    break
+                page.wait_for_timeout(500)
+                waited += 500
+    p = _planner_pending_ids(page)
+    leftover = sum(len(p[k]) for k in p)
+    if leftover:
+        print(f"[planner]   WARNING: {leftover} element(s) still pending "
+              "after expansion; some sessions may be missing in the DOM.")
+
+
+def _fetch_planner_dom() -> bool:
+    """Render the the conference planner planner, expand every day/session/See-More control,
+    and save the fully-expanded DOM to PLANNER_OUTPUT_HTML. Returns True on a
+    successful save. Headless; never raises — logs and returns False so a flaky
+    planner can't abort the rest of the download (the PDFs remain authoritative
+    and the presider map is optional enrichment)."""
+    _bootstrap_playwright()
+    import time
+    from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
+
+    PLANNER_PROFILE_DIR.mkdir(parents=True, exist_ok=True)
+    print(f"[info] rendering the conference planner planner (headless) from {PLANNER_URL} "
+          "to harvest per-session presiders…")
+    with sync_playwright() as pw:
+        ctx = pw.chromium.launch_persistent_context(
+            str(PLANNER_PROFILE_DIR), headless=True, accept_downloads=False,
+            viewport={"width": 1500, "height": 950},
+            args=["--disable-blink-features=AutomationControlled"])
+        try:
+            page = ctx.pages[0] if ctx.pages else ctx.new_page()
+            page.goto(PLANNER_URL, wait_until="domcontentloaded", timeout=60000)
+            # planner.jsp is a GWT shell filled in asynchronously; wait for the
+            # side-menu link, then for the DAY rows to render.
+            try:
+                page.wait_for_selector("#BROWSE_THE_PROGRAM", timeout=45000)
+            except PWTimeout:
+                print("[warn]   planner side-menu link didn't appear in 45s.")
+            if page.locator("[id^='DAY:']").count() == 0:
+                try:
+                    page.locator("#BROWSE_THE_PROGRAM").first.click(timeout=5000)
+                except Exception:
+                    pass
+            deadline = time.time() + 180
+            while time.time() < deadline:
+                if page.locator("[id^='DAY:']").count() > 0:
+                    break
+                page.wait_for_timeout(750)
+            _planner_expand_everything(page)
+            html_text = page.evaluate("() => document.documentElement.outerHTML")
+            # Inject a <base href> so a later manual open resolves the site's
+            # relative assets (cosmetic; the markup itself is complete).
+            try:
+                base_url = page.url
+                if base_url and "<base" not in html_text[:2000].lower():
+                    html_text = re.sub(
+                        r"(<head[^>]*>)", r'\1<base href="' + base_url + '">',
+                        html_text, count=1, flags=re.I)
+            except Exception:
+                pass
+            with open(PLANNER_OUTPUT_HTML, "w", encoding="utf-8") as f:
+                f.write("<!DOCTYPE html>\n")
+                f.write(html_text)
+            size_kb = PLANNER_OUTPUT_HTML.stat().st_size / 1024
+            print(f"[ok]   saved {PLANNER_OUTPUT_HTML.name} ({size_kb:,.1f} KB).")
+            return True
+        except Exception as e:  # noqa: BLE001 — never abort the whole download
+            print(f"[warn]   could not save the planner DOM: {e}. "
+                  "Sessions will have no presiders.")
+            return False
+        finally:
+            ctx.close()
 
 
 def _bootstrap_playwright() -> None:
@@ -393,6 +632,19 @@ def main() -> None:
     except Exception as e:  # noqa: BLE001 — never let enrichment abort the run
         print(f"[warn] Optica schedule fetch failed entirely: {e}")
         failed.extend(OPTICA_DAYS.values())
+
+    # Render + save the the conference planner planner DOM (browser-driven). Optional
+    # enrichment used only for the per-session presider map; a failure here is
+    # a warning, not fatal.
+    print("-" * 72)
+    try:
+        if _fetch_planner_dom():
+            saved_any = True
+        else:
+            failed.append(PLANNER_OUTPUT_HTML.name)
+    except Exception as e:  # noqa: BLE001 — never let enrichment abort the run
+        print(f"[warn] planner DOM fetch failed entirely: {e}")
+        failed.append(PLANNER_OUTPUT_HTML.name)
 
     print()
     print("=" * 72)

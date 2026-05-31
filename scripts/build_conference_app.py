@@ -1720,6 +1720,10 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   --accent:    #d6541c;
   --accent-soft: rgba(214,84,28,.12);
   --accent-faint: rgba(214,84,28,.45);
+  /* Keyboard-selection ring — a cool blue kept deliberately distinct from the
+     warm --accent used for the "added"/"partial" schedule rings. */
+  --sel-ring: rgba(37,99,235,.70);
+  --sel-soft: rgba(37,99,235,.10);
   --tile-overlay: rgba(246,246,244,.65);
   /* Chrome-bar heights scale with the text-size multiplier so their labels
      never clip as the text grows (and the bars tighten up as it shrinks).
@@ -1759,6 +1763,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     --accent:    #ff8c5c;
     --accent-soft: rgba(255,140,92,.18);
     --accent-faint: rgba(255,140,92,.55);
+    --sel-ring: rgba(96,165,250,.75);
+    --sel-soft: rgba(96,165,250,.16);
     --tile-overlay: rgba(17,17,17,.55);
 
     --c-blue-bg:    #1a233d;
@@ -2250,6 +2256,23 @@ body[data-active-view="session-detail"] .bubble[data-kind="talk"],
    added. */
 .bubble.partial { box-shadow: inset 0 0 0 1px var(--accent-faint); }
 
+/* Keyboard-navigation cursor (two-pane / wide layouts only): a cool-blue ring
+   just outside the bubble, plus a faint blue lift. Deliberately blue (not the
+   warm --accent) so it never reads as the orange "added"/"partial" schedule
+   rings. Uses `outline` (not box-shadow) so it composes with those inset rings
+   when a bubble is both selected and scheduled. */
+.bubble.selected {
+  outline: 1.5px solid var(--sel-ring);
+  outline-offset: 1px;
+  background-image: linear-gradient(var(--sel-soft), var(--sel-soft));
+}
+/* A Talk/Session detail's own header card is the "main bubble" of that view, so
+   it carries the same blue keyboard-selection ring as a list bubble. */
+.detail-head.selected {
+  outline: 1.5px solid var(--sel-ring);
+  outline-offset: 2px;
+}
+
 .schedule-btn {
   /* Shrinks with small text (via --sp), capped at default for large text —
      matching the bubble margins. The glyph is drawn as two bars (::before
@@ -2483,15 +2506,30 @@ body[data-active-view="session-detail"] .bubble[data-kind="talk"],
 .search-suggest .suggest-bubble:active {
   border-color: var(--accent);
 }
+/* Keyboard-selected suggestion pill — same blue ring as a selected bubble. */
+.search-suggest .suggest-bubble.selected {
+  outline: 1.5px solid var(--sel-ring);
+  outline-offset: 1px;
+  border-color: var(--sel-ring);
+}
 
 /* ── Session / Talk detail views ───────────────────────────────────── */
 .detail-head {
   position: relative;
-  padding: 14px calc(56px * var(--sp)) 16px 16px;
+  padding: 14px calc(56px * var(--sp)) 16px 16px;   /* title at its original indent */
   border-radius: var(--radius);
   background: var(--c-neutral-bg);
   border-left: 4px solid var(--c-neutral-fg);
   margin-bottom: 16px;
+  cursor: pointer;          /* the header doubles as a Back control */
+  /* It's a tap target (Back), not text to select — stop the mobile text-selection
+     popup ("search web…") and long-press callout from firing on the title. */
+  -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none;
+}
+.detail-head:active { background-image: linear-gradient(rgba(0,0,0,.05), rgba(0,0,0,.05)); }
+@media (prefers-color-scheme: dark) {
+  .detail-head:active { background-image: linear-gradient(rgba(255,255,255,.06), rgba(255,255,255,.06)); }
 }
 .detail-head.clr-blue    { background: var(--c-blue-bg);    border-left-color: var(--c-blue-fg); }
 .detail-head.clr-violet  { background: var(--c-violet-bg);  border-left-color: var(--c-violet-fg); }
@@ -3333,7 +3371,7 @@ body.has-indicator #scroll-indicator { display: flex; }
 <nav id="tabbar">
   <button class="tab-btn" data-tab="sessions"><span class="glyph">▦</span><span>Sessions</span></button>
   <button class="tab-btn" data-tab="talks"><span class="glyph">▤</span><span>Talks</span></button>
-  <button class="tab-btn" data-tab="search"><span class="glyph">⌕</span><span>Search</span></button>
+  <button class="tab-btn" data-tab="search"><span class="glyph">⌕</span><span>Find</span></button>
   <button class="tab-btn" data-tab="me"><span class="glyph">★</span><span>Me</span></button>
 </nav>
 
@@ -3826,6 +3864,60 @@ function parseClockDirective(raw) {
 /* schedule toggle                                                  */
 /* =============================================================== */
 
+/* In-memory undo/redo history for schedule add/remove (Ctrl+Z / Ctrl+Y). Each
+   undo entry is a TRANSACTION — an ordered list of {id, op} ops — so a bulk
+   add/remove (→/← over a multi-selection) undoes in one step, while a single
+   toggle is a transaction of one. Not persisted: the history resets on reload.
+     _undoStack — transactions that can be undone (newest last)
+     _redoStack — transactions that were undone and can be redone
+     _undoBatch — when non-null, toggleScheduled appends to it instead of opening
+                  a new transaction (set up by begin/endUndoBatch around a bulk op)
+     _replayingSchedule — true while undo/redo replays, so toggleScheduled doesn't
+                  record the replayed change back into the history */
+let _undoStack = [];
+let _redoStack = [];
+let _undoBatch = null;
+let _replayingSchedule = false;
+
+function recordScheduleOp(id, op) {
+  if (_replayingSchedule) return;
+  const entry = { id, op };
+  if (_undoBatch) {
+    _undoBatch.push(entry);
+  } else {
+    _undoStack.push([entry]);
+    _redoStack = [];          // a fresh user action invalidates the redo branch
+  }
+}
+function beginUndoBatch() { _undoBatch = []; }
+function endUndoBatch() {
+  if (_undoBatch && _undoBatch.length) { _undoStack.push(_undoBatch); _redoStack = []; }
+  _undoBatch = null;
+}
+/* Drive state.schedule to `wantScheduled` for `id` via toggleScheduled (so all
+   the targeted UI updates happen), but only if it isn't already there. */
+function _setScheduled(id, wantScheduled) {
+  if (state.schedule.includes(id) !== wantScheduled) toggleScheduled(id);
+}
+function undoSchedule() {
+  if (!_undoStack.length) return;
+  const tx = _undoStack.pop();
+  _replayingSchedule = true;
+  for (let i = tx.length - 1; i >= 0; i--) _setScheduled(tx[i].id, tx[i].op === "del");
+  _replayingSchedule = false;
+  _redoStack.push(tx);
+  applySelection();
+}
+function redoSchedule() {
+  if (!_redoStack.length) return;
+  const tx = _redoStack.pop();
+  _replayingSchedule = true;
+  for (const entry of tx) _setScheduled(entry.id, entry.op === "add");
+  _replayingSchedule = false;
+  _undoStack.push(tx);
+  applySelection();
+}
+
 function toggleScheduled(id) {
   const s = new Set(state.schedule);
   let op;
@@ -3836,6 +3928,8 @@ function toggleScheduled(id) {
   // it (especially deletions) instead of just unioning ids.
   state.scheduleLog = state.scheduleLog || {};
   state.scheduleLog[id] = { op, ts: Date.now() };
+  // Feed the in-memory undo history (Ctrl+Z / Ctrl+Y), unless we're replaying.
+  recordScheduleOp(id, op);
   saveState();
 
   // Targeted DOM update instead of a full render(). With thousands of talks
@@ -4050,6 +4144,14 @@ function makeBubble(item, opts = {}) {
       // detail and sets this flag so the press doesn't ALSO toggle the
       // inline expansion when the finger/mouse lifts.
       if (wrap._lpFired) { wrap._lpFired = false; return; }
+      // Two-pane keyboard nav. Ctrl/Cmd-click changes the selection WITHOUT
+      // interacting: plain Ctrl selects (or deselects) this one item, Ctrl+Shift
+      // selects the contiguous run from the anchor to here (Shift-click-text style).
+      const inLeft = isWide() && wrap.closest("#content");
+      if (inLeft && (e.ctrlKey || e.metaKey)) { ctrlClickItem(item.id, e.shiftKey); return; }
+      // A plain click drops the cursor here (single select) so the arrows /
+      // Space can continue from this bubble, then interacts below.
+      if (inLeft) setBubbleSelection(item.id);
       // A near-miss around the +/- button toggles the schedule instead of
       // opening the detail (see inAddZone), so it's hard to overshoot the
       // small circle and land on the bubble. The +/- circle itself has its
@@ -4098,6 +4200,8 @@ function makeBubble(item, opts = {}) {
       // release (via onclick), not start a long-press into the detail view.
       if (e.target.closest(".schedule-btn")) return;
       if (inAddZone(e.clientX, e.clientY)) return;
+      // Ctrl/Cmd(+Shift) is a select-only gesture (see onclick), not a press.
+      if (e.ctrlKey || e.metaKey) return;
       sx = e.clientX; sy = e.clientY;
       wrap._lpFired = false;
       cancel();
@@ -5118,6 +5222,10 @@ function buildSessionHead(s) {
   const head = el("section", {
     class: `detail-head clr-${s.color}`,
     "data-detail-id": s.id,
+    // The header doubles as a Back control: clicking it (off the +/- circle and
+    // the tappable presider bits, which stopPropagation) returns to where you
+    // came from — in addition to the top-bar Back button.
+    onclick: (e) => { if (e.target.closest(".dh-add, .clickable")) return; triggerBack(false); },
   });
   // The session id is NOT shown in the head — it's already the page title
   // in the top bar for session-detail views (see pageTitleFor), so putting
@@ -5197,6 +5305,10 @@ function renderTalkDetail(c, tid) {
   const head = el("section", {
     class: `detail-head clr-${t.color}`,
     "data-detail-id": t.id,
+    // The header doubles as a Back control: clicking it (off the +/- circle and
+    // any tappable bits, which stopPropagation) returns to where you came from —
+    // in addition to the top-bar Back button.
+    onclick: (e) => { if (e.target.closest(".dh-add, .clickable")) return; triggerBack(false); },
   });
   // The talk id is NOT shown here — it's already the page title in the top
   // bar for talk-detail views (see pageTitleFor), so repeating it on a meta
@@ -8129,7 +8241,7 @@ function pageTitleFor(tab, top) {
     const query = ci < 0 ? rest : rest.slice(ci + 1);
     return query || "Search";
   }
-  return ({ sessions: "Sessions", talks: "Talks", search: "Search", me: "My Schedule" })[tab];
+  return ({ sessions: "Sessions", talks: "Talks", search: "Find", me: "My Schedule" })[tab];
 }
 
 function render() {
@@ -8227,6 +8339,22 @@ function render() {
   // Types-panel + indicator are layout-dependent, so refresh after DOM swap.
   refreshTypesPanel();
   updateScrollIndicator();
+  // On a Talk/Session detail (wide only), make sure the keyboard cursor lands on
+  // a real item: keep it when it's already one of this view's items — the bubble
+  // the user clicked to get here IS the main item, and a child they arrowed to
+  // stays put — otherwise default to the detail's own header so the "main
+  // bubble" reads as selected on entry (incl. deep links / Back into a detail).
+  if (isWide() && (top.view.startsWith("talk:") || top.view.startsWith("session:"))) {
+    const mainId = top.view.startsWith("talk:") ? top.view.slice(5) : top.view.slice(8);
+    const ids = new Set(navItems().map(itemId));
+    if (!_selCursorId || !ids.has(_selCursorId)) {
+      _selIds = new Set([mainId]);
+      _selCursorId = mainId; _selAnchorId = mainId; _selPillIdx = -1;
+    }
+  }
+  // Re-paint the keyboard-nav selection ring (item or suggestion pill) on the
+  // freshly built DOM.
+  applySelection();
 
   // The permanently-affixed right-hand Me pane (wide screens only). It's
   // rebuilt on every render so that adding/removing items from the left
@@ -8336,6 +8464,18 @@ function back() {
   }
 }
 
+/* Go Back the way the top-bar Back button used to, routing through history so it
+   stays in sync with the device Back/Forward. Used by the (now header-embedded)
+   Back arrow, Esc, and Space/Enter on a detail header. `keepFlag` true preserves
+   the engaged keyboard selection (a keyboard Back — Esc / Space-Enter — so the
+   ring follows to the origin); false disengages (the mouse Back affordance). */
+function triggerBack(keepFlag) {
+  selectOriginOnBack();
+  if (!keepFlag) _selActive = false;
+  if (_navIdx > 0) history.back();
+  else if (canGoBack()) back();
+}
+
 /* ---- Device / browser Back & Forward button integration ----------------
    The app navigates via per-tab view stacks AND a tab bar, not URLs. To make
    the hardware/browser Back & Forward buttons traverse the FULL navigation
@@ -8352,6 +8492,7 @@ function back() {
    from popstate. _navIdx tracks our position so the in-app Back button can
    consume an entry via history.back() without ever stepping off the app. */
 let _navIdx = 0;   // our position in browser history (0 = the app's base entry)
+let _exiting = false;   // true while a confirmed "Leave" replays past the guard
 const _cloneNav = (o) => JSON.parse(JSON.stringify(o));
 
 // A full, restorable view-state. Caller should snapshotScroll() first so the
@@ -8390,9 +8531,53 @@ function canGoBack() {
 
 window.addEventListener("popstate", (e) => {
   const st = e.state;
+  if (st && st.fcaGuard) {
+    // Device/browser Back at the app ROOT landed on the guard sentinel (the app
+    // is still loaded — see seedBackHistory). If a "Leave" is in progress, let it
+    // continue off the app; otherwise re-pin the base (so we sit on a real entry)
+    // and ask for confirmation first.
+    if (_exiting) { _exiting = false; history.back(); return; }
+    snapshotScroll();
+    _navIdx = 0;
+    try { history.pushState({ fcaIdx: 0, fcaSnap: _navSnapshot() }, ""); } catch (_) {}
+    showExitConfirm();
+    return;
+  }
   _navIdx = (st && typeof st.fcaIdx === "number") ? st.fcaIdx : 0;
   _applyNavSnapshot(st && st.fcaSnap);
 });
+
+/* Confirmation shown when a device/browser Back would leave the app (we've landed
+   on the guard sentinel just below the root). Stay keeps the app put (the base is
+   already re-pinned above the guard); Leave replays one more Back past the guard
+   to wherever the app was opened from. */
+function showExitConfirm() {
+  if (document.querySelector(".exit-confirm")) return;   // already asking
+  const overlay = el("div", { class: "sheet-overlay exit-confirm" });
+  const card    = el("div", { class: "sheet-card" });
+  card.appendChild(el("h2", { class: "sheet-title" }, "Leave the app?"));
+  card.appendChild(el("p", { class: "sheet-hint" },
+    "You’re at the top — pressing Back again would close the app."));
+  const btns  = el("div", { class: "sheet-btns" });
+  const stay  = el("button", { class: "sheet-btn sheet-btn-cancel" }, "Stay");
+  const leave = el("button", { class: "sheet-btn sheet-btn-primary" }, "Leave");
+  btns.appendChild(stay);
+  btns.appendChild(leave);
+  card.appendChild(btns);
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+
+  const doStay  = () => { overlay.remove(); };   // base already re-pinned
+  const doLeave = () => {
+    overlay.remove();
+    _exiting = true;     // BASE → guard (popstate continues) → one more Back exits
+    history.back();
+  };
+  stay.addEventListener("click", doStay);
+  leave.addEventListener("click", doLeave);
+  overlay.addEventListener("click", e => { if (e.target === overlay) doStay(); });
+  card.addEventListener("click", e => e.stopPropagation());
+}
 
 // At startup, stamp the restored-from-storage state onto the base history entry
 // (so Back works after a reload) and rebuild the active tab's drill chain so
@@ -8408,8 +8593,13 @@ function seedBackHistory() {
     stacks[tab] = stacks[tab].slice(0, d);
     return { tab, stacks };
   };
+  // Plant a same-document GUARD sentinel BELOW the app base: replace the loaded
+  // entry with it, then push the real base on top. A device/browser Back at the
+  // root then lands on the guard (popstate fires, the app stays loaded) so we can
+  // confirm before leaving — see the popstate handler / showExitConfirm.
+  try { history.replaceState({ fcaGuard: true }, ""); } catch (_) {}
   _navIdx = 0;
-  try { history.replaceState({ fcaIdx: 0, fcaSnap: snapAt(1) }, ""); } catch (_) {}
+  try { history.pushState({ fcaIdx: 0, fcaSnap: snapAt(1) }, ""); } catch (_) {}
   for (let d = 2; d <= depth; d++) {
     _navIdx++;
     try { history.pushState({ fcaIdx: _navIdx, fcaSnap: snapAt(d) }, ""); } catch (_) {}
@@ -8681,6 +8871,11 @@ function switchTab(tab) {
   _pushNav();                    // a Back/Forward-able navigation step
   saveState();
   render();
+  // The engaged keyboard selection survives the tab change ONLY if its cursor
+  // item is actually on screen in the new tab; otherwise it disengages so an
+  // unrelated list isn't left with a stray ring (render restores scroll
+  // synchronously, so the item's position here is already settled).
+  keepSelectionIfVisible();
 }
 
 /* Click-to-search: used by clickable institutions, author names, and
@@ -8721,6 +8916,7 @@ function searchFor(query, mode) {
    first focus didn't take (element not yet focusable mid layout), so it never
    steals a selection the user has already started editing. */
 function focusSearch() {
+  clearSelection();              // going to Find disengages keyboard selection
   snapshotScroll();
   const stack = state.tabStacks["search"];
   // Did this actually change the view? (arriving from another tab, or
@@ -8781,14 +8977,494 @@ document.addEventListener("keydown", (e) => {
   focusSearch();
 });
 
+/* Single-key tab shortcuts: S / T / F / M jump straight to Sessions / Talks /
+   Find / Me. They fire in both layouts but NEVER while a field is focused (the
+   search box, a notes textarea, any input/contenteditable) or with a modifier
+   held, so typing an "s" into a note doesn't teleport you to Sessions. On a wide
+   layout "f" routes through focusSearch (drops the cursor in the box, ready to
+   type); "m" is a no-op there since Me is permanently shown in the right pane. */
+const _TAB_KEYS = { s: "sessions", t: "talks", f: "search", m: "me" };
+document.addEventListener("keydown", (e) => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const el = e.target;
+  if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable))
+    return;
+  if (document.querySelector(".sheet-overlay")) return;   // a sheet owns the keys
+  const tab = _TAB_KEYS[(e.key || "").toLowerCase()];
+  if (!tab) return;
+  e.preventDefault();
+  if (tab === "search" && isWide()) focusSearch();
+  else switchTab(tab);
+});
+
+/* Esc inside a text field (the Find box, a notes textarea, any input/
+   contenteditable) just drops focus out of it — without the native type=search
+   "clear" — instead of doing nothing. Runs in both layouts. */
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  const el = e.target;
+  if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) {
+    e.preventDefault();
+    el.blur();
+  }
+});
+
+/* Ctrl/Cmd+Z undoes the last schedule add/remove (a bulk →/← undoes as one);
+   Ctrl/Cmd+Y redoes it. Both layouts. Skipped while typing in a field so the
+   browser's own text undo/redo still works there. */
+document.addEventListener("keydown", (e) => {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+  const k = (e.key || "").toLowerCase();
+  if (k !== "z" && k !== "y") return;
+  const el = e.target;
+  if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable))
+    return;
+  e.preventDefault();
+  if (k === "z") undoSchedule();
+  else redoSchedule();
+});
+
+/* =============================================================== */
+/* keyboard bubble navigation (two-pane / wide layouts only)        */
+/* =============================================================== */
+
+/* Selection state for keyboard nav (wide layouts only):
+     _selIds      — Set of selected LEFT-pane (#content) item ids. A selectable
+                    item is a list/child .bubble (data-bubble-id) OR a Talk/
+                    Session detail's own header card (.detail-head, data-detail-
+                    id, the "main bubble"). Every member gets the ring. Usually a
+                    single item; Ctrl/Shift gestures build a multi-selection.
+     _selCursorId — the active item: the moving end for Shift+↑/↓ and the
+                    single-item target for Space/Enter's tap-or-hold.
+     _selAnchorId — the fixed end of a Shift+↑/↓ range (where it began).
+     _selPillIdx  — index of the selected search-suggestion pill in
+                    #search-suggest, or -1. Pills exist only on the Search root,
+                    so this resets whenever that row is gone.
+     _selActive   — whether the user has actually ENGAGED keyboard selection. The
+                    ring stays hidden until this is true. Mouse clicks / Back set
+                    only a "pre-selection" (the cursor) WITHOUT engaging; the
+                    first arrow / Space-Enter / →←  / Ctrl-click / Ctrl+A turns it
+                    on. Esc and switching tabs turn it back off. So clicking
+                    around with the mouse never paints a (distracting) ring. */
+let _selIds      = new Set();
+let _selCursorId = null;
+let _selAnchorId = null;
+let _selPillIdx  = -1;
+let _selActive   = false;
+/* While the Space bar is held down on a selected bubble: { id, detailView,
+   fired, timer }. A quick release taps; holding past _KEY_LP_MS long-presses
+   into the standalone detail. Mirrors the pointer long-press in makeBubble. */
+let _spaceHold   = null;
+const _KEY_LP_MS = 500;
+
+/* Every selectable item in the LEFT pane, in document order: a detail's main
+   header first (when present), then the list/child bubbles. */
+function navItems() {
+  return [...document.querySelectorAll(
+    "#content .detail-head[data-detail-id], #content .bubble[data-bubble-id]")];
+}
+function itemId(elc) {
+  return elc.dataset.bubbleId != null ? elc.dataset.bubbleId : elc.dataset.detailId;
+}
+function cursorItemEl() {
+  if (_selCursorId == null) return null;
+  return navItems().find(elc => itemId(elc) === _selCursorId) || null;
+}
+// Back-compat alias: call sites that want "the active item element".
+function selectedItemEl() { return cursorItemEl(); }
+function searchPills() {
+  return [...document.querySelectorAll("#search-suggest .suggest-bubble")];
+}
+
+/* Paint the selection onto the live DOM: a ring on every item in _selIds (or the
+   active suggestion pill). Idempotent — run after every render and on each
+   selection change. Paints NOTHING until keyboard selection is engaged
+   (_selActive) — a mouse-only pre-selection stays invisible. The pill index
+   resets when its row is gone. Never rings on narrow (keyboard nav is wide). */
+function applySelection() {
+  document.querySelectorAll(
+    "#content .bubble.selected, #content .detail-head.selected, .suggest-bubble.selected"
+  ).forEach(b => b.classList.remove("selected"));
+  if (!isWide() || !_selActive) return;
+  if (_selPillIdx >= 0) {
+    const pills = searchPills();
+    if (_selPillIdx < pills.length) pills[_selPillIdx].classList.add("selected");
+    else _selPillIdx = -1;
+    return;
+  }
+  if (!_selIds.size) return;
+  for (const elc of navItems()) {
+    if (_selIds.has(itemId(elc))) elc.classList.add("selected");
+  }
+}
+
+/* Replace the whole selection with a single item — the normal single-select used
+   by a plain click, a plain arrow move, search nav, and detail entry. Resets the
+   cursor and the Shift-range anchor onto it. */
+function setBubbleSelection(id, opts = {}) {
+  _selIds = new Set(id == null ? [] : [id]);
+  _selCursorId = id;
+  _selAnchorId = id;
+  _selPillIdx = -1;
+  applySelection();
+  if (opts.scroll && id != null) {
+    const elc = cursorItemEl();
+    if (elc) elc.scrollIntoView({ block: "nearest" });
+  }
+}
+function setPillSelection(idx) {
+  _selPillIdx = idx;
+  _selIds = new Set();
+  _selCursorId = null;
+  _selAnchorId = null;
+  applySelection();
+  const pills = searchPills();
+  if (pills[idx]) pills[idx].scrollIntoView({ block: "nearest" });
+}
+function clearSelection() {
+  _selIds = new Set();
+  _selCursorId = null;
+  _selAnchorId = null;
+  _selPillIdx = -1;
+  _selActive = false;        // back to "nothing engaged" — no ring
+  applySelection();
+}
+
+/* Ctrl/Cmd-click: change the selection WITHOUT interacting with the bubble.
+   Plain Ctrl-click selects just this item (or deselects it if it was already
+   selected), and becomes the anchor. Ctrl+Shift-click selects the contiguous run
+   from that anchor to this item — like Shift-clicking text — leaving the anchor
+   put so further Ctrl+Shift-clicks redraw the range from the same start. */
+function ctrlClickItem(id, range) {
+  if (range) {                          // Ctrl+Shift: select the run from the anchor
+    const items = navItems();
+    const anchor = _selAnchorId != null ? _selAnchorId : id;
+    _selAnchorId = anchor;
+    _selCursorId = id;
+    selectRange(items, anchor, id);
+  } else if (_selIds.has(id)) {         // Ctrl: already selected → deselect it
+    _selIds.delete(id);
+    _selCursorId = null;
+    _selAnchorId = null;
+  } else {                              // Ctrl: select just this one (the new anchor)
+    _selIds = new Set([id]);
+    _selCursorId = id;
+    _selAnchorId = id;
+  }
+  _selPillIdx = -1;
+  _selActive = true;                    // a Ctrl-click is an explicit keyboard-style engage
+  applySelection();
+}
+
+/* Set _selIds to the contiguous run of items between the anchor and cursor ids
+   (inclusive), in current document order — the Shift+↑/↓ range. */
+function selectRange(items, anchorId, cursorId) {
+  const ids = items.map(itemId);
+  let a = ids.indexOf(anchorId), b = ids.indexOf(cursorId);
+  if (a < 0 || b < 0) { _selIds = new Set(cursorId == null ? [] : [cursorId]); return; }
+  if (a > b) { const tmp = a; a = b; b = tmp; }
+  _selIds = new Set(ids.slice(a, b + 1));
+}
+
+/* Expand-or-collapse every selectable Session in `ids` in one render (the
+   multi-selection Space/Enter action). Biased toward expand: if any are still
+   collapsed, expand all; if all are already open, collapse all. */
+function toggleExpandSessions(ids) {
+  const expandable = ids.filter(isExpandableSession);
+  if (!expandable.length) return;
+  const set = new Set(state.expandedSessions || []);
+  const allOpen = expandable.every(id => set.has(id));
+  for (const id of expandable) { if (allOpen) set.delete(id); else set.add(id); }
+  snapshotScroll();
+  state.expandedSessions = [...set];
+  saveState();
+  const svg = document.querySelector("#session-list-connectors");
+  if (svg) svg.remove();
+  render();
+}
+/* Leaving a Talk/Session detail via Back: the bubble that opened it becomes the
+   cursor so it's re-selected in whatever list/detail we return to. Does NOT touch
+   the engaged flag — a keyboard Back (Esc) stays engaged so the ring follows to
+   the origin, while the mouse Back button disengages it itself. No-op off a
+   Talk/Session detail. */
+function selectOriginOnBack() {
+  if (!isWide()) return;
+  const v = currentTopView();
+  let id = null;
+  if (v.startsWith("talk:")) id = v.slice(5);
+  else if (v.startsWith("session:")) id = v.slice(8);
+  if (id != null) { _selIds = new Set([id]); _selCursorId = id; _selAnchorId = id; _selPillIdx = -1; }
+}
+/* Move focus back into the Search box and select its text (so the next
+   keystroke overtypes). Drops any pill/bubble cursor. */
+function focusSearchBox() {
+  clearSelection();
+  const i = $("#search-input");
+  if (i) { i.focus(); i.select(); }
+}
+/* Select the topmost search result (the first result bubble), if any. */
+function selectFirstResult() {
+  const items = navItems();
+  if (items.length) setBubbleSelection(itemId(items[0]), { scroll: true });
+}
+/* Index of the first/last item currently inside the #content viewport — the
+   entry point when an arrow is pressed with nothing selected. */
+function _firstVisibleItemIdx(items) {
+  const c = $("#content").getBoundingClientRect();
+  for (let i = 0; i < items.length; i++) {
+    const r = items[i].getBoundingClientRect();
+    if (r.bottom > c.top + 1 && r.top < c.bottom - 1) return i;
+  }
+  return 0;
+}
+function _lastVisibleItemIdx(items) {
+  const c = $("#content").getBoundingClientRect();
+  for (let i = items.length - 1; i >= 0; i--) {
+    const r = items[i].getBoundingClientRect();
+    if (r.bottom > c.top + 1 && r.top < c.bottom - 1) return i;
+  }
+  return items.length - 1;
+}
+/* Is `el` (partially) within the #content viewport right now? */
+function _itemInView(el) {
+  const c = $("#content");
+  if (!c || !el) return false;
+  const cr = c.getBoundingClientRect();
+  const r = el.getBoundingClientRect();
+  return r.bottom > cr.top + 1 && r.top < cr.bottom - 1;
+}
+/* After a tab change: keep the engaged selection iff its cursor item is on
+   screen in the freshly rendered tab; otherwise disengage entirely. */
+function keepSelectionIfVisible() {
+  if (!_selActive) return;
+  const el = cursorItemEl();
+  if (el && _itemInView(el)) applySelection();
+  else clearSelection();
+}
+
+/* Keyboard item navigation — wide (two-pane) layouts only:
+     ↑/↓        move the single cursor (first press with nothing selected grabs
+                the top/bottom item on screen)
+     Shift+↑/↓  extend a contiguous selection from the anchor, like Shift in a
+                text field
+     Space/Enter  one item: tap activates (session expands / talk opens), hold
+                  long-presses into the detail. Multi-selection: if any selected
+                  are Sessions, expand/collapse them all
+     →/←        add (→) / remove (←) the schedule for EVERY selected item
+     Esc        drilled-in views (talk/session detail, click-search results) →
+                Back; a root list → clears the selection
+
+   Entering a Talk/Session detail selects its header (the "main bubble"), and the
+   arrows walk its child bubbles; Back from it re-selects the bubble that opened
+   it (see render() / Back paths). Ctrl/Ctrl+Shift CLICK (in makeBubble) build the
+   multi-selection with the mouse without interacting.
+
+   On the Search root there's an extra row of suggestion pills between the search
+   box and the results: ↓ from the box drops onto the first pill (or, with no
+   pills, the first result); ←/→ move between pills; ↓ from a pill (or ↑ from the
+   top result) crosses into the results; ↑ from a pill (or, with no pills, from
+   the top result) returns to the box with its text selected; Space/Enter runs a
+   pill. Typing in the search box / notes is otherwise never hijacked, and an
+   open modal sheet keeps the keys. */
+document.addEventListener("keydown", (e) => {
+  if (!isWide()) return;
+
+  // Ctrl/Cmd+A selects every item in the current list — unless you're typing in
+  // a field (let it select the field's text instead) or a sheet is open.
+  if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === "a" || e.key === "A")) {
+    const f = e.target;
+    if (f && (f.tagName === "INPUT" || f.tagName === "TEXTAREA" || f.isContentEditable)) return;
+    if (document.querySelector(".sheet-overlay")) return;
+    const items = navItems();
+    if (!items.length) return;
+    e.preventDefault();
+    _selIds = new Set(items.map(itemId));
+    _selAnchorId = itemId(items[0]);
+    _selCursorId = itemId(items[items.length - 1]);
+    _selPillIdx = -1;
+    _selActive = true;
+    applySelection();
+    return;
+  }
+
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (document.querySelector(".sheet-overlay")) return;   // a sheet owns the keys
+
+  const t = e.target;
+  const inSearchInput = !!(t && t.id === "search-input");
+  if (!inSearchInput && t &&
+      (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable))
+    return;
+
+  const searchRoot = state.activeTab === "search" && currentTopView() === "list";
+
+  // Focus is in the Search box: only a plain ArrowDown is ours (drop into the
+  // pills, or the first result when there are none). Everything else types
+  // (Shift+↓ stays an ordinary text selection).
+  if (inSearchInput) {
+    if (searchRoot && e.key === "ArrowDown" && !e.shiftKey) {
+      e.preventDefault();
+      t.blur();
+      _selActive = true;
+      if (searchPills().length) setPillSelection(0);
+      else selectFirstResult();
+    }
+    return;
+  }
+
+  // A suggestion pill is selected (Search root).
+  if (searchRoot && _selPillIdx >= 0) {
+    const pills = searchPills();
+    switch (e.key) {
+      case "ArrowRight": e.preventDefault(); setPillSelection(Math.min(_selPillIdx + 1, pills.length - 1)); return;
+      case "ArrowLeft":  e.preventDefault(); setPillSelection(Math.max(_selPillIdx - 1, 0)); return;
+      case "ArrowDown":  e.preventDefault(); selectFirstResult(); return;
+      case "ArrowUp":    e.preventDefault(); focusSearchBox(); return;
+      case " ": case "Spacebar": case "Enter":
+        e.preventDefault();
+        if (pills[_selPillIdx]) pills[_selPillIdx].click();
+        return;
+      case "Escape":     e.preventDefault(); clearSelection(); return;
+      default: return;
+    }
+  }
+
+  switch (e.key) {
+    case "Escape": {
+      e.preventDefault();
+      if (canGoBack()) triggerBack(true);   // keyboard Back keeps the ring
+      else clearSelection();
+      return;
+    }
+    case "ArrowDown":
+    case "ArrowUp": {
+      const items = navItems();
+      if (!items.length) {
+        // Empty result list on the Search root: ↑ returns to the box.
+        if (searchRoot && e.key === "ArrowUp") { e.preventDefault(); focusSearchBox(); }
+        return;
+      }
+      e.preventDefault();
+      _selActive = true;        // arrow nav engages the (visible) selection
+      const dir = e.key === "ArrowDown" ? 1 : -1;
+      const cur = cursorItemEl();
+      if (!cur) {   // nothing selected yet: grab the visible top/bottom item
+        const idx = dir > 0 ? _firstVisibleItemIdx(items) : _lastVisibleItemIdx(items);
+        setBubbleSelection(itemId(items[idx]), { scroll: true });
+        return;
+      }
+      let idx = items.indexOf(cur);
+      // A plain ↑ at the top item on the Search root rises into the pills (or
+      // box). A Shift-range never leaves the result list.
+      if (!e.shiftKey && searchRoot && e.key === "ArrowUp" && idx === 0) {
+        if (searchPills().length) setPillSelection(0);
+        else focusSearchBox();
+        return;
+      }
+      idx = Math.max(0, Math.min(items.length - 1, idx + dir));
+      const newId = itemId(items[idx]);
+      if (e.shiftKey) {                         // extend the range from the anchor
+        if (_selAnchorId == null) _selAnchorId = itemId(cur);
+        _selCursorId = newId;
+        selectRange(items, _selAnchorId, newId);
+        applySelection();
+        items[idx].scrollIntoView({ block: "nearest" });
+      } else {
+        setBubbleSelection(newId, { scroll: true });
+      }
+      return;
+    }
+    case " ":
+    case "Spacebar":                         // "Spacebar" for legacy Edge
+    case "Enter": {                          // Enter mirrors Space exactly
+      // Multi-selection: if any selected item is a Session, expand/collapse them
+      // all (no single-item tap/hold). With no Sessions selected there's nothing
+      // to expand — use →/← to bulk add/remove instead.
+      if (_selIds.size > 1) {
+        e.preventDefault();
+        if (e.repeat) return;
+        _selActive = true;
+        const sessions = navItems().filter(elc =>
+          elc.classList.contains("bubble") && elc.dataset.kind === "session"
+          && _selIds.has(itemId(elc))).map(itemId);
+        if (sessions.length) toggleExpandSessions(sessions);
+        return;
+      }
+      const cur = cursorItemEl();
+      if (!cur) return;                      // nothing selected: let the key act normally
+      e.preventDefault();                    // never scroll while an item is selected
+      if (e.repeat) return;                  // auto-repeat while held: hold timer runs
+      if (!cur.classList.contains("bubble")) {
+        // The selected item is a detail's own header — Space/Enter goes Back
+        // (keeping the keyboard selection engaged, like Esc).
+        if (cur.classList.contains("detail-head") && canGoBack()) triggerBack(true);
+        return;
+      }
+      _selActive = true; applySelection();   // engage now so the ring shows on press
+      // Press begins. A quick release taps (keyup → click: session expands inline
+      // / talk opens); holding past the threshold instead long-presses into the
+      // standalone detail — so a held Space/Enter on a session reaches Session
+      // detail, not the inline expand a tap does. Mirrors makeBubble's long-press.
+      const id = itemId(cur);
+      const detailView = cur.dataset.kind === "talk" ? `talk:${id}` : `session:${id}`;
+      if (_spaceHold) clearTimeout(_spaceHold.timer);
+      _spaceHold = { id, detailView, fired: false, timer: 0 };
+      _spaceHold.timer = setTimeout(() => {
+        if (_spaceHold) { _spaceHold.fired = true; navigate(_spaceHold.detailView); }
+      }, _KEY_LP_MS);
+      return;
+    }
+    case "ArrowRight":
+    case "ArrowLeft": {
+      // Add (→) / remove (←) the schedule for EVERY selected item — one or many.
+      const ids = _selIds.size ? [..._selIds]
+                : (cursorItemEl() ? [_selCursorId] : []);
+      if (!ids.length) return;
+      e.preventDefault();
+      _selActive = true;        // →/← engages and shows the ring on the item(s)
+      const add = e.key === "ArrowRight";
+      // Group the whole bulk change into one undo transaction.
+      beginUndoBatch();
+      for (const id of ids) {
+        const already = state.schedule.includes(id);
+        if (add && !already) toggleScheduled(id);
+        else if (!add && already) toggleScheduled(id);
+      }
+      endUndoBatch();
+      // toggleScheduled does targeted updates on wide (items survive), so
+      // re-assert the rings rather than relying on a full re-render.
+      applySelection();
+      return;
+    }
+  }
+});
+
+/* Releasing Space/Enter completes a keyboard press: if the long-press timer
+   hasn't fired yet it was a tap, so activate normally (session expands inline,
+   talk opens); if it already fired, the detail was opened on hold — do nothing.
+   _spaceHold is only ever set by the wide-gated keydown above, so this is inert
+   on narrow / in inputs. */
+document.addEventListener("keyup", (e) => {
+  if (e.key !== " " && e.key !== "Spacebar" && e.key !== "Enter") return;
+  if (!_spaceHold) return;
+  e.preventDefault();
+  const hold = _spaceHold;
+  clearTimeout(hold.timer);
+  _spaceHold = null;
+  if (hold.fired) return;                  // long-press already opened the detail
+  const elc = navItems().find(x =>
+    x.classList.contains("bubble") && itemId(x) === hold.id);
+  if (elc) elc.click();
+});
+
 // Route the in-app Back button through history so it and the device/browser
 // Back/Forward stay in sync (history.back() -> popstate -> restore the previous
 // snapshot, and a Forward can redo it). Only call history.back() when we own an
 // entry behind us; otherwise (e.g. restored state with no seeded entry) pop
 // directly so the button can never accidentally leave the app.
 $("#back-btn").addEventListener("click", () => {
-  if (_navIdx > 0) history.back();
-  else if (canGoBack()) back();
+  // The mouse Back affordance disengages the keyboard selection (no ring).
+  triggerBack(false);
 });
 // Only the LEFT tab bar's buttons switch tabs. The right pane's Me button
 // is permanently active and inert (Me is always shown there on wide).

@@ -23,6 +23,9 @@
   --accent:    #d6541c;
   --accent-soft: rgba(214,84,28,.12);
   --accent-faint: rgba(214,84,28,.45);
+  
+  --sel-ring: rgba(37,99,235,.70);
+  --sel-soft: rgba(37,99,235,.10);
   --tile-overlay: rgba(246,246,244,.65);
   
   --tab-h:     calc(58px * var(--fs));
@@ -57,6 +60,8 @@
     --accent:    #ff8c5c;
     --accent-soft: rgba(255,140,92,.18);
     --accent-faint: rgba(255,140,92,.55);
+    --sel-ring: rgba(96,165,250,.75);
+    --sel-soft: rgba(96,165,250,.16);
     --tile-overlay: rgba(17,17,17,.55);
 
     --c-blue-bg:    #1a233d;
@@ -388,6 +393,17 @@ body[data-active-view="session-detail"] .bubble[data-kind="talk"],
 
 .bubble.partial { box-shadow: inset 0 0 0 1px var(--accent-faint); }
 
+.bubble.selected {
+  outline: 1.5px solid var(--sel-ring);
+  outline-offset: 1px;
+  background-image: linear-gradient(var(--sel-soft), var(--sel-soft));
+}
+
+.detail-head.selected {
+  outline: 1.5px solid var(--sel-ring);
+  outline-offset: 2px;
+}
+
 .schedule-btn {
   
   --sb-d: calc(36px * var(--sp));
@@ -592,13 +608,27 @@ body[data-active-view="session-detail"] .bubble[data-kind="talk"],
   border-color: var(--accent);
 }
 
+.search-suggest .suggest-bubble.selected {
+  outline: 1.5px solid var(--sel-ring);
+  outline-offset: 1px;
+  border-color: var(--sel-ring);
+}
+
 .detail-head {
   position: relative;
-  padding: 14px calc(56px * var(--sp)) 16px 16px;
+  padding: 14px calc(56px * var(--sp)) 16px 16px;   
   border-radius: var(--radius);
   background: var(--c-neutral-bg);
   border-left: 4px solid var(--c-neutral-fg);
   margin-bottom: 16px;
+  cursor: pointer;          
+  
+  -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none;
+}
+.detail-head:active { background-image: linear-gradient(rgba(0,0,0,.05), rgba(0,0,0,.05)); }
+@media (prefers-color-scheme: dark) {
+  .detail-head:active { background-image: linear-gradient(rgba(255,255,255,.06), rgba(255,255,255,.06)); }
 }
 .detail-head.clr-blue    { background: var(--c-blue-bg);    border-left-color: var(--c-blue-fg); }
 .detail-head.clr-violet  { background: var(--c-violet-bg);  border-left-color: var(--c-violet-fg); }
@@ -1277,7 +1307,7 @@ body.has-indicator #scroll-indicator { display: flex; }
 <nav id="tabbar">
   <button class="tab-btn" data-tab="sessions"><span class="glyph">▦</span><span>Sessions</span></button>
   <button class="tab-btn" data-tab="talks"><span class="glyph">▤</span><span>Talks</span></button>
-  <button class="tab-btn" data-tab="search"><span class="glyph">⌕</span><span>Search</span></button>
+  <button class="tab-btn" data-tab="search"><span class="glyph">⌕</span><span>Find</span></button>
   <button class="tab-btn" data-tab="me"><span class="glyph">★</span><span>Me</span></button>
 </nav>
 
@@ -1961,6 +1991,49 @@ function parseClockDirective(raw) {
   return { mode, ms: d.getTime() };
 }
 
+let _undoStack = [];
+let _redoStack = [];
+let _undoBatch = null;
+let _replayingSchedule = false;
+
+function recordScheduleOp(id, op) {
+  if (_replayingSchedule) return;
+  const entry = { id, op };
+  if (_undoBatch) {
+    _undoBatch.push(entry);
+  } else {
+    _undoStack.push([entry]);
+    _redoStack = [];          
+  }
+}
+function beginUndoBatch() { _undoBatch = []; }
+function endUndoBatch() {
+  if (_undoBatch && _undoBatch.length) { _undoStack.push(_undoBatch); _redoStack = []; }
+  _undoBatch = null;
+}
+
+function _setScheduled(id, wantScheduled) {
+  if (state.schedule.includes(id) !== wantScheduled) toggleScheduled(id);
+}
+function undoSchedule() {
+  if (!_undoStack.length) return;
+  const tx = _undoStack.pop();
+  _replayingSchedule = true;
+  for (let i = tx.length - 1; i >= 0; i--) _setScheduled(tx[i].id, tx[i].op === "del");
+  _replayingSchedule = false;
+  _redoStack.push(tx);
+  applySelection();
+}
+function redoSchedule() {
+  if (!_redoStack.length) return;
+  const tx = _redoStack.pop();
+  _replayingSchedule = true;
+  for (const entry of tx) _setScheduled(entry.id, entry.op === "add");
+  _replayingSchedule = false;
+  _undoStack.push(tx);
+  applySelection();
+}
+
 function toggleScheduled(id) {
   const s = new Set(state.schedule);
   let op;
@@ -1970,6 +2043,8 @@ function toggleScheduled(id) {
 
   state.scheduleLog = state.scheduleLog || {};
   state.scheduleLog[id] = { op, ts: Date.now() };
+  
+  recordScheduleOp(id, op);
   saveState();
 
   const isAdded = op === "add";
@@ -2114,6 +2189,11 @@ function makeBubble(item, opts = {}) {
 
       if (wrap._lpFired) { wrap._lpFired = false; return; }
 
+      const inLeft = isWide() && wrap.closest("#content");
+      if (inLeft && (e.ctrlKey || e.metaKey)) { ctrlClickItem(item.id, e.shiftKey); return; }
+
+      if (inLeft) setBubbleSelection(item.id);
+
       if (inAddZone(e.clientX, e.clientY)) { toggleScheduled(item.id); return; }
       if (expandable) { toggleSessionExpanded(item.id); return; }
       navigate(isTalk ? `talk:${item.id}` : `session:${item.id}`);
@@ -2143,6 +2223,8 @@ function makeBubble(item, opts = {}) {
 
       if (e.target.closest(".schedule-btn")) return;
       if (inAddZone(e.clientX, e.clientY)) return;
+      
+      if (e.ctrlKey || e.metaKey) return;
       sx = e.clientX; sy = e.clientY;
       wrap._lpFired = false;
       cancel();
@@ -2851,6 +2933,8 @@ function buildSessionHead(s) {
   const head = el("section", {
     class: `detail-head clr-${s.color}`,
     "data-detail-id": s.id,
+
+    onclick: (e) => { if (e.target.closest(".dh-add, .clickable")) return; triggerBack(false); },
   });
 
   head.appendChild(el("h2", { class: "dh-title" }, s.title || "(untitled)"));
@@ -2906,6 +2990,8 @@ function renderTalkDetail(c, tid) {
   const head = el("section", {
     class: `detail-head clr-${t.color}`,
     "data-detail-id": t.id,
+
+    onclick: (e) => { if (e.target.closest(".dh-add, .clickable")) return; triggerBack(false); },
   });
 
   head.appendChild(el("h2", { class: "dh-title" }, displayTitle(t) || "(untitled)"));
@@ -5062,7 +5148,7 @@ function pageTitleFor(tab, top) {
     const query = ci < 0 ? rest : rest.slice(ci + 1);
     return query || "Search";
   }
-  return ({ sessions: "Sessions", talks: "Talks", search: "Search", me: "My Schedule" })[tab];
+  return ({ sessions: "Sessions", talks: "Talks", search: "Find", me: "My Schedule" })[tab];
 }
 
 function render() {
@@ -5129,6 +5215,17 @@ function render() {
 
   refreshTypesPanel();
   updateScrollIndicator();
+
+  if (isWide() && (top.view.startsWith("talk:") || top.view.startsWith("session:"))) {
+    const mainId = top.view.startsWith("talk:") ? top.view.slice(5) : top.view.slice(8);
+    const ids = new Set(navItems().map(itemId));
+    if (!_selCursorId || !ids.has(_selCursorId)) {
+      _selIds = new Set([mainId]);
+      _selCursorId = mainId; _selAnchorId = mainId; _selPillIdx = -1;
+    }
+  }
+
+  applySelection();
 
   renderMePane();
 
@@ -5197,7 +5294,15 @@ function back() {
   }
 }
 
+function triggerBack(keepFlag) {
+  selectOriginOnBack();
+  if (!keepFlag) _selActive = false;
+  if (_navIdx > 0) history.back();
+  else if (canGoBack()) back();
+}
+
 let _navIdx = 0;   
+let _exiting = false;   
 const _cloneNav = (o) => JSON.parse(JSON.stringify(o));
 
 function _navSnapshot() {
@@ -5230,9 +5335,46 @@ function canGoBack() {
 
 window.addEventListener("popstate", (e) => {
   const st = e.state;
+  if (st && st.fcaGuard) {
+
+    if (_exiting) { _exiting = false; history.back(); return; }
+    snapshotScroll();
+    _navIdx = 0;
+    try { history.pushState({ fcaIdx: 0, fcaSnap: _navSnapshot() }, ""); } catch (_) {}
+    showExitConfirm();
+    return;
+  }
   _navIdx = (st && typeof st.fcaIdx === "number") ? st.fcaIdx : 0;
   _applyNavSnapshot(st && st.fcaSnap);
 });
+
+function showExitConfirm() {
+  if (document.querySelector(".exit-confirm")) return;   
+  const overlay = el("div", { class: "sheet-overlay exit-confirm" });
+  const card    = el("div", { class: "sheet-card" });
+  card.appendChild(el("h2", { class: "sheet-title" }, "Leave the app?"));
+  card.appendChild(el("p", { class: "sheet-hint" },
+    "You’re at the top — pressing Back again would close the app."));
+  const btns  = el("div", { class: "sheet-btns" });
+  const stay  = el("button", { class: "sheet-btn sheet-btn-cancel" }, "Stay");
+  const leave = el("button", { class: "sheet-btn sheet-btn-primary" }, "Leave");
+  btns.appendChild(stay);
+  btns.appendChild(leave);
+  card.appendChild(btns);
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+
+  const doStay  = () => { overlay.remove(); };   
+  const doLeave = () => {
+    overlay.remove();
+    _exiting = true;     
+    history.back();
+  };
+  stay.addEventListener("click", doStay);
+  leave.addEventListener("click", doLeave);
+  overlay.addEventListener("click", e => { if (e.target === overlay) doStay(); });
+  card.addEventListener("click", e => e.stopPropagation());
+}
 
 function seedBackHistory() {
   const tab = state.activeTab;
@@ -5242,8 +5384,10 @@ function seedBackHistory() {
     stacks[tab] = stacks[tab].slice(0, d);
     return { tab, stacks };
   };
+
+  try { history.replaceState({ fcaGuard: true }, ""); } catch (_) {}
   _navIdx = 0;
-  try { history.replaceState({ fcaIdx: 0, fcaSnap: snapAt(1) }, ""); } catch (_) {}
+  try { history.pushState({ fcaIdx: 0, fcaSnap: snapAt(1) }, ""); } catch (_) {}
   for (let d = 2; d <= depth; d++) {
     _navIdx++;
     try { history.pushState({ fcaIdx: _navIdx, fcaSnap: snapAt(d) }, ""); } catch (_) {}
@@ -5429,6 +5573,8 @@ function switchTab(tab) {
   _pushNav();                    
   saveState();
   render();
+
+  keepSelectionIfVisible();
 }
 
 function searchFor(query, mode) {
@@ -5440,6 +5586,7 @@ function searchFor(query, mode) {
 }
 
 function focusSearch() {
+  clearSelection();              
   snapshotScroll();
   const stack = state.tabStacks["search"];
 
@@ -5476,9 +5623,383 @@ document.addEventListener("keydown", (e) => {
   focusSearch();
 });
 
+const _TAB_KEYS = { s: "sessions", t: "talks", f: "search", m: "me" };
+document.addEventListener("keydown", (e) => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const el = e.target;
+  if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable))
+    return;
+  if (document.querySelector(".sheet-overlay")) return;   
+  const tab = _TAB_KEYS[(e.key || "").toLowerCase()];
+  if (!tab) return;
+  e.preventDefault();
+  if (tab === "search" && isWide()) focusSearch();
+  else switchTab(tab);
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  const el = e.target;
+  if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) {
+    e.preventDefault();
+    el.blur();
+  }
+});
+
+document.addEventListener("keydown", (e) => {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+  const k = (e.key || "").toLowerCase();
+  if (k !== "z" && k !== "y") return;
+  const el = e.target;
+  if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable))
+    return;
+  e.preventDefault();
+  if (k === "z") undoSchedule();
+  else redoSchedule();
+});
+
+let _selIds      = new Set();
+let _selCursorId = null;
+let _selAnchorId = null;
+let _selPillIdx  = -1;
+let _selActive   = false;
+
+let _spaceHold   = null;
+const _KEY_LP_MS = 500;
+
+function navItems() {
+  return [...document.querySelectorAll(
+    "#content .detail-head[data-detail-id], #content .bubble[data-bubble-id]")];
+}
+function itemId(elc) {
+  return elc.dataset.bubbleId != null ? elc.dataset.bubbleId : elc.dataset.detailId;
+}
+function cursorItemEl() {
+  if (_selCursorId == null) return null;
+  return navItems().find(elc => itemId(elc) === _selCursorId) || null;
+}
+
+function selectedItemEl() { return cursorItemEl(); }
+function searchPills() {
+  return [...document.querySelectorAll("#search-suggest .suggest-bubble")];
+}
+
+function applySelection() {
+  document.querySelectorAll(
+    "#content .bubble.selected, #content .detail-head.selected, .suggest-bubble.selected"
+  ).forEach(b => b.classList.remove("selected"));
+  if (!isWide() || !_selActive) return;
+  if (_selPillIdx >= 0) {
+    const pills = searchPills();
+    if (_selPillIdx < pills.length) pills[_selPillIdx].classList.add("selected");
+    else _selPillIdx = -1;
+    return;
+  }
+  if (!_selIds.size) return;
+  for (const elc of navItems()) {
+    if (_selIds.has(itemId(elc))) elc.classList.add("selected");
+  }
+}
+
+function setBubbleSelection(id, opts = {}) {
+  _selIds = new Set(id == null ? [] : [id]);
+  _selCursorId = id;
+  _selAnchorId = id;
+  _selPillIdx = -1;
+  applySelection();
+  if (opts.scroll && id != null) {
+    const elc = cursorItemEl();
+    if (elc) elc.scrollIntoView({ block: "nearest" });
+  }
+}
+function setPillSelection(idx) {
+  _selPillIdx = idx;
+  _selIds = new Set();
+  _selCursorId = null;
+  _selAnchorId = null;
+  applySelection();
+  const pills = searchPills();
+  if (pills[idx]) pills[idx].scrollIntoView({ block: "nearest" });
+}
+function clearSelection() {
+  _selIds = new Set();
+  _selCursorId = null;
+  _selAnchorId = null;
+  _selPillIdx = -1;
+  _selActive = false;        
+  applySelection();
+}
+
+function ctrlClickItem(id, range) {
+  if (range) {                          
+    const items = navItems();
+    const anchor = _selAnchorId != null ? _selAnchorId : id;
+    _selAnchorId = anchor;
+    _selCursorId = id;
+    selectRange(items, anchor, id);
+  } else if (_selIds.has(id)) {         
+    _selIds.delete(id);
+    _selCursorId = null;
+    _selAnchorId = null;
+  } else {                              
+    _selIds = new Set([id]);
+    _selCursorId = id;
+    _selAnchorId = id;
+  }
+  _selPillIdx = -1;
+  _selActive = true;                    
+  applySelection();
+}
+
+function selectRange(items, anchorId, cursorId) {
+  const ids = items.map(itemId);
+  let a = ids.indexOf(anchorId), b = ids.indexOf(cursorId);
+  if (a < 0 || b < 0) { _selIds = new Set(cursorId == null ? [] : [cursorId]); return; }
+  if (a > b) { const tmp = a; a = b; b = tmp; }
+  _selIds = new Set(ids.slice(a, b + 1));
+}
+
+function toggleExpandSessions(ids) {
+  const expandable = ids.filter(isExpandableSession);
+  if (!expandable.length) return;
+  const set = new Set(state.expandedSessions || []);
+  const allOpen = expandable.every(id => set.has(id));
+  for (const id of expandable) { if (allOpen) set.delete(id); else set.add(id); }
+  snapshotScroll();
+  state.expandedSessions = [...set];
+  saveState();
+  const svg = document.querySelector("#session-list-connectors");
+  if (svg) svg.remove();
+  render();
+}
+
+function selectOriginOnBack() {
+  if (!isWide()) return;
+  const v = currentTopView();
+  let id = null;
+  if (v.startsWith("talk:")) id = v.slice(5);
+  else if (v.startsWith("session:")) id = v.slice(8);
+  if (id != null) { _selIds = new Set([id]); _selCursorId = id; _selAnchorId = id; _selPillIdx = -1; }
+}
+
+function focusSearchBox() {
+  clearSelection();
+  const i = $("#search-input");
+  if (i) { i.focus(); i.select(); }
+}
+
+function selectFirstResult() {
+  const items = navItems();
+  if (items.length) setBubbleSelection(itemId(items[0]), { scroll: true });
+}
+
+function _firstVisibleItemIdx(items) {
+  const c = $("#content").getBoundingClientRect();
+  for (let i = 0; i < items.length; i++) {
+    const r = items[i].getBoundingClientRect();
+    if (r.bottom > c.top + 1 && r.top < c.bottom - 1) return i;
+  }
+  return 0;
+}
+function _lastVisibleItemIdx(items) {
+  const c = $("#content").getBoundingClientRect();
+  for (let i = items.length - 1; i >= 0; i--) {
+    const r = items[i].getBoundingClientRect();
+    if (r.bottom > c.top + 1 && r.top < c.bottom - 1) return i;
+  }
+  return items.length - 1;
+}
+
+function _itemInView(el) {
+  const c = $("#content");
+  if (!c || !el) return false;
+  const cr = c.getBoundingClientRect();
+  const r = el.getBoundingClientRect();
+  return r.bottom > cr.top + 1 && r.top < cr.bottom - 1;
+}
+
+function keepSelectionIfVisible() {
+  if (!_selActive) return;
+  const el = cursorItemEl();
+  if (el && _itemInView(el)) applySelection();
+  else clearSelection();
+}
+
+document.addEventListener("keydown", (e) => {
+  if (!isWide()) return;
+
+  if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === "a" || e.key === "A")) {
+    const f = e.target;
+    if (f && (f.tagName === "INPUT" || f.tagName === "TEXTAREA" || f.isContentEditable)) return;
+    if (document.querySelector(".sheet-overlay")) return;
+    const items = navItems();
+    if (!items.length) return;
+    e.preventDefault();
+    _selIds = new Set(items.map(itemId));
+    _selAnchorId = itemId(items[0]);
+    _selCursorId = itemId(items[items.length - 1]);
+    _selPillIdx = -1;
+    _selActive = true;
+    applySelection();
+    return;
+  }
+
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (document.querySelector(".sheet-overlay")) return;   
+
+  const t = e.target;
+  const inSearchInput = !!(t && t.id === "search-input");
+  if (!inSearchInput && t &&
+      (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable))
+    return;
+
+  const searchRoot = state.activeTab === "search" && currentTopView() === "list";
+
+  if (inSearchInput) {
+    if (searchRoot && e.key === "ArrowDown" && !e.shiftKey) {
+      e.preventDefault();
+      t.blur();
+      _selActive = true;
+      if (searchPills().length) setPillSelection(0);
+      else selectFirstResult();
+    }
+    return;
+  }
+
+  if (searchRoot && _selPillIdx >= 0) {
+    const pills = searchPills();
+    switch (e.key) {
+      case "ArrowRight": e.preventDefault(); setPillSelection(Math.min(_selPillIdx + 1, pills.length - 1)); return;
+      case "ArrowLeft":  e.preventDefault(); setPillSelection(Math.max(_selPillIdx - 1, 0)); return;
+      case "ArrowDown":  e.preventDefault(); selectFirstResult(); return;
+      case "ArrowUp":    e.preventDefault(); focusSearchBox(); return;
+      case " ": case "Spacebar": case "Enter":
+        e.preventDefault();
+        if (pills[_selPillIdx]) pills[_selPillIdx].click();
+        return;
+      case "Escape":     e.preventDefault(); clearSelection(); return;
+      default: return;
+    }
+  }
+
+  switch (e.key) {
+    case "Escape": {
+      e.preventDefault();
+      if (canGoBack()) triggerBack(true);   
+      else clearSelection();
+      return;
+    }
+    case "ArrowDown":
+    case "ArrowUp": {
+      const items = navItems();
+      if (!items.length) {
+        
+        if (searchRoot && e.key === "ArrowUp") { e.preventDefault(); focusSearchBox(); }
+        return;
+      }
+      e.preventDefault();
+      _selActive = true;        
+      const dir = e.key === "ArrowDown" ? 1 : -1;
+      const cur = cursorItemEl();
+      if (!cur) {   
+        const idx = dir > 0 ? _firstVisibleItemIdx(items) : _lastVisibleItemIdx(items);
+        setBubbleSelection(itemId(items[idx]), { scroll: true });
+        return;
+      }
+      let idx = items.indexOf(cur);
+
+      if (!e.shiftKey && searchRoot && e.key === "ArrowUp" && idx === 0) {
+        if (searchPills().length) setPillSelection(0);
+        else focusSearchBox();
+        return;
+      }
+      idx = Math.max(0, Math.min(items.length - 1, idx + dir));
+      const newId = itemId(items[idx]);
+      if (e.shiftKey) {                         
+        if (_selAnchorId == null) _selAnchorId = itemId(cur);
+        _selCursorId = newId;
+        selectRange(items, _selAnchorId, newId);
+        applySelection();
+        items[idx].scrollIntoView({ block: "nearest" });
+      } else {
+        setBubbleSelection(newId, { scroll: true });
+      }
+      return;
+    }
+    case " ":
+    case "Spacebar":                         
+    case "Enter": {                          
+
+      if (_selIds.size > 1) {
+        e.preventDefault();
+        if (e.repeat) return;
+        _selActive = true;
+        const sessions = navItems().filter(elc =>
+          elc.classList.contains("bubble") && elc.dataset.kind === "session"
+          && _selIds.has(itemId(elc))).map(itemId);
+        if (sessions.length) toggleExpandSessions(sessions);
+        return;
+      }
+      const cur = cursorItemEl();
+      if (!cur) return;                      
+      e.preventDefault();                    
+      if (e.repeat) return;                  
+      if (!cur.classList.contains("bubble")) {
+
+        if (cur.classList.contains("detail-head") && canGoBack()) triggerBack(true);
+        return;
+      }
+      _selActive = true; applySelection();   
+
+      const id = itemId(cur);
+      const detailView = cur.dataset.kind === "talk" ? `talk:${id}` : `session:${id}`;
+      if (_spaceHold) clearTimeout(_spaceHold.timer);
+      _spaceHold = { id, detailView, fired: false, timer: 0 };
+      _spaceHold.timer = setTimeout(() => {
+        if (_spaceHold) { _spaceHold.fired = true; navigate(_spaceHold.detailView); }
+      }, _KEY_LP_MS);
+      return;
+    }
+    case "ArrowRight":
+    case "ArrowLeft": {
+      
+      const ids = _selIds.size ? [..._selIds]
+                : (cursorItemEl() ? [_selCursorId] : []);
+      if (!ids.length) return;
+      e.preventDefault();
+      _selActive = true;        
+      const add = e.key === "ArrowRight";
+      
+      beginUndoBatch();
+      for (const id of ids) {
+        const already = state.schedule.includes(id);
+        if (add && !already) toggleScheduled(id);
+        else if (!add && already) toggleScheduled(id);
+      }
+      endUndoBatch();
+
+      applySelection();
+      return;
+    }
+  }
+});
+
+document.addEventListener("keyup", (e) => {
+  if (e.key !== " " && e.key !== "Spacebar" && e.key !== "Enter") return;
+  if (!_spaceHold) return;
+  e.preventDefault();
+  const hold = _spaceHold;
+  clearTimeout(hold.timer);
+  _spaceHold = null;
+  if (hold.fired) return;                  
+  const elc = navItems().find(x =>
+    x.classList.contains("bubble") && itemId(x) === hold.id);
+  if (elc) elc.click();
+});
+
 $("#back-btn").addEventListener("click", () => {
-  if (_navIdx > 0) history.back();
-  else if (canGoBack()) back();
+  
+  triggerBack(false);
 });
 
 $$("#tabbar .tab-btn").forEach(b => b.addEventListener("click", () => {
