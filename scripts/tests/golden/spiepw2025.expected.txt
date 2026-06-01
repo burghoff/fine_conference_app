@@ -407,7 +407,7 @@ Chinese Academy of Medical Sciences & Peking Union Medical College (China)	CAMS-
 Chinese Academy of Sciences (CAS) (China)	CAS
 Chinese Academy of Sciences (China)	CAS
 Chip Integration Technology Ctr. (Netherlands)	Chip Integration Technology Ctr
-Chitose Institute of Science and Technology (Japan)	Chitose Institute of Science and Technology
+Chitose Institute of Science and Technology (Japan)	Chitose
 Chobanian & Avedisian School of Medicine, Boston Univ. (United States)	BU
 Chongqing Univ. (China)	CQU
 Chongqing Univ. of Arts and Sciences (China)	CQU
@@ -535,7 +535,7 @@ Ctr. for Applied Photonics, INESC TEC (Portugal)	Ctr for Applied Photonics
 Ctr. for Astrophysics | Harvard & Smithsonian (United States)	Harvard
 Ctr. for Cardiovascular Medicine and Devices, William Harvey Research Institute, Queen Mary Univ. (United Kingdom)	Ctr for Cardiovascular Medicine and Devices
 Ctr. for Dermatology and Laser Surgery (United States)	Ctr for Dermatology and Laser Surgery
-Ctr. for Free Electron Laser Science, Deutsches Elektronen-Synchrotron (Germany)	Ctr for Free Electron Laser Science
+Ctr. for Free Electron Laser Science, Deutsches Elektronen-Synchrotron (Germany)	DESY
 Ctr. for Global Reproductive Health, Duke Global Institute (United States)	Ctr for Global Reproductive Health
 Ctr. for Intelligent Optics (CIO)	CIO
 Ctr. for Label-free Imaging and Multiscale Biophotonics, Beckman Institute for Advanced Science and Technology (United States)	UIUC
@@ -579,7 +579,7 @@ DL Analytics, LLC (United States)	DL Analytics
 DRS Daylight Solutions (United States)	DRS Daylight Solutions
 DSTAR Communications Inc. (United States)	DSTAR Communications
 DTU Electro (Denmark)	DTU
-Daegu Gyeongbuk Institute of Science & Technology (Korea, Republic of)	Daegu Gyeongbuk Institute of Science & Technology
+Daegu Gyeongbuk Institute of Science & Technology (Korea, Republic of)	DGIST
 Daetwyler Graphics AG (Switzerland)	Daetwyler Graphics
 Daffodil International Univ. (Bangladesh)	Daffodil International
 Dai Nippon Printing Co., Ltd. (Japan)	Dai Nippon Printing
@@ -621,7 +621,7 @@ Department of Premedicine, Eulji University School of Medicine (Korea, Republic 
 Department of Redox Biology and Pathology, University of Vermont (United States)	Vermont
 Department of Surgery (United Kingdom)	Department of Surgery
 Department of Surgery, The Christie Hospital NHS Foundation Trust (United Kingdom)	Department of Surgery
-Deutsches Elektronen-Synchrotron (Germany)	Deutsches Elektronen-Synchrotron
+Deutsches Elektronen-Synchrotron (Germany)	DESY
 Deutsches Krebsforschungszentrum (Germany)	Deutsches Krebsforschungszentrum
 Deutsches Zentrum für Herz-Kreislauf-Forschung e. V. (Germany)	Deutsches Zentrum für Herz-Kreislauf-Forschung
 Deutsches Zentrum für Luft-und Raumfahrt e.V. (Germany)	Deutsches Zentrum für Luft-und Raumfahrt
@@ -784,7 +784,7 @@ Fondazione Links (Italy)	Fondazione Links
 Fooyin Univ. (Taiwan)	Fooyin
 Formerly with Wyant College of Optical Sciences (United States)	Wyant College of Optical Sciences
 Forschungcampus InfectoGnostics (Germany)	Forschungcampus InfectoGnostics
-Forschungszentrum Jülich GmbH (Germany)	Forschungszentrum Jülich
+Forschungszentrum Jülich GmbH (Germany)	FZJ
 Foshan Univ. (China)	Foshan
 Fotonir Aps (Denmark)	Fotonir Aps
 Foundation for Research and Technology-Hellas (Greece)	Foundation for Research and Technology-Hellas
@@ -840,7 +840,7 @@ GLOphotonics (France)	GLOphotonics
 GNS Science (New Zealand)	GNS Science
 GREEN Upstate High School (United States)	GREEN Upstate High School
 GS (Germany)	GS
-GSI Helmholtzzentrum für Schwerionenforschung GmbH (Germany)	Helmholtz Jena
+GSI Helmholtzzentrum für Schwerionenforschung GmbH (Germany)	GSI
 Gachon Univ. (Korea, Republic of)	Gachon
 Galway Clinic (Ireland)	Galway Clinic
 Galway Univ. Hospitals (Ireland)	Galway
@@ -1162,7 +1162,7 @@ Institut für Integrierte Photonik, RWTH Aachen Univ. (Germany)	RWTH Aachen
 Institut für Mikroproduktionstechnik, Leibniz Univ. Hannover (Germany)	Leibniz Hannover
 Institut für Nanophotonik Göttingen e.V. (Germany)	Institut für Nanophotonik Göttingen
 Institut für Neurowissenschaften und Medizin, Forschungszentrum (Germany)	Institut für Neurowissenschaften und Medizin
-Institut für Neurowissenschaften und Medizin, Forschungszentrum Jülich GmbH (Germany)	Forschungszentrum Jülich
+Institut für Neurowissenschaften und Medizin, Forschungszentrum Jülich GmbH (Germany)	FZJ
 Institut für Photonik, Leibniz Univ. Hannover (Germany)	Leibniz Hannover
 Institut für Physik, Humboldt-Univ. zu Berlin (Germany)	Institut für Physik
 Institut für Physik, Univ. Rostock (Germany)	Institut für Physik
@@ -1244,7 +1244,7 @@ Instituto Superior de Engenharia de Lisboa (Portugal)	Instituto Superior de Enge
 Instituto Superior de Engenharia de Lisboa, Instituto Politécnico de Lisboa (Portugal)	Instituto Superior de Engenharia de Lisboa
 Instituto de Bioingeniería, Univ. Miguel Hernández (Spain)	Instituto de Bioingeniería
 Instituto de Cerámica y Vidrio (Spain)	Instituto de Cerámica y Vidrio
-Instituto de Ciencia de Materiales de Madrid (Spain)	Instituto de Ciencia de Materiales de Madrid
+Instituto de Ciencia de Materiales de Madrid (Spain)	ICMM
 Instituto de Ciencia de Materiales de Madrid, Consejo Superior de Investigaciones Científicas (Spain)	CSIC
 Instituto de Energía Solar, Univ. Politécnica de Madrid (Spain)	Instituto de Energía Solar
 Instituto de Física "Gleb Wataghin" (Brazil)	Instituto de Física "Gleb Wataghin"
@@ -1357,7 +1357,7 @@ Kangwon National Univ. (Korea, Republic of)	Kangwon National
 Kansai Univ. (Japan)	Kansai
 Karl-Franzens-Univ. Graz (Austria)	Karl-Franzens
 Karlsruhe Institute of Technology (Germany)	KIT
-Karlsruher Institut für Technologie (Germany)	Karlsruher Institut für Technologie
+Karlsruher Institut für Technologie (Germany)	KIT
 Karolinska Institute (Sweden)	Karolinska Institute
 Kaunas Univ. of Technology (Lithuania)	Kaunas
 Keck School of Medicine of USC (United States)	Keck School of Medicine of USC
@@ -1492,7 +1492,7 @@ Laser and Plasma Research Institute, Shahid Beheshti Univ. (Iran, Islamic Republ
 Laser-Forschungslabor (Germany)	Laser-Forschungslabor
 Laser-Forschungslabor, Klinikum der Univ. München, Ludwig-Maximilians-Univ. München (Germany)	LMU Munich
 Laser-Forschungslabor, LIFE-Center of Department of Urology, LMU University Hospital (Germany)	Laser-Forschungslabor
-Laser-und Immunologie-Forschungs-Einrichtungen Zentrum (Germany)	Laser-und Immunologie-Forschungs-Einrichtungen Zentrum
+Laser-und Immunologie-Forschungs-Einrichtungen Zentrum (Germany)	LMU Munich
 LaserFusionX Inc. (United States)	LaserFusionX
 Laserline GmbH (Germany)	Laserline
 Laserssel Corp. (Korea, Republic of)	Laserssel
@@ -1510,7 +1510,7 @@ Lehigh Univ. (United States)	Lehigh
 Lehrstuhl für Photonische Technologien, Friedrich-Alexander-Univ. Erlangen-Nürnberg (Germany)	FAU
 Leibniz Univ. Hannover (Germany)	Leibniz Hannover
 Leibniz-Institut für Kristallzüchtung (Germany)	Leibniz-Institut für Kristallzüchtung
-Leibniz-Institut für Oberflächenmodifizierung e.V. (Germany)	Leibniz-Institut für Oberflächenmodifizierung
+Leibniz-Institut für Oberflächenmodifizierung e.V. (Germany)	IOM
 Leibniz-Institut für Photonische Technologien e.V. (Germany)	Leibniz-Institut für Photonische Technologien
 Leibniz-Institut für Polymerforschung Dresden e.V. (Germany)	Leibniz-Institut für Polymerforschung Dresden
 Leibniz-Zentrum für Photonik in der Infektionsforschung (Germany)	Leibniz-Zentrum für Photonik in der Infektionsforschung
@@ -2639,7 +2639,7 @@ Toshiba Research Europe (United Kingdom)	Toshiba
 Toshitaka Agano, AG Consulting (Japan)	Toshitaka Agano
 Toyoda Gosei Co., Ltd. (Japan)	Toyoda Gosei
 Toyota Central R&D Labs., Inc. (Japan)	Toyota Central R&D Labs
-Toyota Research Institute of North America (United States)	Toyota Research Institute of North America
+Toyota Research Institute of North America (United States)	TRINA
 Toyota Research Institute, North America (United States)	Toyota Research Institute
 Toyota Technological Institute (Japan)	Toyota Technological Institute
 TranslaTUM (Germany)	TranslaTUM
@@ -2947,7 +2947,7 @@ Univ. of Maryland, Baltimore County (United States)	UMBC
 Univ. of Maryland, College Park (United States)	Maryland
 Univ. of Massachusetts Amherst (United States)	UMass Amherst
 Univ. of Massachusetts Boston (United States)	UMass Boston
-Univ. of Massachusetts Dartmouth (United States)	Dartmouth
+Univ. of Massachusetts Dartmouth (United States)	UMass Dartmouth
 Univ. of Massachusetts Lowell (United States)	UMass Lowell
 Univ. of Miami (United States)	U Miami
 Univ. of Miami Miller School of Medicine (United States)	U Miami

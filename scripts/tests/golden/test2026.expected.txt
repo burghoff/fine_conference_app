@@ -40,7 +40,7 @@ Department of Physics, Pohang University of Science and Technology (POSTECH), Po
 Department of Physics, The University of Texas at Austin, Austin, TX, United States	UT Austin
 Department of Physics, Ulsan National Institute of Science and Technology, Ulsan, Korea (the Republic of)	UNIST
 Department of Physics, University of Colorado Boulder, Boulder, CO, United States	CU Boulder
-Division of Quantum Information, KIST School, Korea University of Science and Technology (KIST), Seoul, Korea (the Republic of)	Korea
+Division of Quantum Information, KIST School, Korea University of Science and Technology (KIST), Seoul, Korea (the Republic of)	UST
 E. L. Ginzton Laboratory, Stanford University, Stanford, CA, United States	Stanford
 ECE, University of Virginia, Charlottesville, VA, United States	UVA
 Eindhoven University of Technology, Eindhoven, Netherlands	TU Eindhoven

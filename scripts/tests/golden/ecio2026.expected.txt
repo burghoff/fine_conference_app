@@ -53,8 +53,8 @@ Columbia University	Columbia
 Cornell University	Cornell
 Cyber Ridge	Cyber Ridge
 Cycle GmbH	Cycle
-Daegu Gyeongbuk Institute of Science & Technology	Daegu Gyeongbuk Institute of Science & Technology
-Daegu Gyeongbuk Institute of Science and Technology	Daegu Gyeongbuk Institute of Science and Technology
+Daegu Gyeongbuk Institute of Science & Technology	DGIST
+Daegu Gyeongbuk Institute of Science and Technology	DGIST
 Danmarks Tekniske Universitet	DTU
 Deeplight SA	DeepLight SA/GmbH
 Delft University of technology	TU Delft
@@ -62,7 +62,7 @@ Department of Informatics - Aristoteleio Panepistimio Thessalonikis	Thessaloniki
 Department of Materials Science and Engineering	Department of Materials Science and Engineering
 Department of Physics - Aristoteleio Panepistimio Thessalonikis	Thessaloniki
 Department of Physics, College of Science and Humanities, Shaqra University, Shaqra, Kingdom of Saudi Arabia	Shaqra
-Deutsches Elektronen-Synchrotron	Deutsches Elektronen-Synchrotron
+Deutsches Elektronen-Synchrotron	DESY
 Dublin City University	Dublin City
 EPFL	EPFL
 ETH	ETH Zürich
@@ -81,8 +81,8 @@ Femto-ST	Femto-ST
 Femtoprint	Femtoprint
 Ferdinand-Braun-Institut (FBH)	FBH
 Fields at Work GmbH	Fields at Work
-Forschungszentrum Jülich GmbH	Forschungszentrum Jülich
-Foundation for Research on Information Technologies in Society (IT'IS)	Foundation for Research on Information Technologies in Society
+Forschungszentrum Jülich GmbH	FZJ
+Foundation for Research on Information Technologies in Society (IT'IS)	IT'IS
 Fraunhofer HHI	Fraunhofer HHI
 Fraunhofer IAF	Fraunhofer
 Fraunhofer IZM	Fraunhofer
@@ -130,13 +130,13 @@ KOREA ADVANCED MATERIALS Co., Ltd	KOREA ADVANCED MATERIALS
 KTH Royal Institute of Technology	KTH
 KU LeuveCelestijnenlaan 200D, Belgium	KU LeuveCelestijnenlaan 200D
 Karlsruhe Institute of Technology (KIT)	KIT
-Karlsruher Institut für Technologie	Karlsruher Institut für Technologie
+Karlsruher Institut für Technologie	KIT
 Keio University	Keio
 Kongju National University	Kongju National
 Konkuk University	Konkuk
-Korea Advanced Inst of Science & Tech	Korea Advanced Inst of Science & Tech
+Korea Advanced Inst of Science & Tech	KAIST
 Korea Advanced Institute of Science and Technology	KAIST
-Koç Universitesi	Koç Universitesi
+Koç Universitesi	Koç
 Kungliga Tekniska Hogskolan	Kungliga Tekniska Hogskolan
 LAAS CNRS	CNRS
 LICB	LICB
@@ -185,7 +185,7 @@ Nottingham Trent University	Nottingham Trent
 Now with: Infineon Technologies AG	Now with: Infineon Technologies
 OST - Eastern Switzerland University of Applied Sciences	OST - Eastern Switzerland
 Ohio State University	Ohio State
-Optoelectronics Research Centre	Optoelectronics Research Centre
+Optoelectronics Research Centre	Southampton
 PICAdvanced, S.A.	PICAdvanced
 Paderborn University	Paderborn
 Paul Scherrer Institut	PSI

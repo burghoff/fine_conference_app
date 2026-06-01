@@ -385,8 +385,8 @@ Center for Nanophase Material Sciences, Oak Ridge National Laboratory, Oak Ridge
 Center for Nanophase Materials Science, Oak Ridge National Laboratory, Oak Ridge, TN, United States	Oak Ridge
 Center for Nanophase Materials Sciences	Center for Nanophase Materials Sciences
 Center for Nanoscale Materials, Argonne National Laboratory, Lemont, IL, United States	Argonne
-Center for Optical Materials Science and Engineering Technologies	COMSET Clemson
-Center for Optical Materials Science and Engineering Technologies, Anderson, SC, United States	COMSET Clemson
+Center for Optical Materials Science and Engineering Technologies	Clemson
+Center for Optical Materials Science and Engineering Technologies, Anderson, SC, United States	Clemson
 Center for Optical Research and Education, Utsunomiya University, Utsunomiya, Tochigi, Japan	Utsunomiya
 Center for Photonics Technology, Virginia Tech, Blacksburg, VA, United States	Virginia Tech
 Center for Physical Sciences & Technology	FTMC Vilnius
@@ -394,7 +394,7 @@ Center for Physical Sciences & Technology, Vilnius, Lithuania	FTMC Vilnius
 Center for Power Electronics Systems, Virginia Polytechnic Institute and State University, Blacksburg, VA, United States	Virginia Tech
 Center for Quantum Information Science and Engineering (VTQ), Virginia Tech, Blacksburg, VA, United States	Virginia Tech
 Center for Quantum Information and Quantum Biology, Osaka University, Toyonaka, Osaka, Japan	Osaka
-Center for Quantum Information and Quantum Biology, Osaka, Osaka, Japan	Center for Quantum Information and Quantum Biology
+Center for Quantum Information and Quantum Biology, Osaka, Osaka, Japan	Osaka
 Center for Quantum Science & Engineering, Swiss Federal Institute of Technology Lausanne (EPFL), Lausanne, Switzerland	EPFL
 Center for Quantum Science and Engineering, Stevens Institute of Technology, Hoboken, NJ, United States	Stevens
 Center for Quantum Technology, Korea Institute of Science and Technology (KIST), Seoul, Korea (the Republic of)	KIST
@@ -493,8 +493,8 @@ Chinese Academy of Sciences, Suzhou, China	CAS
 Chinese Academy of Sciences,Shanghai Institute of Microsystem and Information Technology,	SIMIT
 Chinese Academy of Sciences,Shanghai Institute of Microsystem and Information Technology,, Shanghai, China	SIMIT
 Chinese Univrsity of Hong Kong	CUHK
-Chitose Institute of Science and Technology	Chitose Institute of Science and Technology
-Chitose Institute of Science and Technology, Hokkaido, Japan	Chitose Institute of Science and Technology
+Chitose Institute of Science and Technology	Chitose
+Chitose Institute of Science and Technology, Hokkaido, Japan	Chitose
 Chongqing University	CQU
 Chongqing University, Chongqing, Chongqing, China	CQU
 Christ University	Christ
@@ -991,9 +991,9 @@ Division of Nano & Information Technology, KIST School, Seoul, Korea (the Republ
 Division of Physical Sciences and Mathematics, University of the Philippines - Visayas, Miag-ao, Iloilo, Philippines	UP Visayas
 Division of Physical Sciences, College of Letters and Science	College of Letters and Science
 Division of Physics and Applied Physics, School of Physical and Mathematical Sciences, Nanyang Technological University, 637371, Singapore	NTU Singapore
-Division of Quantum Information, KIST School, Korea University of Science and Technology (KIST), Seoul, Korea (the Republic of)	Korea
+Division of Quantum Information, KIST School, Korea University of Science and Technology (KIST), Seoul, Korea (the Republic of)	UST
 Division of Quantum Information, KIST School, Seoul, Korea (the Republic of)	KIST
-Division of Quantum Information, Korea University of Science and Technology, Seoul, Korea (the Republic of)	Korea
+Division of Quantum Information, Korea University of Science and Technology, Seoul, Korea (the Republic of)	UST
 Dokuz Eylül University	Dokuz Eylül
 Donostia International Physics Center	Donostia International Physics Center
 Donostia International Physics Center, San Sebastian, Spain	Donostia International Physics Center
@@ -1071,8 +1071,8 @@ EUV Tech	EUV Tech
 EUV Tech, Martinez, CA, United States	EUV Tech
 EXAIL	Exail
 EXAIL, La Garde, France	Exail
-EXPEC Advanced Research Center (EXPEC ARC)	EXPEC Advanced Research Center
-EXPEC Advanced Research Center (EXPEC ARC), Dhahran 31311, Saudi Arabia	EXPEC Advanced Research Center
+EXPEC Advanced Research Center (EXPEC ARC)	EXPEC ARC
+EXPEC Advanced Research Center (EXPEC ARC), Dhahran 31311, Saudi Arabia	EXPEC ARC
 East Tennessee State University	East Tennessee State
 Eastern Institute of Technology, Ningbo	Eastern Institute of Technology
 Ecole Centrale de Lyon	Ecole Centrale de Lyon
@@ -1255,7 +1255,7 @@ EpiPhotonics USA, Inc., San jose, CA, United States	EpiPhotonics USA
 Erlangen Graduate School in Advanced Optical Technologies (SAOT)	SAOT Erlangen
 Erlangen Graduate School in Advanced Optical Technologies (SAOT), Erlangen, Bayern, Germany	SAOT Erlangen
 Erlangen Graduate School in Advanced Optical Technologies (SAOT), Erlangen, Germany	SAOT Erlangen
-Ernst Ruska-Centre for Microscopy and Spectroscopy with Electrons, Forschungszentrum Jülich, Jülich, Germany	Forschungszentrum Jülich
+Ernst Ruska-Centre for Microscopy and Spectroscopy with Electrons, Forschungszentrum Jülich, Jülich, Germany	FZJ
 Escuela de Ingeniería de Telecomunicación, University of Vigo, Vigo, Spain	Vigo
 Eulambia Advanced Technologies	Eulambia Advanced Technologies
 Eulambia Advanced Technologies, Athens, Greece	Eulambia Advanced Technologies
@@ -1341,7 +1341,7 @@ Florida Polytechnic University	Florida Polytechnic
 Florida State University	FSU
 Florida international University	FIU
 Fluminense Federal University	Fluminense Federal
-Forschungszentrum Jülich	Forschungszentrum Jülich
+Forschungszentrum Jülich	FZJ
 Fraunhofer HHI	Fraunhofer HHI
 Fraunhofer Heinrich Hertz Institute, Technical University Berlin	Fraunhofer
 Fraunhofer Heinrich Hertz Institute, Technical University Berlin, Berlin, Germany	Fraunhofer
@@ -1419,9 +1419,9 @@ GLOphotonics, Limoges, France	GLOphotonics
 GPPMM Group, XLIM Institute, CNRS UMR 7252, University of Limoges	CNRS
 GPPMM Group, XLIM Institute, CNRS UMR 7252, University of Limoges, Limoges, France	CNRS
 GREMAN, CNRS, UMR 7347, INSA CVL, Université de Tours, Tours, France	CNRS
-GSI Helmholtz Centre for Heavy Ion Research	Helmholtz Jena
-GSI Helmholtz Centre for Heavy Ion Research, Darmstadt, Germany	Helmholtz Jena
-GSI Helmholtzzentrum für Schwerionenforschung	Helmholtz Jena
+GSI Helmholtz Centre for Heavy Ion Research	GSI
+GSI Helmholtz Centre for Heavy Ion Research, Darmstadt, Germany	GSI
+GSI Helmholtzzentrum für Schwerionenforschung	GSI
 Gail (India) Ltd.	Gail
 Gail (India) Ltd., Noida, India	Gail
 Gekko Photonics	Gekko Photonics
@@ -1516,8 +1516,8 @@ HS Photonics	HS Photonics
 HS Photonics, Changsha, China	HS Photonics
 HZDR	HZDR
 HZDR, Dresden, Germany	HZDR
-Hadassah-Hebrew-University-Medical-Center	Hadassah-Hebrew
-Hadassah-Hebrew-University-Medical-Center, Jerusalem, Israel	Hadassah-Hebrew
+Hadassah-Hebrew-University-Medical-Center	Hebrew
+Hadassah-Hebrew-University-Medical-Center, Jerusalem, Israel	Hebrew
 Halliburton Technology	Halliburton Technology
 Halliburton Technology, Houston, TX, United States	Halliburton Technology
 Hanbat National University	Hanbat National
@@ -1557,7 +1557,7 @@ Helen Diller Quantum Center, Technion, Haifa, Israel	Technion
 Helmholtz Center Dresden-Rossendorf	Helmholtz Center Dresden-Rossendorf
 Helmholtz Center Dresden-Rossendorf, Dresden, Germany	Helmholtz Center Dresden-Rossendorf
 Helmholtz Institute Jena	Helmholtz Jena
-Helmholtz Institute Jena, GSI Helmholtzzentrum für Schwerionenforschung, Jena, Germany	Helmholtz Jena
+Helmholtz Institute Jena, GSI Helmholtzzentrum für Schwerionenforschung, Jena, Germany	GSI
 Helmholtz Institute Jena, Jena, Germany	Helmholtz Jena
 Helmholtz-Zentrum Dresden-Rossendorf	Helmholtz Jena
 Helmholtz-Zentrum Dresden-Rossendorf (HZDR)	HZDR
@@ -1619,8 +1619,8 @@ Huazhong university of science and technology	Huazhong
 Huazhong university of science and technology, Wuhan, China	Huazhong
 Huazhong university of science and technologygy	Huazhong
 Huazhong university of science and technologygy, Wuhan, China	Huazhong
-Hubei Optical Fundamental Research Center	Hubei Optical Fundamental Research Center
-Hubei Optical Fundamental Research Center, Wuhan 430074, Hubei, China	Hubei Optical Fundamental Research Center
+Hubei Optical Fundamental Research Center	HUST
+Hubei Optical Fundamental Research Center, Wuhan 430074, Hubei, China	HUST
 Humboldt University	Humboldt
 Humboldt University, Berlin, Germany	Humboldt
 Humboldt Universität zu Berlin	Humboldt
@@ -1706,7 +1706,7 @@ Imec NL, Einhoven, Netherlands	imec
 Imec, Leuven, Belgium	imec
 Imperial College London	Imperial
 Imperial College London, London, United Kingdom	Imperial
-Indian Institute of Information Technology	Indian Institute of Information Technology
+Indian Institute of Information Technology	IIIT
 Indian Institute of Science	IISc Bangalore
 Indian Institute of Science (IISc)	IISc Bangalore
 Indian Institute of Science, Bengaluru, India	IISc Bangalore
@@ -1767,7 +1767,7 @@ Institute for Infocomm Research (I2R),Agency for Science, Technology and Researc
 Institute for Infocomm Research, A*STAR	A*STAR
 Institute for Infocomm Research, A*STAR, Singapore, Singapore	A*STAR
 Institute for Infocomm Research, Singapore, Singapore	A*STAR
-Institute for Microelectronics Stuttgart	Institute for Microelectronics Stuttgart
+Institute for Microelectronics Stuttgart	IMS CHIPS
 Institute for Molecular Science	Institute for Molecular Science
 Institute for Molecular Science, Okazaki, Aichi, Japan	Institute for Molecular Science
 Institute for Molecular Science, Okazaki, Japan	Institute for Molecular Science
@@ -2022,7 +2022,7 @@ KDDI Research, Inc.	KDDI
 KDDI research, Inc.	KDDI
 KDDI research, Inc., Fujimino, Japan	KDDI
 KIST School	KIST
-KIST School, Korea University of Science and Technology (KIST)	Korea
+KIST School, Korea University of Science and Technology (KIST)	UST
 KRISS	KRISS
 KRISS, Yuseong-gu, Daejeon, Korea (the Republic of)	KRISS
 KTH Royal Institute of Technology	KTH
@@ -2097,10 +2097,10 @@ Korea Research Institute of Standard and Science, Daejeon, Korea (the Republic o
 Korea Research Institute of Standards and Science	KRISS
 Korea Research Institute of Standards and Science, Daejeon, Korea (the Republic of)	KRISS
 Korea University	Korea
-Korea University of Science and Technology	Korea
-Korea University of Science and Technology (UST)	Korea
-Korea University of Science and Technology (UST), Seoul, Korea (the Republic of)	Korea
-Korea University of Science and Technology, Seoul, Korea (the Republic of)	Korea
+Korea University of Science and Technology	UST
+Korea University of Science and Technology (UST)	UST
+Korea University of Science and Technology (UST), Seoul, Korea (the Republic of)	UST
+Korea University of Science and Technology, Seoul, Korea (the Republic of)	UST
 Korea University, Seoul, Korea (the Republic of)	Korea
 Kutateladze Inst Thermophys SB RAS	Kutateladze Institute
 Kutateladze Inst Thermophys SB RAS, Novosibirsk, Russian Federation	Kutateladze Institute
@@ -2188,8 +2188,8 @@ Lehrstuhl für Angewandte Festkörperphysik, Ruhr-Universität Bochum	RUB
 Lehrstuhl für Angewandte Festkörperphysik, Ruhr-Universität Bochum, Bochum, Germany	RUB
 Leibniz University Hannover	Leibniz Hannover
 Leibniz Universität Hannover	Leibniz Hannover
-Leibniz-Institut für Oberflächenmodifizierung e.V.	Leibniz-Institut für Oberflächenmodifizierung
-Leibniz-Institut für Oberflächenmodifizierung e.V., Leipzig, Germany	Leibniz-Institut für Oberflächenmodifizierung
+Leibniz-Institut für Oberflächenmodifizierung e.V.	IOM
+Leibniz-Institut für Oberflächenmodifizierung e.V., Leipzig, Germany	IOM
 Leonardo	Leonardo
 Leonardo, Rome, Italy	Leonardo
 Lightera Labs	Lightera Labs
@@ -2573,8 +2573,8 @@ National Semiconductor Translation and Innovation Centre (NSTIC), Singapore, Sin
 National Sun Yat-Sen University	Sun Yat-sen
 National Sun Yat-sen University	Sun Yat-sen
 National Sun Yat-sen University, Kaohsiung, Taiwan	Sun Yat-sen
-National Taiwan Univ of Science & Tech	NTU Taiwan
-National Taiwan Univ of Science & Tech, Taipei, Taiwan	NTU Taiwan
+National Taiwan Univ of Science & Tech	NTUST
+National Taiwan Univ of Science & Tech, Taipei, Taiwan	NTUST
 National Taiwan University	NTU Taiwan
 National Taiwan University of Science and Technology	NTUST
 National Taiwan University, Taipei, Taiwan	NTU Taiwan
@@ -2769,8 +2769,8 @@ Pennslvania State University, University Park, PA, United States	Penn State
 Pennsylvania State University	Penn State
 Pennsylvania State University, State college, PA, United States	Penn State
 Perioperative and Critical Care Theme, NIHR Biomedical Research Centre, Southampton, United Kingdom	NIHR Biomedical Research Centre
-Peter Grünberg Institute (PGI-6), Research Centre Jülich, Jülich, Germany	Forschungszentrum Jülich
-Peter-Grünberg-Institute (PGI-9)	Forschungszentrum Jülich
+Peter Grünberg Institute (PGI-6), Research Centre Jülich, Jülich, Germany	FZJ
+Peter-Grünberg-Institute (PGI-9)	FZJ
 Phase Sensitive Innovations	Phase Sensitive Innovations
 Phase Sensitive Innovations, Inc.	Phase Sensitive Innovations
 Phase Sensitive Innovations, Inc., Newark, DE, United States	Phase Sensitive Innovations
@@ -3072,8 +3072,8 @@ Radiation Oncology, WashU Medicine, St. Louis, MO, United States	WashU
 Raymond & Beverly Sackler School of Chemistry, Tel Aviv University, Tel Aviv, Israel	TAU
 Raymond & Beverly Sackler School of Physics and Astronomy, Tel Aviv University, Tel Aviv, Israel	TAU
 Reality Lab Research, Meta platforms, Redmond, WA, United States	Meta
-Regensburg Center for Ultrafast Nanoscopy	Regensburg Center for Ultrafast Nanoscopy
-Regensburg Center for Ultrafast Nanoscopy, Regensburg, Germany	Regensburg Center for Ultrafast Nanoscopy
+Regensburg Center for Ultrafast Nanoscopy	Regensburg
+Regensburg Center for Ultrafast Nanoscopy, Regensburg, Germany	Regensburg
 Relativity Networks	Relativity Networks
 Relativity Networks, Orlando, FL, United States	Relativity Networks
 Rensselaer Polytechnic Institute	RPI
@@ -3431,8 +3431,8 @@ State Key Laboratory of Information Photonics and Optical Communications, School
 State Key Laboratory of Materials for Integrated Circuits, Shanghai Institute of Microsystem and Information Technology	SIMIT
 State Key Laboratory of Materials for Integrated Circuits, Shanghai Institute of Microsystem and Information Technology, Chinese Academy of Sciences, Shanghai, China	SIMIT
 State Key Laboratory of Materials for Integrated Circuits, Shanghai Institute of Microsystem and Information Technology, Shanghai, China	SIMIT
-State Key Laboratory of Optical Fiber and Cable Manufacture Technology	State Key Lab of Optical Fiber and Cable
-State Key Laboratory of Optical Fiber and Cable Manufacture Technology, Wuhan, China	State Key Lab of Optical Fiber and Cable
+State Key Laboratory of Optical Fiber and Cable Manufacture Technology	YOFC
+State Key Laboratory of Optical Fiber and Cable Manufacture Technology, Wuhan, China	YOFC
 State Key Laboratory of Optical Field Manipulation Science and Technology, Institute of Optics and Electronics, Chengdu, Sichuan, China	Chengdu
 State Key Laboratory of Optical Quantum Materials, The University of Hong Kong, Pokfulam, Hong Kong, China	HKU
 State Key Laboratory of Optoelectronic Materials and Devices, Institute of Semiconductors,Chinese Academy of Sciences, Beijing, China	CAS IOS Beijing
@@ -3719,8 +3719,8 @@ Toyohashi University of Technology	Toyohashi
 Toyohashi University of Technology, Toyohashi, Aichi, Japan	Toyohashi
 Toyota Central R&D Labs Inc	Toyota Central R&D Labs
 Toyota Central R&D Labs Inc, Nagakute, AICHI, Japan	Toyota Central R&D Labs
-Toyota Research Institute of North America	Toyota Research Institute of North America
-Toyota Research Institute of North America, Ann Arbor, MI, United States	Toyota Research Institute of North America
+Toyota Research Institute of North America	TRINA
+Toyota Research Institute of North America, Ann Arbor, MI, United States	TRINA
 Toyota Technological Institute	Toyota Technological Institute
 Toyota Technological Institute, Nagoya, Aichi, Japan	Toyota Technological Institute
 Trapped-Ion Quantum Computing Laboratory, Hon Hai Research Institute, Taipei, Taiwan	Hon Hai Research Institute
@@ -4197,8 +4197,8 @@ University of York, York, China	York
 University of York, York, United Kingdom	York
 University of Zagreb	Zagreb
 University of Zagreb, Zagreb, Croatia	Zagreb
-University of calabria	calabria
-University of calabria, Pisa, Italy	calabria
+University of calabria	Calabria
+University of calabria, Pisa, Italy	Calabria
 University of california, Berkeley	UC Berkeley
 University of central Florida	UCF
 University of ss. Cyril and Methodius in Trnava	UCM Trnava
@@ -4247,8 +4247,8 @@ UoH, Hyderabad, India	UoH
 Utsunomiya University	Utsunomiya
 Uviquity	Uviquity
 Uviquity, Raleigh, NC, United States	Uviquity
-V.E. Zuev Institute of Atmospheric Optics	VE Zuev Institute of Atmospheric Optics
-V.E. Zuev Institute of Atmospheric Optics, Tomsk, Russian Federation	VE Zuev Institute of Atmospheric Optics
+V.E. Zuev Institute of Atmospheric Optics	Zuev Institute
+V.E. Zuev Institute of Atmospheric Optics, Tomsk, Russian Federation	Zuev Institute
 VPIphotonics GmbH	VPIphotonics
 VPIphotonics GmbH, Berlin, Germany	VPIphotonics
 VPIphotonics Inc	VPIphotonics

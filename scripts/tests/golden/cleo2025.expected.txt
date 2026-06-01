@@ -389,10 +389,10 @@ Center for Exoplanets and Habitable Worlds, Pennsylvania State University, Unive
 Center for Free Electron Laser Science	Center for Free Electron Laser Science
 Center for Free Electron Laser Science, Hamburg, Germany	Center for Free Electron Laser Science
 Center for Free-Electron Laser Science	Center for Free-Electron Laser Science
-Center for Free-Electron Laser Science CFEL, Deutsches Elektronen-Synchrotron, Hamburg, Germany	Deutsches Elektronen-Synchrotron
+Center for Free-Electron Laser Science CFEL, Deutsches Elektronen-Synchrotron, Hamburg, Germany	DESY
 Center for Free-Electron Laser Science, Deutsches Elektronen-Synchrotron DESY	DESY
 Center for Free-Electron Laser Science, Deutsches Elektronen-Synchrotron DESY, Hamburg, Germany	DESY
-Center for Free-Electron Laser Science, Deutsches Elektronen-Synchrotron, Hamburg, Germany	Deutsches Elektronen-Synchrotron
+Center for Free-Electron Laser Science, Deutsches Elektronen-Synchrotron, Hamburg, Germany	DESY
 Center for Free-Electron Laser Science, Hamburg, Germany	Center for Free-Electron Laser Science
 Center for High Technology Materials (CHTM), University of New Mexico, Albuquerque, NM, United States	UNM
 Center for High Technology Materials(CHTM), University of New Mexico, Albuquerque, NM, United States	UNM
@@ -942,7 +942,7 @@ Dept. of Electronics and Electrical Communication Engineering, Indian Institute 
 Dept. of Electronics, Peking University, Beijing, BEIJING, China	Peking
 Deptartment of Electrical Engineering and Computer Science, University of Michigan, Ann Arbor, MI, United States	Michigan
 Deutsche Telekom Chair, Technische Universität Dresden, Dresden, Germany	TU Dresden
-Deutsches Elektronen-Synchrotron	Deutsches Elektronen-Synchrotron
+Deutsches Elektronen-Synchrotron	DESY
 Deutsches Elektronen-Synchrotron DESY	DESY
 Deutsches Elektronen-Synchrotron DESY, Hamburg, Germany	DESY
 Device Technology Laboratories, NTT, Atsugi, Kanagawa, Japan	NTT
@@ -961,7 +961,7 @@ Dipartimento di Ingegneria, Università di Palermo	Dipartimento di Ingegneria
 Dipartimento di Ingegneria, Università di Palermo, Palermo, Italy	Dipartimento di Ingegneria
 Division of Physics and Applied Physics, School of Physical and Mathematical Sciences, Nanyang Technological University	NTU Singapore
 Division of Physics and Applied Physics, School of Physical and Mathematical Sciences, Nanyang Technological University, Singapore, Singapore	NTU Singapore
-Division of Quantum Information, KIST School, Korea University of Science and Technology, Seoul, Korea (the Republic of)	Korea
+Division of Quantum Information, KIST School, Korea University of Science and Technology, Seoul, Korea (the Republic of)	UST
 Dornsife Department of Physics & Astronomy, University of Southern California, Los Angeles, CA, United States	USC
 Draper	Draper
 Draper, Cambridge, MA, United States	Draper
@@ -1269,8 +1269,8 @@ Florida Institute of Technology	Florida Institute of Technology
 Florida Semiconductor Institute, University of Florida, Gainesville, FL, United States	Florida
 Fondazione Bruno Kessler	Fondazione Bruno Kessler
 Fondazione Bruno Kessler, Trento, Italy	Fondazione Bruno Kessler
-Forschungszentrum Jülich	Forschungszentrum Jülich
-Forschungszentrum Jülich, Jülich, Germany	Forschungszentrum Jülich
+Forschungszentrum Jülich	FZJ
+Forschungszentrum Jülich, Jülich, Germany	FZJ
 Fouad Alghanim & Sons Group of Companies	Fouad Alghanim & Sons Group of Companies
 Fouad Alghanim & Sons Group of Companies, Kuwait City, Kuwait	Fouad Alghanim & Sons Group of Companies
 Foundation for Research and Technology-Hellas (FORTH)	FORTH
@@ -1510,8 +1510,8 @@ Huazhong Universityof Science and Technology	Huazhong
 Hubei Key Laboratory of Optical Information and Pattern Recognition, Wuhan Institute of Technology	Wuhan Institute of Technology
 Hubei Key Laboratory of Optical Information and Pattern Recognition, Wuhan Institute of Technology, Wuhan, China	Wuhan Institute of Technology
 Hubei Key Laboratory of Optical Information and Pattern Recognition, Wuhan Institute of Technology, Wuhan, Hubei, China	Wuhan Institute of Technology
-Hubei Optical Fundamental Research Center	Hubei Optical Fundamental Research Center
-Hubei Optical Fundamental Research Center, Wuhan, China	Hubei Optical Fundamental Research Center
+Hubei Optical Fundamental Research Center	HUST
+Hubei Optical Fundamental Research Center, Wuhan, China	HUST
 Humbholdt	Humbholdt
 Humboldt University Berlin	Humboldt
 Humboldt University Berlin, Berlin, Berlin, Germany	Humboldt
@@ -1813,9 +1813,9 @@ Institute of Solid State Theory and Optics, Jena, Germany	Institute of Solid Sta
 Institute of high pressure physics, "Unipress", Polish academy of sciences	Polish Academy
 Institute of high pressure physics, "Unipress", Polish academy of sciences, Warsaw, Poland	Warsaw
 Institutionen för Systemteknik, Linköpings Universitet, 581 83 Linköping, Sweden	Linköping
-Instituto de Ciencia de Materiales de Madrid (ICMM)	Instituto de Ciencia de Materiales de Madrid
-Instituto de Ciencia de Materiales de Madrid (ICMM), Madrid, Spain	Instituto de Ciencia de Materiales de Madrid
-Instituto de Ciencia de Materiales de Madrid ICMM-CSIC	Instituto de Ciencia de Materiales de Madrid
+Instituto de Ciencia de Materiales de Madrid (ICMM)	ICMM
+Instituto de Ciencia de Materiales de Madrid (ICMM), Madrid, Spain	ICMM
+Instituto de Ciencia de Materiales de Madrid ICMM-CSIC	ICMM
 Instituto de Ciencia de Materiales de Madrid ICMM-CSIC, Madrid, Spain	CSIC
 Instituto de Ciencias Aplicadas y Tecnología, Universidad Nacional Autónoma de México, Mexico City, Mexico	UNAM
 Instituto de Ciencias Nucleares, UNAM	UNAM
@@ -2005,7 +2005,7 @@ Korea Photonics Technology Institute, Gwangju, Korea (the Republic of)	Korea Pho
 Korea Research Institute of Standards and Science	KRISS
 Korea Research Institute of Standards and Science, Daejeon, Korea (the Republic of)	KRISS
 Korea University	Korea
-Korea University of Science and Technology	Korea
+Korea University of Science and Technology	UST
 Korea advanced institute of science and technology (KAIST)	KAIST
 Koç University	Koç
 Koç University, Sariyer, Istanbul, Turkey	Koç
@@ -2507,8 +2507,8 @@ National Sun Yat-Sen University	Sun Yat-sen
 National Sun Yat-Sen University, Kaohsiung, Taiwan	Sun Yat-sen
 National Taipei University of Technology	National Taipei
 National Taipei University of Technology, Taipei, Taiwan	National Taipei
-National Taiwan Univ of Science & Tech	NTU Taiwan
-National Taiwan Univ of Science & Tech, Taipei, Taiwan	NTU Taiwan
+National Taiwan Univ of Science & Tech	NTUST
+National Taiwan Univ of Science & Tech, Taipei, Taiwan	NTUST
 National Taiwan University	NTU Taiwan
 National Taiwan University of Science and Technology	NTUST
 National Taiwan University, Department of Electrical Engineering, Taipei City, Taipei, Taiwan	NTU Taiwan
@@ -2700,7 +2700,7 @@ Pengcheng Laboratory, Shenzhen, China	PCL Shenzhen
 Penn State University	Penn State
 Penn State University, University Park, PA, United States	Penn State
 Pennsylvania State University	Penn State
-Peter Grünberg Institut (PGI-3), Forschungszentrum Jülich, Jülich, Germany	Forschungszentrum Jülich
+Peter Grünberg Institut (PGI-3), Forschungszentrum Jülich, Jülich, Germany	FZJ
 PhLAM - Physique des Lasers Atomes et Molecules, Univ. Lille, CNRS, Lille, France	CNRS
 Philipps-Universität Marburg	Marburg
 Phillips-University Marburg	Marburg
@@ -3299,8 +3299,8 @@ State Key Laboratory of Optical Fiber and Cable Manufacture Technology, YOFC	YOF
 State Key Laboratory of Optical Fiber and Cable Manufacture Technology, YOFC, Wuhan, China	YOFC
 State Key Laboratory of Optical Fiber and Cable Manufacture Technology, Yangtze Optical Fiber and Cable Joint Stock Limited Company (YOFC)	YOFC
 State Key Laboratory of Optical Fiber and Cable Manufacture Technology, Yangtze Optical Fiber and Cable Joint Stock Limited Company (YOFC), Wuhan, China	YOFC
-State Key Laboratory of Optical Fiber and Cable Manufacture Technology, Yangtze Optical Fibreand Cable Joint Stock Limited Company	State Key Lab of Optical Fiber and Cable
-State Key Laboratory of Optical Fiber and Cable Manufacture Technology, Yangtze Optical Fibreand Cable Joint Stock Limited Company, Wuhan, China	State Key Lab of Optical Fiber and Cable
+State Key Laboratory of Optical Fiber and Cable Manufacture Technology, Yangtze Optical Fibreand Cable Joint Stock Limited Company	YOFC
+State Key Laboratory of Optical Fiber and Cable Manufacture Technology, Yangtze Optical Fibreand Cable Joint Stock Limited Company, Wuhan, China	YOFC
 State Key Laboratory of Precision Space-time Information Sensing Technology	State Key Laboratory of Precision Space-time Information Sensing Technology
 State Key Laboratory of Precision Space-time Information Sensing Technology, Beijing, Beijing, China	State Key Laboratory of Precision Space-time Information Sensing Technology
 State Key Laboratory of Precision Spectral Science and Technology, East China Normal University, Shanghai, China	East China Normal
@@ -3782,8 +3782,8 @@ University of Brescia, Brescia, Italy	Brescia
 University of Bristol	Bristol
 University of British Columbia	British Columbia
 University of British Columbia, Vancouver, BC, Canada	Columbia
-University of Calabria	calabria
-University of Calabria, Rende, Italy	calabria
+University of Calabria	Calabria
+University of Calabria, Rende, Italy	Calabria
 University of Calgary	Calgary
 University of Calgary, Calgary, AB, Canada	Calgary
 University of Califonia, Los Angeles	UCLA

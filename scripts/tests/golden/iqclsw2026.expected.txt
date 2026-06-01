@@ -107,7 +107,7 @@ Naval Research Laboratory (USA)	NRL
 ONERA (France)	ONERA
 Paul Drude Institute for Solid State Electronics (Germany)	Paul Drude Institute
 Paul-Drude-Institut für Festkörperelektronik (Germany)	Paul Drude Institute
-Peter Gruenberg Institute 9 (PGI 9) (Germany)	Forschungszentrum Jülich
+Peter Gruenberg Institute 9 (PGI 9) (Germany)	FZJ
 Photonics Institute & Center for Micro- and Nanostructures, TU Wien (Austria)	TU Vienna
 Photonics Institute, TU Wien (Austria)	TU Vienna
 Politecnico di Torino (Italy)	PoliTo

@@ -2272,6 +2272,14 @@ body[data-active-view="session-detail"] .bubble[data-kind="talk"],
   outline: 1.5px solid var(--sel-ring);
   outline-offset: 2px;
 }
+/* Keyboard selection of an author name / affiliation pill inside a Talk detail
+   (the ↓ from the header walks authors → pills → session). Same blue ring. */
+.author-line .author-name.selected,
+.inst-list .inst-short.selected {
+  outline: 1.5px solid var(--sel-ring);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
 
 .schedule-btn {
   /* Shrinks with small text (via --sp), capped at default for large text —
@@ -3085,6 +3093,32 @@ body.has-indicator #scroll-indicator { display: flex; }
 .sheet-btn-primary { background: var(--accent); color: #fff; }
 .sheet-btn-primary:active { filter: brightness(.92); }
 
+/* ── Export-icon Copy/Share toggle (Me Settings) ─────────────────────
+   The Me header keeps its Copy/Paste icon buttons (.icon-btn). When the device
+   has a share sheet (navigator.share), a small Copy/Share segmented toggle here
+   swaps the Copy icon for a Share icon. Local-only setting. */
+.share-pref {
+  margin: 20px auto 0;
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+}
+.share-pref .share-pref-label {
+  flex: 0 0 auto; font-size: 13px; font-weight: 600; color: var(--muted);
+}
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--line); border-radius: var(--radius-base);
+  overflow: hidden;
+}
+.seg .seg-btn {
+  padding: 8px 16px;
+  font-size: 13px; color: var(--text); background: var(--surface-2);
+  border-right: 1px solid var(--line);
+  -webkit-tap-highlight-color: transparent;
+}
+.seg .seg-btn:last-child { border-right: 0; }
+.seg .seg-btn.active { background: var(--accent); color: #fff; }
+@media (hover: hover) { .seg .seg-btn:not(.active):hover { background: var(--accent-soft); } }
+
 /* ── Wide-screen two-pane layout ───────────────────────────────────────
    On wide screens (desktops/laptops) we show TWO panes side by side:
 
@@ -3394,6 +3428,30 @@ body.has-indicator #scroll-indicator { display: flex; }
 </aside>
 
 <script>
+/*! The Fine Conference App  —  https://github.com/burghoff/fine_conference_app
+ *
+ * MIT License
+ *
+ * Copyright (c) 2026 David Burghoff <burghoff@utexas.edu>
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
 __DECODER_BLOCK__const DATA = __DATA_INIT__;
 
 /* =============================================================== */
@@ -3491,6 +3549,11 @@ function defaultState() {
     // NOT in the sync payload, since comfortable text size is per-device (a
     // phone and a desktop monitor want different sizes), not schedule data.
     fontScale: 1,
+    // Local, per-device choice for the export icon in the Me header:
+    // "copy" | "share" (Share is only offered where navigator.share exists).
+    // Like fontScale, this is a device preference, not schedule data, so it is
+    // deliberately NOT in the sync payload — it never travels between devices.
+    exportMethod: "copy",
   };
 }
 
@@ -3545,6 +3608,24 @@ function loadState() {
       }
     }
     if (!Array.isArray(s.expandedSessions)) s.expandedSessions = [];
+    // Drop any trailing "searchresults:" views from each restored nav stack.
+    // Click-searches (tapping an author/affiliation/presider) push a TEMPORARY
+    // results view onto the current tab's stack; persisting them means a reload
+    // can land on — or Back into — a stale search-results page. Pop the ones
+    // sitting at the top so the stack restores to the real content beneath (the
+    // root is always kept).
+    if (s.tabStacks && typeof s.tabStacks === "object") {
+      for (const k of Object.keys(s.tabStacks)) {
+        const st = s.tabStacks[k];
+        if (!Array.isArray(st)) continue;
+        while (st.length > 1) {
+          const top = st[st.length - 1];
+          if (top && typeof top.view === "string"
+              && top.view.startsWith("searchresults:")) st.pop();
+          else break;
+        }
+      }
+    }
     // Validate the text-size multiplier: must be a finite number within the
     // supported range; anything else falls back to 1 (default size).
     if (typeof s.fontScale !== "number" || !isFinite(s.fontScale)) {
@@ -3552,6 +3633,8 @@ function loadState() {
     } else {
       s.fontScale = Math.max(FS_MIN, Math.min(FS_MAX, s.fontScale));
     }
+    // Validate the export-icon preference; anything unknown falls back to Copy.
+    if (!["copy", "share"].includes(s.exportMethod)) s.exportMethod = "copy";
     return s;
   } catch (_) { return defaultState(); }
 }
@@ -5346,6 +5429,7 @@ function renderTalkDetail(c, tid) {
       const nameEl = el("span", {
         class: "author-name clickable" + (isSpeaker ? " speaker" : ""),
         title: `Find other talks by ${name}`,
+        "data-navkey": "author:" + idx,   // keyboard-nav target (see navItems/navRows)
         onclick: () => searchFor(name, "name"),
       }, name);
       line.appendChild(nameEl);
@@ -5367,6 +5451,7 @@ function renderTalkDetail(c, tid) {
       line.appendChild(el("span", {
         class: "author-name clickable",
         title: `Find other talks by ${clean}`,
+        "data-navkey": "author:" + idx,
         onclick: () => searchFor(clean, "name"),
       }, clean));
       if (idx < names.length - 1) {
@@ -5409,7 +5494,7 @@ function renderTalkDetail(c, tid) {
       // identical to the (full) affiliation — so every institution row carries
       // its clickable chip consistently.
       if (shortForm) {
-        row.appendChild(el("span", { class: "inst-short" }, shortForm));
+        row.appendChild(el("span", { class: "inst-short", "data-navkey": "pill:" + i }, shortForm));
       }
       li.appendChild(row);
       if (shortForm) {
@@ -7030,7 +7115,7 @@ function renderTopbarExtras(tab, top) {
   const left = $("#topbar-left");
   if (left) left.innerHTML = "";
   if (tab === "me" && top.view === "list") {
-    // "Last sync" sits just left of the Copy/Paste buttons, mirroring the
+    // "Last sync" sits just left of the Export/Import controls, mirroring the
     // wide Me pane's header so the one-pane and two-pane Me views read the
     // same. Compact + truncating so it never crowds the buttons on a
     // small phone.
@@ -7038,18 +7123,7 @@ function renderTopbarExtras(tab, top) {
       class: "topbar-sync",
       html: esc(formatLastSync(state.lastSyncAt)),
     }));
-    slot.appendChild(el("button", {
-      class: "icon-btn",
-      title: "Paste sync code",
-      "aria-label": "Paste sync code",
-      onclick: doPaste,
-    }, "⇲"));
-    slot.appendChild(el("button", {
-      class: "icon-btn",
-      title: "Copy sync code",
-      "aria-label": "Copy sync code",
-      onclick: doCopy,
-    }, "⧉"));
+    appendSyncControls(slot);
   } else if (tab === "sessions" && top.view === "list" && left) {
     // Sessions ROOT list, LEFT corner: a single toggle between Expand All and
     // Collapse All for the inline session expansions. (There's no longer a
@@ -7094,14 +7168,15 @@ function exportState() {
     // clients reading an old code synthesize zero-timestamp adds.
     scheduleLog: state.scheduleLog || {},
     showPast: state.showPast,
-    activeTab: state.activeTab,
-    tabStacks: state.tabStacks,
-    searchQuery: state.searchQuery,
     hiddenTypes: state.hiddenTypes,
     selectedDates: state.selectedDates,
     notes: state.notes,
     // Wide-screen Me-pane width preference (CSS px; null = default 1/3).
     meWidth: state.meWidth,
+    // NOTE: navigation state (activeTab / tabStacks / searchQuery) is
+    // deliberately NOT carried — the code is schedule + preferences only, so an
+    // import never yanks the receiver to a different tab/scroll. Old codes may
+    // still include those fields; importState simply ignores them.
   };
   const json = JSON.stringify(payload);
   // UTF-8-safe base64
@@ -7238,38 +7313,18 @@ function importState(code) {
     if (_sessionIds.has(key)) delete mergedNotes[key];
   }
 
-  // Which tab the LEFT column lands on, and the nav stacks, after an import.
-  //
-  // On a NARROW (one-pane) device the sync code is always copied from the Me
-  // tab — that's the only place the Copy button lives there — so the receiving
-  // phone should likewise stay on Me. Adopting the sender's activeTab is wrong:
-  // a code generated in two-pane mode carries whatever tab the sender's LEFT
-  // pane happened to be on (Sessions/Talks/Search), which would yank the phone
-  // away from Me on paste. So on narrow screens we pin to "me". On WIDE screens
-  // Me can't be the left tab at all (it's the permanent right pane), so we take
-  // the incoming tab and let render() coerce a stray "me" to Sessions.
-  const incomingStacks = data.tabStacks || defaultState().tabStacks;
-  const landTab = isWide() ? (data.activeTab || "sessions") : "me";
-  let landStacks = incomingStacks;
-  if (!isWide()) {
-    // Land the phone at the Me ROOT, not wherever the sender's Me stack was
-    // left (which on a two-pane sender reflects an unrelated session, or a
-    // stale scroll position the receiver shouldn't inherit). A fresh root
-    // entry means render() restores no anchor and we open at the top of Me.
-    landStacks = Object.assign({}, incomingStacks, {
-      me: [{ view: "list", scrollY: 0 }],
-    });
-  }
-
+  // Navigation state (activeTab / tabStacks / searchQuery) is intentionally NOT
+  // imported: the code no longer carries it, and we leave the receiver exactly
+  // where it is. That's safe in both layouts — on narrow the Paste control only
+  // exists on the Me root list (so you're already looking at the result), and
+  // on wide the Me pane is permanently visible. Old codes that still include
+  // those fields are simply ignored.
   Object.assign(state, {
     schedule:       merged,
     scheduleLog:    mergedLog,
     showPast:       (typeof data.showPast === "object" && data.showPast)
                       ? Object.values(data.showPast).some(Boolean)
                       : !!data.showPast,
-    activeTab:      landTab,
-    tabStacks:      landStacks,
-    searchQuery:    data.searchQuery || "",
     hiddenTypes:    Array.isArray(data.hiddenTypes) ? data.hiddenTypes : [],
     selectedDates:  selDates,
     notes:          mergedNotes,
@@ -7407,6 +7462,90 @@ function showPasteSheet() {
     primaryLabel: "Import",
     onPrimary: doImport,
   });
+}
+
+/* =============================================================== */
+/* Export / Import — Copy / Paste (with optional Share)             */
+/* =============================================================== */
+
+/* The Me header carries two icon buttons: Paste (import) and, for export,
+   either Copy or Share. Which export icon appears is a LOCAL, per-device
+   setting (state.exportMethod: "copy" | "share") chosen in the Settings block
+   — and Share is only offered where the device exposes a share sheet
+   (navigator.share). The setting is deliberately NOT in the sync payload, so it
+   never travels between devices; Copy and Share carry the same code. */
+
+/* Material-style share glyph (three connected nodes), sized to match the other
+   header icon glyphs (1em). */
+function shareSvg() {
+  return '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" '
+       + 'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+       + 'stroke-linejoin="round" aria-hidden="true">'
+       + '<circle cx="18" cy="5" r="2.6"></circle>'
+       + '<circle cx="6" cy="12" r="2.6"></circle>'
+       + '<circle cx="18" cy="19" r="2.6"></circle>'
+       + '<line x1="8.3" y1="13.3" x2="15.7" y2="17.7"></line>'
+       + '<line x1="15.7" y1="6.3" x2="8.3" y2="10.7"></line>'
+       + '</svg>';
+}
+
+/* Build the Paste + (Copy|Share) icon pair into a header slot. Same builder for
+   the narrow top-bar extras and the wide Me-pane header. */
+function appendSyncControls(container) {
+  container.appendChild(el("button", {
+    class: "icon-btn", title: "Paste sync code", "aria-label": "Paste sync code",
+    onclick: (e) => { e.stopPropagation(); doPaste(); },
+  }, "⇲"));
+  if (state.exportMethod === "share" && navigator.share) {
+    container.appendChild(el("button", {
+      class: "icon-btn", title: "Share sync code", "aria-label": "Share sync code",
+      html: shareSvg(),
+      onclick: (e) => { e.stopPropagation(); doShare(); },
+    }));
+  } else {
+    container.appendChild(el("button", {
+      class: "icon-btn", title: "Copy sync code", "aria-label": "Copy sync code",
+      onclick: (e) => { e.stopPropagation(); doCopy(); },
+    }, "⧉"));
+  }
+}
+
+/* Share the sync code through the OS share sheet. Runs inside the click gesture
+   (no awaits precede navigator.share). */
+async function doShare() {
+  try { await navigator.share({ text: exportState() }); } catch (_) {}
+}
+
+/* Rebuild just the header icon buttons after the Copy/Share setting changes —
+   no content re-render, so the Settings scroll position is left undisturbed. */
+function _refreshSyncHeader() {
+  if ($("#topbar-extra")) renderTopbarExtras(state.activeTab, { view: currentTopView() });
+  const extra = $("#me-pane-extra");
+  if (extra) { extra.innerHTML = ""; appendSyncControls(extra); }
+}
+
+/* Settings block (under the zoom control): a Copy / Share toggle that picks
+   which export icon the header shows. Only rendered when the device has a share
+   sheet — otherwise Copy is the only choice and there is nothing to toggle. */
+function appendSharePref(sec) {
+  if (!navigator.share) return;
+  const seg = el("div", { class: "seg" });
+  const cur = (state.exportMethod === "share") ? "share" : "copy";
+  for (const o of [{ v: "copy", label: "Copy" }, { v: "share", label: "Share" }]) {
+    const b = el("button", {
+      class: "seg-btn" + (cur === o.v ? " active" : ""), type: "button",
+    }, o.label);
+    b.addEventListener("click", () => {
+      if (state.exportMethod === o.v) return;
+      state.exportMethod = o.v; saveState();
+      [...seg.children].forEach(c => c.classList.remove("active"));
+      b.classList.add("active");
+      _refreshSyncHeader();
+    });
+    seg.appendChild(b);
+  }
+  sec.appendChild(el("div", { class: "share-pref" },
+    [el("span", { class: "share-pref-label" }, "Export with"), seg]));
 }
 
 /* =============================================================== */
@@ -8012,6 +8151,9 @@ function appendSettingsSection(c) {
     onclick: (e) => stepFontScale(1, e.currentTarget),
   }));
   sec.appendChild(row);
+  // Copy/Share toggle for the export icon sits directly below the zoom stepper
+  // (only rendered when the device has a share sheet).
+  appendSharePref(sec);
   c.appendChild(sec);
   updateFontScaleControl();
 }
@@ -8146,9 +8288,9 @@ function renderMePane() {
   if (!pane) return;
   if (!isWide()) { disconnectBylineObservers(pane); pane.innerHTML = ""; return; }
 
-  // Copy/Paste sync buttons live in the pane header. Rebuilt each render
-  // so they stay wired after DOM swaps. Same handlers the Me tab's
-  // top-bar extras use.
+  // Export/Import sync controls live in the pane header. Rebuilt each render
+  // so they stay wired after DOM swaps. Same builder the Me tab's top-bar
+  // extras use (appendSyncControls).
   const sync = $("#me-pane-sync");
   if (sync) sync.textContent = formatLastSync(state.lastSyncAt);
   // Collapse the pane title to "Me" if "My Schedule" can't fit on one line
@@ -8157,14 +8299,7 @@ function renderMePane() {
   const extra = $("#me-pane-extra");
   if (extra) {
     extra.innerHTML = "";
-    extra.appendChild(el("button", {
-      class: "icon-btn", title: "Paste sync code",
-      "aria-label": "Paste sync code", onclick: doPaste,
-    }, "⇲"));
-    extra.appendChild(el("button", {
-      class: "icon-btn", title: "Copy sync code",
-      "aria-label": "Copy sync code", onclick: doCopy,
-    }, "⧉"));
+    appendSyncControls(extra);
   }
 
   // Preserve the pane's scroll position across this rebuild. Replacing
@@ -8346,7 +8481,11 @@ function render() {
   // bubble" reads as selected on entry (incl. deep links / Back into a detail).
   if (isWide() && (top.view.startsWith("talk:") || top.view.startsWith("session:"))) {
     const mainId = top.view.startsWith("talk:") ? top.view.slice(5) : top.view.slice(8);
-    const ids = new Set(navItems().map(itemId));
+    // Only a real bubble/header cursor carries into the freshly built detail (the
+    // bubble that opened it, or a child you arrowed to). Author/pill keys are
+    // generic ("author:0") and would wrongly survive across talks, so they fall
+    // back to the header here.
+    const ids = new Set(navItems().filter(isSchedulable).map(itemId));
     if (!_selCursorId || !ids.has(_selCursorId)) {
       _selIds = new Set([mainId]);
       _selCursorId = mainId; _selAnchorId = mainId; _selPillIdx = -1;
@@ -8864,18 +9003,29 @@ function switchTab(tab) {
   const stack = state.tabStacks[tab];
   const drilledIn = !!(stack && stack.length > 1);
   if (tab === state.activeTab && !drilledIn) return;   // already at this root
+  // A selected talk carries between the Sessions and Talks views: it stays
+  // selected and scrolls to the middle of the new view (expanding its session
+  // first when landing on Sessions). Resolve it BEFORE the switch so the session
+  // can be pre-expanded for the new tab's render.
+  const carry = _crossTabCarry(tab);
   snapshotScroll();
   _replaceNav();                 // save where we are now, so Back returns here
   state.activeTab = tab;
   if (drilledIn) stack.length = 1;   // drop to the tab's root list
+  // Pin the carried item (talk or session) centered by giving the new root entry
+  // a scroll anchor BEFORE render — render's own restore then centers it (sync,
+  // no rAF fight).
+  if (carry) _setupCarried(carry);
   _pushNav();                    // a Back/Forward-able navigation step
   saveState();
   render();
-  // The engaged keyboard selection survives the tab change ONLY if its cursor
-  // item is actually on screen in the new tab; otherwise it disengages so an
-  // unrelated list isn't left with a stray ring (render restores scroll
-  // synchronously, so the item's position here is already settled).
-  keepSelectionIfVisible();
+  if (!carry) {
+    // The engaged keyboard selection survives the tab change ONLY if its cursor
+    // item is actually on screen in the new tab; otherwise it disengages so an
+    // unrelated list isn't left with a stray ring (render restores scroll
+    // synchronously, so the item's position here is already settled).
+    keepSelectionIfVisible();
+  }
 }
 
 /* Click-to-search: used by clickable institutions, author names, and
@@ -9061,10 +9211,38 @@ const _KEY_LP_MS = 500;
    header first (when present), then the list/child bubbles. */
 function navItems() {
   return [...document.querySelectorAll(
-    "#content .detail-head[data-detail-id], #content .bubble[data-bubble-id]")];
+    "#content .detail-head[data-detail-id], #content .bubble[data-bubble-id], "
+    + "#content [data-navkey]")];
 }
+/* The key identifying a navigable element: a real schedule id for bubbles/detail
+   headers, or a synthetic "author:N" / "pill:N" for the in-detail text targets. */
 function itemId(elc) {
-  return elc.dataset.bubbleId != null ? elc.dataset.bubbleId : elc.dataset.detailId;
+  return elc.dataset.navkey != null ? elc.dataset.navkey
+       : elc.dataset.bubbleId != null ? elc.dataset.bubbleId
+       : elc.dataset.detailId;
+}
+/* Can this element be added to / removed from the schedule (a real session/talk
+   bubble or detail header)? Authors and affiliation pills cannot. */
+function isSchedulable(elc) {
+  return !!elc && (elc.dataset.bubbleId != null || elc.dataset.detailId != null);
+}
+/* Group the linear nav items into ROWS for ↑/↓ movement. Only consecutive
+   AUTHOR targets collapse into one row (authors render horizontally on a single
+   line, so ←/→ moves within them and ↑/↓ steps OVER the whole group). Every
+   other item — including each affiliation pill — is its own row: the
+   institutions list renders VERTICALLY (one per line), so ↑/↓ should step from
+   one institution to the next, not ←/→. So a Talk detail reads:
+   [header] → [authors] → [inst 1] → [inst 2] → … → [session]. */
+function navRows() {
+  const rows = [];
+  let curType = null, curRow = null;
+  for (const elc of navItems()) {
+    const key = itemId(elc) || "";
+    const type = key.startsWith("author:") ? "author" : null;
+    if (type !== null && type === curType) curRow.push(elc);
+    else { curRow = [elc]; rows.push(curRow); curType = type; }
+  }
+  return rows;
 }
 function cursorItemEl() {
   if (_selCursorId == null) return null;
@@ -9083,7 +9261,8 @@ function searchPills() {
    resets when its row is gone. Never rings on narrow (keyboard nav is wide). */
 function applySelection() {
   document.querySelectorAll(
-    "#content .bubble.selected, #content .detail-head.selected, .suggest-bubble.selected"
+    "#content .bubble.selected, #content .detail-head.selected, "
+    + "#content [data-navkey].selected, .suggest-bubble.selected"
   ).forEach(b => b.classList.remove("selected"));
   if (!isWide() || !_selActive) return;
   if (_selPillIdx >= 0) {
@@ -9207,23 +9386,32 @@ function selectFirstResult() {
   const items = navItems();
   if (items.length) setBubbleSelection(itemId(items[0]), { scroll: true });
 }
-/* Index of the first/last item currently inside the #content viewport — the
-   entry point when an arrow is pressed with nothing selected. */
+/* Index of the first/last item to grab when an arrow is pressed with nothing
+   selected. Prefer the first/last item that's FULLY inside the #content viewport,
+   so selecting it doesn't trigger a little scroll to reveal a partly-cut edge
+   item. Fall back to the first/last partially-visible item only when nothing fits
+   wholly (e.g. an item taller than the viewport). */
 function _firstVisibleItemIdx(items) {
   const c = $("#content").getBoundingClientRect();
+  let firstPartial = -1;
   for (let i = 0; i < items.length; i++) {
     const r = items[i].getBoundingClientRect();
-    if (r.bottom > c.top + 1 && r.top < c.bottom - 1) return i;
+    if (!(r.bottom > c.top + 1 && r.top < c.bottom - 1)) continue;   // not in view at all
+    if (firstPartial < 0) firstPartial = i;
+    if (r.top >= c.top - 1 && r.bottom <= c.bottom + 1) return i;     // fully visible
   }
-  return 0;
+  return firstPartial >= 0 ? firstPartial : 0;
 }
 function _lastVisibleItemIdx(items) {
   const c = $("#content").getBoundingClientRect();
+  let lastPartial = -1;
   for (let i = items.length - 1; i >= 0; i--) {
     const r = items[i].getBoundingClientRect();
-    if (r.bottom > c.top + 1 && r.top < c.bottom - 1) return i;
+    if (!(r.bottom > c.top + 1 && r.top < c.bottom - 1)) continue;
+    if (lastPartial < 0) lastPartial = i;
+    if (r.top >= c.top - 1 && r.bottom <= c.bottom + 1) return i;
   }
-  return items.length - 1;
+  return lastPartial >= 0 ? lastPartial : items.length - 1;
 }
 /* Is `el` (partially) within the #content viewport right now? */
 function _itemInView(el) {
@@ -9240,6 +9428,98 @@ function keepSelectionIfVisible() {
   const el = cursorItemEl();
   if (el && _itemInView(el)) applySelection();
   else clearSelection();
+}
+
+/* Switching between the Sessions and Talks views carries the engaged selection
+   to where it lives in the destination list, centered. Returns { kind, id } or
+   null. The destination decides what can be carried:
+     • Talks list shows only talks  → carry the topmost selected TALK.
+     • Sessions list shows sessions AND (when expanded) talks → carry the topmost
+       selected SESSION if any, else the topmost TALK (pre-expanding its session
+       so the talk will actually render).
+   Null when the rule doesn't apply (not wide, nothing engaged, nothing of the
+   right kind selected, or it isn't a Sessions↔Talks switch). */
+function _crossTabCarry(newTab) {
+  if (!isWide()) return null;
+  const isList = (t) => t === "sessions" || t === "talks";
+  if (!isList(newTab)) return null;
+  const v = currentTopView();
+  const inDetail = v.startsWith("talk:") || v.startsWith("session:");
+  const inSearchResults = v.startsWith("searchresults:")
+    || (state.activeTab === "search" && v === "list");
+  // Carry from a Sessions/Talks list, any session/talk DETAIL (on any tab), or a
+  // search-results list — anywhere a session/talk bubble can be engaged.
+  if (!isList(state.activeTab) && !inDetail && !inSearchResults) return null;
+  // What to carry: the engaged selection if there is one; otherwise, on a detail,
+  // the detail's own session/talk — so simply VIEWING it carries it across.
+  let sel;
+  if (_selActive && _selIds.size) sel = [..._selIds];
+  else if (inDetail) sel = [v.startsWith("talk:") ? v.slice(5) : v.slice(8)];
+  else return null;
+  const topBy = (ids, map) => {
+    const xs = ids.filter(id => map[id]);
+    if (!xs.length) return null;
+    xs.sort((a, b) => cmpTs(map[a].start_ts, map[b].start_ts));
+    return xs[0];
+  };
+  if (newTab === "sessions") {
+    const sess = topBy(sel, sessionMap);
+    if (sess) return { kind: "session", id: sess };
+    const talk = topBy(sel, talkMap);
+    if (talk) {
+      const sid = talkMap[talk].session_id;
+      if (sid && isExpandableSession(sid) && !isSessionExpanded(sid)) {
+        state.expandedSessions = [...(state.expandedSessions || []), sid];
+        saveState();
+      }
+      return { kind: "talk", id: talk };
+    }
+    return null;
+  }
+  const talk = topBy(sel, talkMap);
+  if (talk) return { kind: "talk", id: talk };
+  // No talk to carry, but a SESSION is selected → highlight its FIRST talk in the
+  // Talks list (sessions themselves don't appear there).
+  const sess = topBy(sel, sessionMap);
+  if (sess) {
+    const first = _firstTalkOfSession(sess);
+    if (first) return { kind: "talk", id: first };
+  }
+  return null;
+}
+
+/* Earliest-starting talk of a session, or null. */
+function _firstTalkOfSession(sid) {
+  const s = sessionMap[sid];
+  const ids = s && Array.isArray(s.talk_ids) ? s.talk_ids : [];
+  const talks = ids.map(id => talkMap[id]).filter(Boolean);
+  if (!talks.length) return null;
+  talks.sort((a, b) => cmpTs(a.start_ts, b.start_ts));
+  return talks[0].id;
+}
+
+/* Collapse the selection to the carried item and set up the new root view so
+   that render() restores its scroll with the item in the vertical middle. We do
+   this via a scroll ANCHOR (offset = half the viewport) rather than a post-render
+   scroll, so render's own restore — which runs synchronously — does the centering
+   and nothing fights it. Must be called after state.activeTab is the new tab and
+   its stack is at root, but before render(). */
+function _setupCarried(carry) {
+  const id = carry.id;
+  _selIds = new Set([id]);
+  _selCursorId = id; _selAnchorId = id; _selPillIdx = -1;
+  _selActive = true;   // carrying from a detail engages the ring even if it wasn't
+  const c = $("#content");
+  const ch = c ? c.clientHeight : 600;
+  // A talk anchors against its parent session as fallback; a session is its own
+  // bubble (no parent session id needed).
+  const sid = carry.kind === "talk" ? ((talkMap[id] && talkMap[id].session_id) || "") : "";
+  const stack = state.tabStacks[state.activeTab];
+  const top = stack[stack.length - 1];
+  // restoreListAnchor pins the item's TOP to `offset`; ≈ half-viewport (minus
+  // ~half a bubble) puts its middle near the viewport middle.
+  top.scrollAnchor = { id, sessionId: sid, offset: Math.max(0, ch / 2 - 28), fallbacks: [] };
+  top.scrollY = 0;
 }
 
 /* Keyboard item navigation — wide (two-pane) layouts only:
@@ -9361,17 +9641,25 @@ document.addEventListener("keydown", (e) => {
         else focusSearchBox();
         return;
       }
-      idx = Math.max(0, Math.min(items.length - 1, idx + dir));
-      const newId = itemId(items[idx]);
-      if (e.shiftKey) {                         // extend the range from the anchor
+      if (e.shiftKey) {                         // extend a contiguous range (linear)
+        idx = Math.max(0, Math.min(items.length - 1, idx + dir));
+        const newId = itemId(items[idx]);
         if (_selAnchorId == null) _selAnchorId = itemId(cur);
         _selCursorId = newId;
         selectRange(items, _selAnchorId, newId);
         applySelection();
         items[idx].scrollIntoView({ block: "nearest" });
-      } else {
-        setBubbleSelection(newId, { scroll: true });
+        return;
       }
+      // Plain move steps by ROW: in a Talk detail the author group is a single
+      // stop (←/→ moves within it), but each institution is its own row, so ↓
+      // goes header → authors → inst 1 → inst 2 → … → session; everywhere else
+      // each row is one item, i.e. the old item-by-item behaviour.
+      const rows = navRows();
+      let ri = rows.findIndex(r => r.includes(cur));
+      if (ri < 0) ri = 0;
+      ri = Math.max(0, Math.min(rows.length - 1, ri + dir));
+      setBubbleSelection(itemId(rows[ri][0]), { scroll: true });
       return;
     }
     case " ":
@@ -9395,9 +9683,15 @@ document.addEventListener("keydown", (e) => {
       e.preventDefault();                    // never scroll while an item is selected
       if (e.repeat) return;                  // auto-repeat while held: hold timer runs
       if (!cur.classList.contains("bubble")) {
-        // The selected item is a detail's own header — Space/Enter goes Back
-        // (keeping the keyboard selection engaged, like Esc).
-        if (cur.classList.contains("detail-head") && canGoBack()) triggerBack(true);
+        if (cur.classList.contains("detail-head")) {
+          // The detail's own header — Space/Enter goes Back (keeping the keyboard
+          // selection engaged, like Esc).
+          if (canGoBack()) triggerBack(true);
+        } else {
+          // An author name or affiliation pill — activate it (runs its search).
+          _selActive = true;
+          cur.click();
+        }
         return;
       }
       _selActive = true; applySelection();   // engage now so the ring shows on press
@@ -9416,9 +9710,24 @@ document.addEventListener("keydown", (e) => {
     }
     case "ArrowRight":
     case "ArrowLeft": {
-      // Add (→) / remove (←) the schedule for EVERY selected item — one or many.
-      const ids = _selIds.size ? [..._selIds]
-                : (cursorItemEl() ? [_selCursorId] : []);
+      const cur = cursorItemEl();
+      // In-detail text targets (authors, affiliation pills) aren't schedulable,
+      // so ←/→ moves within their row instead of touching the schedule. The
+      // author group is multi-item (←/→ steps between names); an institution
+      // pill is its own single-item row, so ←/→ is a no-op there (use ↑/↓).
+      if (cur && !isSchedulable(cur)) {
+        e.preventDefault();
+        _selActive = true;
+        const row = navRows().find(r => r.includes(cur)) || [cur];
+        let i = row.indexOf(cur) + (e.key === "ArrowRight" ? 1 : -1);
+        i = Math.max(0, Math.min(row.length - 1, i));
+        setBubbleSelection(itemId(row[i]), { scroll: true });
+        return;
+      }
+      // Otherwise: add (→) / remove (←) the schedule for EVERY selected item.
+      // Filter out any non-schedulable keys (author:/pill:) defensively.
+      const ids = (_selIds.size ? [..._selIds] : (cur ? [_selCursorId] : []))
+        .filter(id => !String(id).startsWith("author:") && !String(id).startsWith("pill:"));
       if (!ids.length) return;
       e.preventDefault();
       _selActive = true;        // →/← engages and shows the ring on the item(s)
