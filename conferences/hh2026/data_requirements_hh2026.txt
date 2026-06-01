@@ -1,0 +1,42 @@
+# data_requirements_hh2026.txt — Hilton Head 2026
+#
+# Structured manifest of the data files that the fetch (downloader) and process
+# scripts in this directory rely on. make_app.py reads this file to decide
+# whether a download can be skipped: when FORCE_DOWNLOAD is off, every file
+# marked "required = yes" below must already exist in data/ for the download to
+# be skipped; otherwise make_app runs the downloader.
+#
+# Format (simple, line-oriented; '#' starts a comment, blank lines ignored):
+#   - Each file is a block introduced by a header line "[file: <pattern>]".
+#   - <pattern> is a filename or a glob resolved relative to the data/
+#     subdirectory of THIS conference folder.
+#   - Inside a block, "key: value" lines give metadata. Recognized keys:
+#       required     yes | no   (default yes) — whether the file must be present
+#       produced_by  which script normally creates it (fetch / process / manual)
+#       description  one-line human description
+#       manual       how to obtain the file by hand if the downloader can't
+#   - Continuation: a "manual"/"description" value may wrap onto indented lines.
+#
+# manual_steps_written: 2026-06-01
+# These manual-download instructions were accurate as of the date above; the
+# conference website can change, so re-verify if much later.
+
+generated_for: hh2026
+manual_steps_written: 2026-06-01
+
+[file: HiltonHead2026_Program.pdf]
+required: yes
+produced_by: fetch
+description: The official Hilton Head 2026 Final Program PDF — the single,
+  authoritative source for the entire technical program. It contains the
+  Special Events descriptions, the Sunday-through-Thursday day-by-day schedule
+  (plenary / rising-star / invited speakers, the numbered technical Sessions,
+  the Sunday Workshops, the SEMI MSIG Industry Session, and the social/
+  housekeeping events), and the three Poster Presentation sessions. The
+  processor reads ONLY this file and emits conference_data.json from it.
+manual: Open https://www.hh2026.org/files/HiltonHead2026_Program.pdf in a
+  browser (or right-click the "Program" download link on
+  https://www.hh2026.org/program/ ) and save the PDF into this folder's data/
+  subdirectory as exactly HiltonHead2026_Program.pdf . The URL is stable (no
+  rolling date suffix); if the organisers re-issue the program, re-download to
+  pick up the changes.

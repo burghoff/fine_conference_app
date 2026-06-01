@@ -1,0 +1,148 @@
+ATLANT 3D, DENMARK	ATLANT 3D
+ATLANT3D, DENMARK	ATLANT3D
+AkriVita Inc., USA	AkriVita
+Alleima, USA	Alleima
+Analog Devices, USA	Analog Devices
+Army Research Laboratory, USA	ARL
+BAE Systems, Inc., USA	BAE Systems
+BQL Healthcare USA Inc.	BQL Healthcare USA
+Berkeley Sensor and Actuator Center, USA	Berkeley Sensor and Actuator Center
+Binghamton University, USA	Binghamton
+Blackrock Neurotech, USA	Blackrock Neurotech
+CEA Leti., Grenoble, FRANCE	CEA Leti
+CEA-Leti, FRANCE	CEA-Leti
+CEA-Leti, Grenoble, FRANCE	CEA-Leti
+California NanoSystems Institute, Los Angeles, USA	California NanoSystems Institute
+Carnegie Mellon University, USA	Carnegie Mellon
+Chonnam National University, KOREA	Chonnam National
+Columbia University, USA	Columbia
+Cornell University, USA	Cornell
+DEVCOM Army Research Lab, USA	ARL
+DEVCOM Army Research Laboratory, USA	ARL
+Digitho Technologies Inc., CANADA	Digitho Technologies
+Draper, USA	Draper
+ECS Federal, USA	ECS Federal
+ETH Zürich, SWITZERLAND	ETH Zürich
+EV Group, USA	EV Group
+Ecole Polytechnique Fédérale de Lausanne, SWITZERLAND	EPFL
+Edwards Life Sciences, USA	Edwards Life Sciences
+Edwards Lifesciences, USA	Edwards Lifesciences
+Emory University, USA	Emory
+EngeniusMicro, LLC, USA	EngeniusMicro
+Evatec AG, SWITZERLAND	Evatec
+Exo Imaging, USA	Exo Imaging
+FabuBlox, Inc., USA	FabuBlox
+Florida Institute of Technology, USA	Florida Institute of Technology
+Forge Nano, Inc., USA	Forge Nano
+GE Aerospace, USA	GE Aerospace
+Geegah LLC, USA	Geegah
+General Technical Services, USA	General Technical Services
+George Mason University, USA	George Mason
+Georgia Institute of Technology, USA	Georgia Tech
+Georgia Tech Institute for Matter and Systems, USA	Georgia Tech
+Harvard University, USA	Harvard
+Heidelberg Instruments Nano AG, SWITZERLAND	Heidelberg Instruments Nano
+Heidelberg Instruments, GERMANY	Heidelberg Instruments
+InchFab, USA	InchFab
+Institut für Mikroelektronik Stuttgart, GERMANY	Institut für Mikroelektronik Stuttgart
+Iowa State University, USA	Iowa State
+Jade University of Applied Sciences, GERMANY	Jade
+Jeonbuk National University, KOREA	Jeonbuk National
+Jet Propulsion Laboratory, USA	JPL
+Johns Hopkins University, USA	Johns Hopkins
+Kampanics, L.L.C., USA	Kampanics
+Korea Advanced Institute of Science and Technology (KAIST), KOREA	KAIST
+Lam Research, USA	Lam Research
+Lam, USA	Lam
+Lawrence Livermore National Laboratory, USA	LLNL
+Leibniz IFW Dresden, GERMANY	Leibniz IFW Dresden
+Leibniz Institute for Solid State and Materials Research Dresden, GERMANY	Leibniz Institute for Solid State and Materials Research Dresden
+Leibniz University, Hannover, GERMANY	Leibniz
+LioniX International, BV, NETHERLANDS	LioniX International
+Lyncee Tec SA, SWITZERLAND	Lyncee Tec SA
+MEMStaff, USA	MEMStaff
+Mass Eye and Ear, USA	Mass Eye and Ear
+Massachusetts Institute of Technology, USA	MIT
+Mayo Clinic, USA	Mayo Clinic
+Menlo Microsystems Inc., USA	Menlo Microsystems
+Michigan State University, USA	Michigan State
+Mississippi State University, USA	Mississippi State
+Mount Sinai, USA	Mount Sinai
+Multidisciplinary Digital Publishing Institute (MDPI), SWITZERLAND	Multidisciplinary Digital Publishing Institute
+Nanoscribe GmbH & Co. KG, Germany	Nanoscribe GmbH &
+National Institute of Standards and Technology (NIST), USA	NIST
+National Institute of Standards and Technology, USA	NIST
+National Taiwan University Hospital, Hsinchu, TAIWAN	NTU Taiwan
+National Yang Ming Chiao Tung University, TAIWAN	NYCU
+Northeastern University, USA	Northeastern
+Ohio State University, USA	Ohio State
+Orthomerica, USA	Orthomerica
+Pacific Northwest National Laboratory (PNNL), USA	PNNL
+Pennsylvania State University, USA	Penn State
+Polytec GmbH, GERMANY	Polytec
+Polytec Inc., USA	Polytec
+Polytec, Inc., USA	Polytec
+Purdue University, USA	Purdue
+QST SOLUTIONS Limited, USA	QST SOLUTIONS
+Renesas Electronics, USA	Renesas Electronics
+Robert Bosch GmbH, GERMANY	Bosch
+Rutgers University, USA	Rutgers
+SEMI MEMS & Sensors Industry, USA	SEMI MEMS & Sensors Industry
+ST Microelectronics, USA	ST Microelectronics
+STMicroelectronics, USA	STMicro
+SUNY Binghampton, USA	SUNY Binghampton
+Sandia National Laboratories, USA	Sandia
+Sandia National Laboratory, USA	Sandia
+Silex, USA	Silex
+SmarAct Metrology, GERMANY	SmarAct Metrology
+SoftMEMS LLC, USA	SoftMEMS
+SoftMEMS, USA	SoftMEMS
+Stanford University, USA	Stanford
+State University of New York (SUNY), Binghamton, USA	Binghamton
+State University of New York, Binghamton, USA	Binghamton
+StethX Microsystems Inc., USA	StethX Microsystems
+StethX Microsystems, USA	StethX Microsystems
+Syntiant Corporation, USA	Syntiant
+Teledyne MEMS, CANADA	Teledyne MEMS
+Texas A&M University, USA	Texas A&M
+Texas Instruments, USA	Texas Instruments
+Trine University, USA	Trine
+Tsinghua University, CHINA	Tsinghua
+Tufts University, USA	Tufts
+U.S. Army Combat Capabilities Development Command, USA	US Army Combat Capabilities Development Command
+US Naval Research Laboratory (NRL), USA	NRL
+Ultimate Fighting Bots (UFB), USA	Ultimate Fighting Bots
+Universite Claude Bernard Lyon, FRANCE	Claude Bernard Lyon
+University of California, Berkeley, USA	UC Berkeley
+University of California, Davis, USA	UC Davis
+University of California, Irvine, USA	UC Irvine
+University of California, Los Angeles, USA	UCLA
+University of California, San Diego, USA	UC San Diego
+University of Central Florida, USA	UCF
+University of Cincinnati, USA	Cincinnati
+University of Colorado, Boulder, USA	CU Boulder
+University of Delaware, USA	Delaware
+University of Florida, USA	Florida
+University of Illinois, Chicago, USA	UIUC
+University of Illinois, Urbana-Champaign, USA	UIUC
+University of Maryland, Baltimore, USA	UMBC
+University of Maryland, College Park, USA	Maryland
+University of Massachusetts, Amherst, USA	UMass Amherst
+University of Michigan, Ann Arbor, USA	Michigan
+University of Michigan, USA	Michigan
+University of Minnesota, Minneapolis, USA	Minnesota
+University of Minnesota, St. Paul	Minnesota
+University of Minnesota, USA	Minnesota
+University of North Carolina, Charlotte, USA	NC State
+University of Pennsylvania, USA	UPenn
+University of Rhode Island, USA	Rhode Island
+University of Southern California, USA	USC
+University of Texas, Austin, USA	UT Austin
+University of Texas, El Paso, USA	UT Austin
+University of Utah, USA	Utah
+Université de Sherbrooke, CANADA	Sherbrooke
+UpNano US, Inc., USA	UpNano US
+VTT Technical Research Centre of Finland, FINLAND	VTT Technical Research Centre of Finland
+Vectorious Medical, ISRAEL	Vectorious Medical
+Virginia Tech, USA	Virginia Tech
+York University, CANADA	York
