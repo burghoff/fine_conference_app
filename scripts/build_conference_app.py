@@ -5027,6 +5027,20 @@ function renderTimeGrouped(container, items, opts = {}) {
   const _locOf = (it) => effectiveLocation(it) || "";
   const _byLoc = (a, b) =>
     _locOf(a).localeCompare(_locOf(b), undefined, { numeric: true });
+  // Same-time tie-break is normally by location, but when two items have titles
+  // of the form "<Word> <Number> …" (e.g. "Workshop 1", "Workshop 2", which may
+  // sit in different rooms) order them by that number instead, so the series
+  // reads 1, 2, 3 rather than by arbitrary room name. Requires the same leading
+  // word; otherwise falls back to location.
+  const _numKey = (it) => {
+    const m = (it.title || "").match(/^(\D+?)\s*(\d+)\b/);
+    return m ? { word: m[1].trim().toLowerCase(), num: parseInt(m[2], 10) } : null;
+  };
+  const _byTie = (a, b) => {
+    const ka = _numKey(a), kb = _numKey(b);
+    if (ka && kb && ka.word && ka.word === kb.word) return ka.num - kb.num;
+    return _byLoc(a, b);
+  };
 
   const reorderBucket = (bucket) => {
     if (bucket.length < 2) return bucket;
@@ -5035,7 +5049,7 @@ function renderTimeGrouped(container, items, opts = {}) {
       if (!it.session_id) sessionIdsHere.add(it.id);
     }
     // No sessions in this bucket (e.g. the Talks tab): just order by location.
-    if (sessionIdsHere.size === 0) return [...bucket].sort(_byLoc);
+    if (sessionIdsHere.size === 0) return [...bucket].sort(_byTie);
     const childrenOf = {};   // sessionId -> [talks in bucket]
     for (const it of bucket) {
       if (it.session_id && sessionIdsHere.has(it.session_id)) {
@@ -5056,9 +5070,9 @@ function renderTimeGrouped(container, items, opts = {}) {
     }
     // Order each group by location (children follow their parent below, so they
     // move with it). Standalone talks at the front are ordered by location too.
-    front.sort(_byLoc);
-    sessionsNoConn.sort(_byLoc);
-    sessionsConn.sort(_byLoc);
+    front.sort(_byTie);
+    sessionsNoConn.sort(_byTie);
+    sessionsConn.sort(_byTie);
     const back = [];
     for (const s of sessionsNoConn) {
       back.push(s);

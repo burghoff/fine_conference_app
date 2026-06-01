@@ -291,6 +291,90 @@ def _all_caps(s: str) -> bool:
     return upper / len(letters) >= 0.8
 
 
+# -----------------------------------------------------------------------------
+# Title-case rendering for the ALL-CAPS talk/poster titles, with data-driven
+# acronym restoration. Ported from the SPIE PW 2025 processor: the program
+# prints talk titles in ALL CAPS but session titles, special-event blurbs and
+# institution names in normal mixed case, so that already-correctly-cased text
+# is a ready-made dictionary of how each acronym is actually written (MEMS,
+# NEMS, AI, LDV, …). Nothing is hardcoded — the acronym casing is learned.
+# -----------------------------------------------------------------------------
+_MINOR = {"a", "an", "and", "as", "at", "but", "by", "for", "from", "in", "of",
+          "on", "or", "the", "to", "via", "with", "vs", "nor"}
+
+
+def learn_acronyms(corpus: list[str]) -> dict[str, str]:
+    """Learn canonical acronym casing from already-correctly-cased text. Maps each
+    token's UPPERCASE form to its most common observed casing, keeping only those
+    whose canonical form is genuinely acronym-cased (has an uppercase letter and
+    is not just an ordinary Capitalized word)."""
+    from collections import Counter
+    forms: dict[str, "Counter"] = {}
+    for text in corpus:
+        for tok in (text or "").split():
+            core = tok.strip(".,;:!?()[]{}\"'")
+            if len(core) < 2 or not any(c.isalpha() for c in core):
+                continue
+            forms.setdefault(core.upper(), Counter())[core] += 1
+    acr: dict[str, str] = {}
+    for up, counter in forms.items():
+        canon = counter.most_common(1)[0][0]
+        if any(c.isupper() for c in canon) and \
+                canon != canon[:1].upper() + canon[1:].lower():
+            acr[up] = canon
+    return acr
+
+
+def _recase_token(core: str, acr: dict[str, str]) -> str:
+    """Apply learned acronym casing to one UPPERCASE token, falling back to
+    roman-numeral preservation and ordinary Capitalization. Alpha runs inside a
+    hyphen/slash compound are recased independently so a buried acronym still
+    restores."""
+    up = core.upper()
+    if up in acr:
+        return acr[up]
+    if up.endswith("S") and up[:-1] in acr:
+        return acr[up[:-1]] + "s"
+    alpha = re.sub(r"[^A-Za-z]", "", core).lower()
+    if re.fullmatch(r"[ivxlcdm]{2,}", alpha):       # roman numeral (II, XVIII)
+        return core.upper()
+
+    def _run(m: "re.Match") -> str:
+        seg = m.group(0)
+        u = seg.upper()
+        if u in acr:
+            return acr[u]
+        if u.endswith("S") and u[:-1] in acr:
+            return acr[u[:-1]] + "s"
+        return seg[:1].upper() + seg[1:].lower()
+    return re.sub(r"[A-Za-z]+", _run, core)
+
+
+def _smart_title(t: str, acr: dict[str, str]) -> str:
+    """Render an ALL-CAPS title for display: restore learned acronym casing,
+    lowercase minor joining words (except first/last), and capitalize the first
+    word and any word after a colon."""
+    toks = t.split()
+    n = len(toks)
+    out: list[str] = []
+    at_start = True
+    for i, tok in enumerate(toks):
+        alpha = re.sub(r"[^A-Za-z]", "", tok).lower()
+        if not (tok.upper() in acr or
+                (tok.upper().endswith("S") and tok.upper()[:-1] in acr)) \
+                and 0 < i < n - 1 and alpha in _MINOR:
+            rep = tok.lower()
+        else:
+            rep = _recase_token(tok, acr)
+        if at_start:
+            j = next((k for k, c in enumerate(rep) if c.isalpha()), None)
+            if j is not None and rep[j].islower():
+                rep = rep[:j] + rep[j].upper() + rep[j + 1:]
+        out.append(rep)
+        at_start = tok.endswith(":")
+    return " ".join(out)
+
+
 # =============================================================================
 # Author / institution parsing.
 # =============================================================================
@@ -359,7 +443,12 @@ def _parse_authors(author_text: str,
     non-existent institution number are dropped so the JSON stays consistent."""
     valid = {i["n"] for i in institutions}
     authors: list[dict] = []
-    for tok in re.split(r",(?=\s)", author_text):
+    # Authors are separated by commas, OR by a bare "and"/"&" (a two-author
+    # byline "X and Y", or the Oxford-comma "…, and Z"). The comma split
+    # requires a FOLLOWING space so an affiliation marker's internal comma
+    # ("Surname1,2") is never split; " and "/" & " need surrounding whitespace
+    # so a name like "Anand" is left intact.
+    for tok in re.split(r",(?=\s)|\s+and\s+|\s+&\s+", author_text):
         tok = tok.strip()
         if not tok:
             continue
@@ -383,13 +472,40 @@ def _split_body_fonts(body_lines: list[Line]) -> tuple[str, str]:
     affiliation. Most talks keep the two on separate lines, but the industry
     session puts them on one line ('<Speaker, regular>, <Company, oblique>'),
     so a line-level oblique test mis-files them — char-level is robust."""
-    reg: list[dict] = []
-    obl: list[dict] = []
+    author_parts: list[str] = []
+    aff_parts: list[str] = []
     for l in body_lines:
+        obl: list[dict] = []
+        reg: list[dict] = []
         for c in l.content_chars:
             fn = c.get("fontname", "")
             (obl if ("Oblique" in fn or "Italic" in fn) else reg).append(c)
-    return _join_chars(reg), _join_chars(obl)
+        obl_txt = _join_chars(obl)
+        reg_txt = _join_chars(reg)
+        # Oblique is used for THREE things: affiliation text, the tiny
+        # superscript affiliation MARKERS glued to author surnames, and the
+        # italic connective "and" / spaces in an author list. Only treat the
+        # oblique run as a real affiliation when it carries alphabetic content
+        # beyond that connective; otherwise the line is an author line and is
+        # kept whole (markers in place, spacing preserved) so the comma-split
+        # works. When a line mixes real regular names AND real oblique text it
+        # is an industry byline ("<Speaker>, <Company>") and is split.
+        # Alphabetic content of each font run, with the connective "and" removed
+        # (it is italic in author lists and often glued to a marker, e.g.
+        # "45and"). What remains in the oblique run, if anything, is real
+        # affiliation text.
+        obl_real = re.sub(r"[^a-z]", "", obl_txt.lower()).replace("and", "")
+        reg_real = re.sub(r"[^A-Za-z]", "", reg_txt)
+        if not obl_real:
+            author_parts.append(_join_chars(l.content_chars))
+        elif not reg_real:
+            aff_parts.append(obl_txt)
+        else:
+            author_parts.append(reg_txt)
+            aff_parts.append(obl_txt)
+    # Join lines with a space so the last author on one line is not glued to the
+    # first on the next ("…Boning3" + "Michael…").
+    return _clean(" ".join(author_parts)), _clean(" ".join(aff_parts))
 
 
 def _block_has_body(lines: list[Line]) -> bool:
@@ -735,6 +851,36 @@ def build_conference_data() -> dict:
                 return
             start_ts = _iso(cur_dom, cur_month, bs) if (bs and cur_dom) else None
             end_ts = _iso(cur_dom, cur_month, be) if (be and cur_dom) else None
+
+            # A Sunday Workshop runs a half-day and OWNS its internal agenda
+            # items (Lunch, a panel, the closing "Adjourn"). Fold those into the
+            # workshop as Event-typed talk-rows rather than scattering them as
+            # standalone sessions. An "Adjourn" marks the workshop's end, so it
+            # closes the session (the next workshop banner reopens one).
+            if banner_session is not None \
+                    and banner_session["format"] == "Sunday Workshop":
+                talk_seq += 1
+                tid = f"T{talk_seq:03d}"
+                talks.append({
+                    "id": tid, "session_id": banner_session["id"],
+                    "title": payload["title"], "number": "",
+                    "start_ts": start_ts, "end_ts": end_ts,
+                    "speaker": "", "presenter": "", "speaker_pos": None,
+                    "authors": [], "author_aliases": [], "institutions": [],
+                    "institutions_may_dedup": False,
+                    "abstract": payload.get("details", ""),
+                    "status": "", "withdrawn": False,
+                    "first_author": "", "last_author": "",
+                    "color": "rose", "location": "",
+                })
+                banner_session["talk_ids"].append(tid)
+                if start_ts:
+                    timed.append({"day": (cur_month, cur_dom), "start": bs,
+                                  "obj": talks[-1], "kind": "talk"})
+                if re.match(r"^adjourn\b", payload["title"], re.I):
+                    banner_session = None      # workshop concluded
+                return
+
             ev = _new_session(payload["title"], "rose", "Event",
                               start_ts=start_ts, end_ts=end_ts,
                               details=payload.get("details", ""))
@@ -985,6 +1131,29 @@ def build_conference_data() -> dict:
             n_enriched += 1
         log(f"  special-events: {len(special)} blurbs, enriched "
             f"{n_enriched} session(s).")
+
+    # ---- render the ALL-CAPS talk/poster titles into normal title case,
+    #      restoring acronym casing learned from the conference's own
+    #      mixed-case text (session titles, special-event blurbs, institution
+    #      names). The session banner titles are already mixed-case, so they
+    #      form the in-domain dictionary; nothing is hardcoded. ----
+    corpus: list[str] = []
+    for s in sessions:
+        if not _all_caps(s["title"]):
+            corpus.append(s["title"])
+        if s.get("details"):
+            corpus.append(s["details"])
+    for t in talks:
+        for inst in t["institutions"]:
+            corpus.append(inst.get("name") or "")
+    acr = learn_acronyms(corpus)
+    n_recased = 0
+    for t in talks:
+        if _all_caps(t["title"]):
+            t["title"] = _smart_title(t["title"], acr)
+            n_recased += 1
+    log(f"  title-case: learned {len(acr)} acronym(s); recased "
+        f"{n_recased} title(s).")
 
     # Drop sessions that ended up empty and undated (e.g. a skipped pointer).
     sessions = [s for s in sessions
