@@ -3778,8 +3778,8 @@ UNM	UNM
 UNM, Albuquerque, NM, United States	UNM
 UNSW Canberra	UNSW Canberra
 UNSW Canberra, City, ACT, Australia	UNSW Canberra
-US Army CCDC	US Army CCDC
-US Army CCDC, Redstone Arsenal, AL, United States	US Army CCDC
+US Army CCDC	DEVCOM
+US Army CCDC, Redstone Arsenal, AL, United States	DEVCOM
 US Army DEVCOM Armaments Center-Benét Laboratories	DEVCOM
 US Army DEVCOM Armaments Center-Benét Laboratories, Watervliet, NY, United States	DEVCOM
 US Military Academy	US Military Academy

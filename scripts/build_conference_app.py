@@ -94,6 +94,7 @@ Run: just `python build_conference_app.py`.
 from __future__ import annotations
 
 import base64
+import html
 import json
 import re
 import sys
@@ -1437,6 +1438,28 @@ def _normalize_title_text(s: str) -> str:
     return re.sub(r"\s+", " ", s).strip()
 
 
+# --- Micrometre units --------------------------------------------------------
+# The micro sign rendered as Greek small mu (U+03BC) — the same character the
+# HTML entity "&mu;" decodes to, so the entity path and this path agree.
+_MICRON = "μ"
+
+# A bare "um" used as the micrometre unit: a number (optionally decimal), an
+# optional single space, then "um" at a word boundary. The leading-number
+# requirement and the trailing word boundary keep ordinary words ("aluminum",
+# "spectrum", "datum", "vacuum") and micro-compounds ("umol") untouched; only
+# "<number>um" / "<number> um" is rewritten.
+_MICRON_UNIT_RE = re.compile(r"(?<![A-Za-z])(\d+(?:\.\d+)?)( ?)um(?![A-Za-z])")
+
+
+def _fix_micron_units(s: str) -> str:
+    """Rewrite a bare micrometre unit ('9um', '2.1 um') to use μ ('9μm',
+    '2.1 μm'), preserving any existing space. Conservative — see
+    _MICRON_UNIT_RE."""
+    if not s:
+        return s
+    return _MICRON_UNIT_RE.sub(rf"\1\2{_MICRON}m", s)
+
+
 # --- Chemical-formula subscripts (ported from the ECIO 2026 processor) -------
 # All IUPAC element symbols (1- and 2-letter). Membership is case-sensitive at
 # the call site (symbol must start uppercase, second letter lowercase).
@@ -1769,11 +1792,16 @@ def normalize_presentation(data: dict) -> None:
     talks = data.get("talks", []) or []
     items = sessions + talks
 
-    # 1. Text hygiene + trailing-period strip on every title.
+    # 1. Decode HTML entities (e.g. "&mu;" -> μ), normalize bare micrometre
+    #    units ("9um"/"2.1 um" -> "9μm"/"2.1 μm"), strip text-extraction
+    #    artifacts, and trim a trailing period. html.unescape is a no-op on a
+    #    title with no entities, so entity-free conferences are unaffected.
     for it in items:
         if it.get("title"):
-            it["title"] = _strip_trailing_periods(
-                _normalize_title_text(it["title"]))
+            t = html.unescape(it["title"])
+            t = _normalize_title_text(t)
+            t = _fix_micron_units(t)
+            it["title"] = _strip_trailing_periods(t)
 
     # 2. ALL-CAPS recasing. Learn acronym casing from the conference's own
     #    normally-cased text (any non-shouting title, session details, and

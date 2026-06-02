@@ -174,8 +174,8 @@ Australian Research Council (ARC) Centre of Excellence for Transformative Meta-O
 Australian Research Council Centre of Excellence for Gravitational Wave Discovery (OzGrav)	OzGrav
 Australian Research Council Centre of Excellence for Gravitational Wave Discovery (OzGrav), Adelaide, SA, Australia	OzGrav
 Australian Research Council Centre of Excellence for Transformative Meta-Optical Systems, Department of Electronic Materials Engineering, Research School of Physics, The Australian National University, Canberra, Canberra, ACT, Australia	TMOS
-Aviation and Missile Center, US Army CCDC	US Army CCDC
-Aviation and Missile Center, US Army CCDC, Huntsville, AL, United States	US Army CCDC
+Aviation and Missile Center, US Army CCDC	DEVCOM
+Aviation and Missile Center, US Army CCDC, Huntsville, AL, United States	DEVCOM
 Axiomatic_AI Inc.	Axiomatic_AI
 Axiomatic_AI Inc., Cambridge, MA, United States	Axiomatic_AI
 Ayar Labs	Ayar Labs
@@ -4095,8 +4095,8 @@ Uviquity	Uviquity
 Uviquity, Raleigh, NC, United States	Uviquity
 VACOM GmbH	VACOM
 VACOM GmbH, Grossloebichau, Germany	VACOM
-VTT Technical Research Centre of Finland Ltd.	VTT Technical Research Centre of Finland
-VTT Technical Research Centre of Finland Ltd., Espoo, Finland	VTT Technical Research Centre of Finland
+VTT Technical Research Centre of Finland Ltd.	VTT
+VTT Technical Research Centre of Finland Ltd., Espoo, Finland	VTT
 Vanderbilt University	Vanderbilt
 Vanderbilt University, Nashville, TN, United States	Vanderbilt
 Vanguard Automation	Vanguard Automation

@@ -342,8 +342,13 @@ _ANCHORS_SRC: list = [
     ([r're:\blle,\s+rochester\b', 'laboratory for laser energetics'], 'Rochester'),
     (['darpa mto', 'darpa'], 'DARPA'),
     (['army research lab', r're:\barl\b'], 'ARL'),
-    ('us army ccdc', 'US Army CCDC'),
-    ('devcom', 'DEVCOM'),
+    # The US Army Combat Capabilities Development Command: the spelled-out name,
+    # its former "CCDC" acronym, and the current "DEVCOM" branding are all the
+    # same command, so they fold to one short. (The ARL anchor above still wins
+    # for the "…Development Command Army Research Laboratory" strings.) Note the
+    # unrelated Chinese "CCDC Drilling …" institute carries neither "us army" nor
+    # "combat capabilities" and is handled by its own anchor far below.
+    (['us army ccdc', 'combat capabilities development command', 'devcom'], 'DEVCOM'),
     ('hrl', 'HRL'),
     ('draper', 'Draper'),
     (['jhu/apl', 'johns hopkins applied physics'], 'JHU APL'),
@@ -813,6 +818,13 @@ _ANCHORS_SRC: list = [
         'leibniz universitat hannover',
     ], 'Leibniz U Hannover'),
     ('leibniz-institut fur oberflachenmodifizierung', 'IOM'),
+    # IFW Dresden — Leibniz Institute for Solid State and Materials Research
+    # (German "Leibniz-Institut für Festkörper- und Werkstoffforschung"). Cover
+    # the English and German names plus the standard "IFW Dresden" acronym.
+    ([
+        'leibniz institute for solid state and materials research',
+        'festkorper- und werkstoffforschung', 'ifw dresden',
+    ], 'IFW Dresden'),
     ('cluster of excellence phoenixd', 'Cluster of Excellence PhoenixD'),
     ('laser zentrum hannover', 'Laser Zentrum Hannover e.V'),
     (['universitat hamburg', 'university of hamburg'], 'Universitat Hamburg'),
@@ -1079,6 +1091,9 @@ _ANCHORS_SRC: list = [
     ('linkoping', 'Linköping'),
     ('rise research institutes', 'RISE Research Institutes of Sweden'),
     ('aalto', 'Aalto'),
+    # VTT Technical Research Centre of Finland (the "Ltd."/"Oy" legal suffix and
+    # the Centre/Center spelling both vary); the bare "VTT" acronym is the short.
+    ([r're:\bvtt\b', r're:technical research cent(?:re|er) of finland'], 'VTT'),
     ('vexlum', 'Vexlum Oy'),
     ('university of turku', 'U Turku'),
     ('university of jyvaskyla', 'U Jyväskylä'),
@@ -1831,6 +1846,8 @@ _ANCHORS_SRC: list = [
     # ---- Other catch-all institutes ----------------------------------------
     ('hp inc', 'HP'),
     (['av incorporated', 'av inc.'], 'AV Inc.'),
+    # MDPI (the open-access publisher), spelled out or as the bare acronym.
+    ([r're:\bmdpi\b', 'multidisciplinary digital publishing institute'], 'MDPI'),
 
     # ---- Ad-hoc rarities ---------------------------------------------------
     ('uniwersytet mikolaja', 'Nicolaus Copernicus'),
@@ -2206,7 +2223,11 @@ def _final_clean(s: str) -> str:
     s = s.replace(',', ' ')
     s = s.replace('.', '')                    # "Co." -> "Co", "I.D." -> "ID"
     s = re.sub(r'\s+', ' ', s).strip()
-    return s.strip(' -')
+    # Drop a leftover dangling connector at either edge ("Foo &" / "& Bar"),
+    # e.g. a residue of a stripped legal tail — an internal "&" ("Texas A&M",
+    # "Johnson & Johnson") is kept since strip() only trims the ends.
+    s = re.sub(r'^(?:&|\+)\s+|\s+(?:&|\+)$', '', s)
+    return s.strip(' -&+')
 
 
 def _strip_legal_suffix(s: str) -> str:
@@ -2222,7 +2243,10 @@ def _strip_legal_suffix(s: str) -> str:
         r'pte\.?,?\s*ltd\.?', r'pte\.?',
         r'ltd\.?', r'limited', r'llc', r'l\.l\.c\.', r'inc\.?',
         r'incorporated', r'corp\.?', r'corporation', r'gmbh',
-        r'co\.,?\s*kg', r'ag', r's\.r\.l\.?', r's\.a\.?', r'b\.v\.?',
+        # German limited-partnership tails, incl. the "Co. KG"/"Co. KGaA"
+        # compounds and the bare "KG"/"KGaA" forms (longest listed first).
+        r'co\.,?\s*kgaa', r'co\.,?\s*kg', r'kgaa', r'kg',
+        r'ag', r's\.r\.l\.?', r's\.a\.?', r'b\.v\.?',
         r'plc', r'pty\.?\s*ltd\.?',
         r'k\.?k\.?', r'oy', r'ab', r'a/s', r's\.p\.a\.?', r'spa',
         r'oyj', r'asa', r'nv', r'n\.v\.?', r'sas', r's\.a\.s\.?',
@@ -2236,8 +2260,17 @@ def _strip_legal_suffix(s: str) -> str:
     # Require a separator (comma, space, or start) before the designator so it
     # can't chew into a real word — e.g. "s.a." must not match the "sa" in
     # "Tulsa", and "ag" must be a standalone token, not the tail of a word.
+    #
+    # Between the separator and the designator, optionally consume an "&"/"and"/
+    # "und"/"+" connector so a compound trailing tag like the German "GmbH & Co.
+    # KG" fully collapses: one pass strips "& Co. KG" (connector + designator),
+    # leaving "<Name> GmbH" for the next pass to strip — instead of stranding a
+    # dangling "<Name> GmbH &". The connector is only consumed when a real
+    # designator follows it, so an internal "&" in a name (e.g. "Johnson &
+    # Johnson", "Texas A&M") is never touched.
     pat = re.compile(
-        r'(?:^|(?<=[\s,]))[\s,]*(?:' + '|'.join(designators) + r')\s*$',
+        r'(?:^|(?<=[\s,]))[\s,]*(?:(?:&|\+|and|und)[\s,]*)?'
+        r'(?:' + '|'.join(designators) + r')\s*$',
         re.IGNORECASE,
     )
     prev = None

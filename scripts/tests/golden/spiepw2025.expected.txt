@@ -348,7 +348,7 @@ Cancer Research UK Cambridge Institute (United Kingdom)	Cancer Research UK Cambr
 Cancer Research UK Cambridge Institute, Univ. of Cambridge (United Kingdom)	Cambridge
 Cancer Research UK Manchester Institute (United Kingdom)	Cancer Research UK Manchester Institute
 Canlas Laser Processing GmbH (Germany)	Canlas Laser Processing
-Capgemini Engineering Deutschland S.A.S. & Co. KG (Germany)	Capgemini Engineering Deutschland SAS &
+Capgemini Engineering Deutschland S.A.S. & Co. KG (Germany)	Capgemini Engineering Deutschland
 Capgemini S.A. (France)	Capgemini
 Capital Normal Univ. (China)	Capital Normal
 Cardiff Univ. (United	Cardiff
@@ -453,7 +453,7 @@ Coherent Corp. (Germany)	Coherent
 Coherent Corp. (Switzerland)	Coherent
 Coherent Corp. (United Kingdom)	Coherent
 Coherent Corp. (United States)	Coherent
-Coherent LaserSystems GmbH & Co. KG (Germany)	Coherent LaserSystems GmbH &
+Coherent LaserSystems GmbH & Co. KG (Germany)	Coherent LaserSystems
 Coherent Mainz (Germany)	Coherent Mainz
 Coherent Photonics (United	Coherent Photonics (United
 Coherent Photonics (United States)	Coherent Photonics
@@ -570,7 +570,7 @@ Czech Technical Univ. in Prague (Czech Republic)	Czech TU Prague
 DARPA (United States)	DARPA
 DATRIX SpA (Italy)	DATRIX
 DELO Industrial Adhesives Pte. Ltd. (Singapore)	DELO Industrial Adhesives
-DELO Industrie Klebstoffe GmbH & Co. KGaA (Germany)	DELO Industrie Klebstoffe GmbH & Co KGaA
+DELO Industrie Klebstoffe GmbH & Co. KGaA (Germany)	DELO Industrie Klebstoffe
 DEVCOM Army Research Lab. (United States)	ARL
 DEVCOM Army Research Laboratory (ARL) (United States)	ARL
 DIOPTIC Inc (United States)	DIOPTIC
@@ -1426,7 +1426,7 @@ Kyoto Univ. (Japan)	Kyoto
 Kyung Hee Univ. (Korea, Republic of)	Kyung Hee
 Kyungpook National Univ. (Korea, Republic of)	Kyungpook National
 Kyushu Univ. (Japan)	Kyushu
-Kündig Nahrungsmittel GmbH & Co. KG (Germany)	Kündig Nahrungsmittel GmbH &
+Kündig Nahrungsmittel GmbH & Co. KG (Germany)	Kündig Nahrungsmittel
 L-NESS Lab., CNR-Istituto di Fotonica e Nanotecnologie (Italy)	Istituto di Fotonica e Nanotecnologie
 L-NESS Lab., Politecnico di Milano (Italy)	PoliMi
 L3Harris Technologies (United States)	L3Harris Technologies
@@ -1655,8 +1655,8 @@ Memorial Sloan-Kettering Cancer Ctr. (United States)	Memorial Sloan-Kettering Ca
 Menhir Photonics AG (Switzerland)	Menhir Photonics
 Menlo Systems GmbH (Germany)	Menlo Systems
 Mercedes-Benz AG (Germany)	Mercedes-Benz
-Merck & Co., Inc. (United States)	Merck &
-Merck KGaA (Germany)	Merck KGaA
+Merck & Co., Inc. (United States)	Merck
+Merck KGaA (Germany)	Merck
 Mesa Photonics, LLC (United States)	Mesa Photonics
 Meta (United States)	Meta
 Meta Reality Labs Research (United States)	Meta Reality Labs Research
@@ -1665,7 +1665,7 @@ Metrohm Spectro, Inc. (United States)	Metrohm Spectro
 Miami Univ. (United States)	Miami Ohio
 Michigan State Univ. (United States)	Michigan State
 Michigan Technological Univ. (United States)	Michigan Tech
-Micro-Epsilon Messtechnik GmbH&Co KG (Germany)	Micro-Epsilon Messtechnik GmbH&Co KG
+Micro-Epsilon Messtechnik GmbH&Co KG (Germany)	Micro-Epsilon Messtechnik GmbH&Co
 Micro-Hybrid Electronic GmbH (Germany)	Micro-Hybrid Electronic
 Micro-LAM, Inc. (United States)	Micro-LAM
 Micro/Nano Device Inspection and Research Ctr. (Taiwan)	Micro/Nano Device Inspection and Research Ctr
@@ -1768,7 +1768,7 @@ NanoCytomics LLC (United States)	NanoCytomics
 NanoSeeX Inc. (Taiwan)	NanoSeeX
 Nanoco Technologies Ltd (United Kingdom)	Nanoco Technologies
 Nanoscope Technologies, LLC (United States)	Nanoscope Technologies
-Nanoscribe GmbH & Co. KG (Germany)	Nanoscribe GmbH &
+Nanoscribe GmbH & Co. KG (Germany)	Nanoscribe
 Nanotech Anion AB (Sweden)	Nanotech Anion
 Nanovation (France)	Nanovation
 Nanyang Technological Univ. (Singapore)	NTU Singapore
@@ -2050,9 +2050,9 @@ PowerPhotonic Ltd. (United Kingdom)	PowerPhotonic
 Poznan Supercomputing and Networking Ctr. (Poland)	Poznan Supercomputing and Networking Ctr
 Praevium Research, Inc. (United States)	Praevium Research
 Precigenetics, Inc. (United States)	Precigenetics
-Precitec GmbH & Co. KG (Germany)	Precitec GmbH &
+Precitec GmbH & Co. KG (Germany)	Precitec
 Precitec Optronik GmbH (Germany)	Precitec Optronik
-Precitec Vision Gmbh & Co. KG (Switzerland)	Precitec Vision Gmbh &
+Precitec Vision Gmbh & Co. KG (Switzerland)	Precitec Vision
 Prince of Songkla Univ. (Thailand)	Prince of Songkla
 Princess Margaret Cancer Ctr. (Canada)	Princess Margaret Cancer Ctr
 Princess Margaret Cancer Ctr., Univ. Health Network (Canada)	Princess Margaret Cancer Ctr
@@ -2472,7 +2472,7 @@ Telops, Inc. (Canada)	Telops
 Temple Univ. (United States)	Temple
 TeraXion Inc. (Canada)	TeraXion
 Teramount Ltd. (Israel)	Teramount
-Tesat-Spacecom GmbH & Co. KG (Germany)	Tesat-Spacecom GmbH &
+Tesat-Spacecom GmbH & Co. KG (Germany)	Tesat-Spacecom
 Tesseract Health (United States)	Tesseract Health
 Tesseract Health, Inc. (United States)	Tesseract Health
 Texas A&M Univ. (United States)	Texas A&M
@@ -2661,7 +2661,7 @@ TÜBİTAK Research Institute for Fundamental Sciences (Turkey)	TÜBİTAK Researc
 Télécom Paris (France)	Télécom Paris
 Télécom SudParis (France)	Télécom SudParis
 U.S. Air Force Academy (United States)	US Air Force Academy
-U.S. Army Combat Capabilities Development Command (United States)	US Army Combat Capabilities Development Command
+U.S. Army Combat Capabilities Development Command (United States)	DEVCOM
 U.S. Army Engineer Research and Development Ctr. (United States)	US Army Engineer Research and Development Ctr
 U.S. Army Institute of Surgical Research (United States)	US Army Institute of Surgical Research
 U.S. Army Research Institute of Environmental Medicine (United States)	US Army Research Institute of Environmental Medicine
@@ -3099,7 +3099,7 @@ VLC Photonics S.L. (Spain)	VLC Photonics
 VMR Institute (United States)	VMR Institute
 VMR Institute for Vitreous Macula Retina (United States)	VMR Institute for Vitreous Macula Retina
 VPIphotonics GmbH (Germany)	VPIphotonics
-VTT Technical Research Ctr. of Finland Ltd. (Finland)	VTT Technical Research Ctr of Finland
+VTT Technical Research Ctr. of Finland Ltd. (Finland)	VTT
 Vancouver Coastal Health Research Institute (Canada)	Vancouver Coastal Health Research Institute
 Vancouver General Hospital (Canada)	Vancouver General Hospital
 Vanderbilt Univ. (United States)	Vanderbilt

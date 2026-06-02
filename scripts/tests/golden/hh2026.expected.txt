@@ -55,8 +55,8 @@ Korea Advanced Institute of Science and Technology (KAIST), KOREA	KAIST
 Lam Research, USA	Lam Research
 Lam, USA	Lam
 Lawrence Livermore National Laboratory, USA	LLNL
-Leibniz IFW Dresden, GERMANY	Leibniz IFW Dresden
-Leibniz Institute for Solid State and Materials Research Dresden, GERMANY	Leibniz Institute for Solid State and Materials Research Dresden
+Leibniz IFW Dresden, GERMANY	IFW Dresden
+Leibniz Institute for Solid State and Materials Research Dresden, GERMANY	IFW Dresden
 Leibniz University, Hannover, GERMANY	Leibniz
 LioniX International, BV, NETHERLANDS	LioniX International
 Lyncee Tec SA, SWITZERLAND	Lyncee Tec SA
@@ -68,8 +68,8 @@ Menlo Microsystems Inc., USA	Menlo Microsystems
 Michigan State University, USA	Michigan State
 Mississippi State University, USA	Mississippi State
 Mount Sinai, USA	Mount Sinai
-Multidisciplinary Digital Publishing Institute (MDPI), SWITZERLAND	Multidisciplinary Digital Publishing Institute
-Nanoscribe GmbH & Co. KG, Germany	Nanoscribe GmbH &
+Multidisciplinary Digital Publishing Institute (MDPI), SWITZERLAND	MDPI
+Nanoscribe GmbH & Co. KG, Germany	Nanoscribe
 National Institute of Standards and Technology (NIST), USA	NIST
 National Institute of Standards and Technology, USA	NIST
 National Taiwan University Hospital, Hsinchu, TAIWAN	NTU Taiwan
@@ -109,7 +109,7 @@ Texas Instruments, USA	Texas Instruments
 Trine University, USA	Trine
 Tsinghua University, CHINA	Tsinghua
 Tufts University, USA	Tufts
-U.S. Army Combat Capabilities Development Command, USA	US Army Combat Capabilities Development Command
+U.S. Army Combat Capabilities Development Command, USA	DEVCOM
 US Naval Research Laboratory (NRL), USA	NRL
 Ultimate Fighting Bots (UFB), USA	Ultimate Fighting Bots
 Universite Claude Bernard Lyon, FRANCE	Claude Bernard Lyon
@@ -142,7 +142,7 @@ University of Texas, El Paso, USA	UT Austin
 University of Utah, USA	Utah
 Université de Sherbrooke, CANADA	Sherbrooke
 UpNano US, Inc., USA	UpNano US
-VTT Technical Research Centre of Finland, FINLAND	VTT Technical Research Centre of Finland
+VTT Technical Research Centre of Finland, FINLAND	VTT
 Vectorious Medical, ISRAEL	Vectorious Medical
 Virginia Tech, USA	Virginia Tech
 York University, CANADA	York
