@@ -1413,6 +1413,425 @@ def _renumber_talk_insts(talk: dict) -> bool:
     return True
 
 
+# =============================================================================
+# Presentation normalization of session/talk titles and locations.
+# -----------------------------------------------------------------------------
+# These transforms were previously duplicated across individual conference
+# processors. They are SOURCE-AGNOSTIC — they operate only on the final
+# title/location strings — so they live here and run for every conference, and
+# a new conference's processor need not reimplement any of them. All are
+# idempotent (running them twice changes nothing).
+# =============================================================================
+
+# --- Safe title text hygiene -------------------------------------------------
+def _normalize_title_text(s: str) -> str:
+    """Strip text-extraction artifacts from a title: zero-width characters,
+    zero-width RTL marks, NBSP, and collapsed runs of whitespace. Deliberately
+    conservative — it does NOT stitch hyphen-split words or strip emphasis,
+    because those are PDF-line-break repairs that only the parsing processor can
+    apply safely (a universal hyphen-stitch would corrupt a legitimate suspended
+    hyphen like 'mid- to long-term'). Idempotent."""
+    if not s:
+        return s
+    s = s.replace("​", "").replace("‎", "").replace(" ", " ")
+    return re.sub(r"\s+", " ", s).strip()
+
+
+# --- Chemical-formula subscripts (ported from the ECIO 2026 processor) -------
+# All IUPAC element symbols (1- and 2-letter). Membership is case-sensitive at
+# the call site (symbol must start uppercase, second letter lowercase).
+_ELEMENT_SYMBOLS = {
+    "H", "He", "Li", "Be", "B", "C", "N", "O", "F", "Ne", "Na", "Mg", "Al",
+    "Si", "P", "S", "Cl", "Ar", "K", "Ca", "Sc", "Ti", "V", "Cr", "Mn", "Fe",
+    "Co", "Ni", "Cu", "Zn", "Ga", "Ge", "As", "Se", "Br", "Kr", "Rb", "Sr",
+    "Y", "Zr", "Nb", "Mo", "Tc", "Ru", "Rh", "Pd", "Ag", "Cd", "In", "Sn",
+    "Sb", "Te", "I", "Xe", "Cs", "Ba", "La", "Ce", "Pr", "Nd", "Pm", "Sm",
+    "Eu", "Gd", "Tb", "Dy", "Ho", "Er", "Tm", "Yb", "Lu", "Hf", "Ta", "W",
+    "Re", "Os", "Ir", "Pt", "Au", "Hg", "Tl", "Pb", "Bi", "Po", "At", "Rn",
+    "Fr", "Ra", "Ac", "Th", "Pa", "U", "Np", "Pu", "Am", "Cm", "Bk", "Cf",
+    "Es", "Fm", "Md", "No", "Lr", "Rf", "Db", "Sg", "Bh", "Hs", "Mt", "Ds",
+    "Rg", "Cn", "Nh", "Fl", "Mc", "Lv", "Ts", "Og",
+}
+_SUBSCRIPT_DIGITS = {str(d): chr(0x2080 + d) for d in range(10)}
+
+
+def _to_subscript(digits: str) -> str:
+    return "".join(_SUBSCRIPT_DIGITS.get(c, c) for c in digits)
+
+
+def _is_formula_group_inner(inner: str) -> bool:
+    """True if a parenthesised group's inner text looks like a chemical
+    sub-formula: it has a letter and decomposes entirely into element symbols
+    (plus digits, commas, spaces). So '(Zr,Ti)' qualifies but '(WITHDRAWN)',
+    '(2PP)', '(over 3W)' and '(001)' do not. This is what keeps a parenthetical
+    word from being mistaken for a formula subgroup."""
+    if not re.search(r"[A-Za-z]", inner):
+        return False
+    if not re.fullmatch(r"[A-Za-z0-9, ]+", inner):
+        return False
+    for run in re.findall(r"[A-Za-z]+", inner):
+        k = 0
+        while k < len(run):
+            if (k + 1 < len(run) and run[k].isupper() and run[k + 1].islower()
+                    and run[k:k + 2] in _ELEMENT_SYMBOLS):
+                k += 2
+            elif run[k] in _ELEMENT_SYMBOLS:
+                k += 1
+            else:
+                return False
+    return True
+
+
+def _parse_formula_unit(s: str, i: int) -> dict | None:
+    """Parse ONE formula unit at s[i]: a parenthesised subgroup '(…)' (whose
+    inner text must itself be element-only) or an element symbol, each
+    optionally followed by a count. A count is a SINGLE digit 2–9 (real
+    stoichiometric subscripts are small and never an explicit 1), sitting
+    directly after the unit or across one stray space (the split-subscript
+    artifact); it must not be part of a longer number, a decimal, or a range
+    (so '120', 'Al0.35', 'Ca19' carry no count). Returns {kind,text,count,end}
+    or None."""
+    n = len(s)
+    if i >= n:
+        return None
+    if s[i] == "(":
+        j = s.find(")", i)
+        if j == -1:
+            return None
+        if not _is_formula_group_inner(s[i + 1:j]):
+            return None
+        text = s[i:j + 1]
+        end = j + 1
+        kind = "group"
+    else:
+        sym = None
+        if (i + 1 < n and s[i].isupper() and s[i + 1].islower()
+                and s[i:i + 2] in _ELEMENT_SYMBOLS):
+            sym = s[i:i + 2]
+        elif s[i] in _ELEMENT_SYMBOLS:  # single-letter symbol (uppercase)
+            sym = s[i]
+        if sym is None:
+            return None
+        text = sym
+        end = i + len(sym)
+        kind = "elem"
+    # Optional count: a lone digit 2–9, directly attached or across one space.
+    k = end
+    spaces = 0
+    while k < n and s[k] == " ":
+        k += 1
+        spaces += 1
+    count = ""
+    if (spaces <= 1 and k < n and s[k] in "23456789"
+            and (k + 1 >= n or (not s[k + 1].isdigit() and s[k + 1] != "."))):
+        count = s[k]
+        end = k + 1
+    return {"kind": kind, "text": text, "count": count, "end": end}
+
+
+def _try_parse_formula(s: str, start: int):
+    """Greedily parse a run of formula units beginning at s[start]. Adjacent
+    units always chain; a unit reached across a single space only chains when
+    it carries its own count (so 'Si 3 N 4 Hybrid' stops before 'Hybrid').
+    Returns (units, end_index) or None."""
+    u = _parse_formula_unit(s, start)
+    if not u:
+        return None
+    units = [u]
+    end = u["end"]
+    n = len(s)
+    while end < n:
+        if s[end] == " ":
+            nu = _parse_formula_unit(s, end + 1)
+            if nu and nu["count"]:
+                units.append(nu)
+                end = nu["end"]
+                continue
+            break
+        nu = _parse_formula_unit(s, end)
+        if nu:
+            units.append(nu)
+            end = nu["end"]
+            continue
+        break
+    return units, end
+
+
+def _subscriptize_formulas(title: str) -> str:
+    """Rewrite chemical-formula subscripts in `title` as Unicode subscripts
+    ('Si3N4' / 'Si 3 N 4' -> 'Si₃N₄'). Conservative by design so it does NOT
+    mangle gene names ('MUC16'), strain codes ('C57BL/6'), ion charges
+    ('Mn2+'), virus names ('SARS-CoV2' aside) or part numbers: a candidate
+    formula must start at a token boundary, carry a real small count, not end
+    in a charge sign, and not bleed into a following word."""
+    if not title:
+        return title
+    out: list[str] = []
+    i = 0
+    n = len(title)
+    while i < n:
+        ch = title[i]
+        # Only START a formula at a token boundary (not mid-word), so 'MUC16',
+        # 'ROS2', 'GF45' — where an element letter sits inside a word — are left
+        # alone.
+        at_boundary = (i == 0) or (not title[i - 1].isalnum()) or (
+            title[i - 1].islower() and ch.isupper())   # camelCase: 'OnSi3N4'
+        if at_boundary and (ch == "(" or ch.isupper()):
+            res = _try_parse_formula(title, i)
+            if res:
+                units, end = res
+                has_count = any(u["count"] for u in units)
+                n_elem = sum(1 for u in units if u["kind"] == "elem")
+                has_two = any(u["kind"] == "elem" and len(u["text"]) == 2
+                              for u in units)
+                has_group = any(u["kind"] == "group" for u in units)
+                # Reject a trailing charge ('Mn2+', 'Ho3+') or a formula that
+                # bleeds straight into another word ('S3IM' -> S₃I + 'M').
+                nxt = title[end] if end < n else ""
+                tainted = nxt == "+" or nxt.isalpha()
+                if (has_count and not tainted
+                        and (has_two or has_group or n_elem >= 2)):
+                    out.append("".join(
+                        u["text"] + _to_subscript(u["count"]) for u in units))
+                    i = end
+                    continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
+# --- Location tidying (ported from the SPIE PW 2025 processor) ---------------
+def _clean_location(loc: str) -> str:
+    """Tidy a room/location string: collapse whitespace, collapse repeated
+    parentheses, and balance a stray trailing ')' (a source occasionally
+    mis-prints e.g. 'Room 155 (Upper Mezz))'). Idempotent."""
+    if not loc:
+        return loc
+    loc = re.sub(r"\s+", " ", loc).strip()
+    loc = re.sub(r"\){2,}", ")", loc)
+    loc = re.sub(r"\({2,}", "(", loc)
+    while loc.count(")") > loc.count("("):
+        loc = re.sub(r"\s*\)\s*$", "", loc)
+    return loc.strip()
+
+
+# --- ALL-CAPS title casing (ported from the SPIE PW / Hilton Head processors)
+# A program that prints titles in ALL CAPS still writes its acronyms in normal
+# mixed case elsewhere (other titles, session details, institution names), so
+# that correctly-cased text is a ready-made dictionary of how each acronym is
+# actually written ("QCLs", "THz", "GaAs", "OCT"). We learn that casing from the
+# data and use it to render the SHOUTING titles. Nothing conference-specific is
+# learned; the only hardcoded data is the CURATED_ACRONYMS seed below.
+_TITLE_MINOR = {"a", "an", "and", "as", "at", "but", "by", "for", "from", "in",
+                "of", "on", "or", "the", "to", "via", "with", "vs", "nor"}
+
+# A seed of well-known field acronyms / materials / units that may never appear
+# in mixed case in an all-caps-titled program, so they can't be learned from the
+# corpus. These are GENERIC domain vocabulary (not conference content); extend
+# as needed. Keyed UPPERCASE -> canonical; curated entries override the learned
+# casing. Alpha runs inside a hyphen/slash compound are looked up individually.
+CURATED_ACRONYMS = {
+    # MEMS / NEMS family
+    "MEMS": "MEMS", "NEMS": "NEMS", "FERRONEMS": "FerroNEMS", "MEM": "MEM",
+    "CMOS": "CMOS", "MBE": "MBE", "BIOMEMS": "BioMEMS",
+    # piezoelectric / wide-bandgap materials & compounds
+    "ALN": "AlN", "ALSCN": "AlScN", "SCALN": "ScAlN", "SC": "Sc", "SIC": "SiC",
+    "GAN": "GaN", "GAAS": "GaAs", "PZT": "PZT", "PMN": "PMN", "PT": "PT",
+    "HZO": "HZO", "HFO": "HfO", "SIO": "SiO", "LITAO": "LiTaO", "LINBO": "LiNbO",
+    "ZNO": "ZnO",
+    # transducers / detectors
+    "PMUT": "PMUT", "PMUTS": "PMUTs", "CMUT": "CMUT", "BAW": "BAW", "SAW": "SAW",
+    "SFAT": "SFAT", "SPAD": "SPAD",
+    # devices / processes / measurement
+    "DLP": "DLP", "LDV": "LDV", "DOF": "DOF", "IMU": "IMU", "SOI": "SOI",
+    "PDMS": "PDMS", "PECVD": "PECVD", "VHF": "VHF", "FET": "FET",
+    "BIOFET": "BioFET", "CNT": "CNT", "RF": "RF", "LC": "LC", "DC": "DC",
+    "IR": "IR", "VNC": "VNC", "SU": "SU", "TPP": "TPP", "PP": "PP", "DLW": "DLW",
+    "ML": "ML", "AI": "AI", "RT": "RT", "LAMP": "LAMP", "TCF": "TCF",
+    "TCQ": "TCQ",
+    # chemistry / biology
+    "DNA": "DNA", "RNA": "RNA", "PFOS": "PFOS", "PFAS": "PFAS", "PH": "pH",
+    "OTC": "OTC",
+    # units (lower/mixed case)
+    "MHZ": "MHz", "GHZ": "GHz", "KHZ": "kHz", "MK": "mK", "PPM": "ppm",
+    "NM": "nm",
+    # well-known organizations / brands
+    "ADI": "ADI", "NIST": "NIST", "NRL": "NRL", "CEA": "CEA", "NANOSI": "NanoSI",
+}
+
+
+def _is_allcaps_title(s: str) -> bool:
+    """True when a title's alphabetic content is essentially all upper-case —
+    the signal that it is a SHOUTING title needing acronym-aware recasing rather
+    than a normally-cased one (which is left untouched)."""
+    letters = [c for c in s if c.isalpha()]
+    if len(letters) < 3:
+        return False
+    upper = sum(1 for c in letters if c.isupper())
+    return upper / len(letters) >= 0.8
+
+
+def learn_acronyms(corpus: list[str]) -> dict[str, str]:
+    """Learn canonical acronym casing from already-correctly-cased text. Maps
+    each token's UPPERCASE form to its most common observed casing, keeping only
+    those whose canonical form is genuinely acronym-cased (has an uppercase
+    letter and is not just an ordinary Capitalized word)."""
+    from collections import Counter
+    forms: dict[str, "Counter"] = {}
+    for text in corpus:
+        for tok in (text or "").split():
+            core = tok.strip(".,;:!?()[]{}\"'")
+            if len(core) < 2 or not any(c.isalpha() for c in core):
+                continue
+            forms.setdefault(core.upper(), Counter())[core] += 1
+    acr: dict[str, str] = {}
+    for up, counter in forms.items():
+        canon = counter.most_common(1)[0][0]
+        if any(c.isupper() for c in canon) and \
+                canon != canon[:1].upper() + canon[1:].lower():
+            acr[up] = canon
+    return acr
+
+
+# Strict roman-numeral matcher (so an ordinary word that happens to be made of
+# the letters i/v/x/l/c/d/m — e.g. "VILLI", "CIVIL", "MILL" — is NOT mistaken
+# for a numeral and frozen uppercase).
+_ROMAN_RE = re.compile(
+    r"^M{0,4}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3})$", re.I)
+
+
+def _recase_token(core: str, acr: dict[str, str]) -> str:
+    """Apply acronym casing to one UPPERCASE token, falling back to roman-numeral
+    preservation and ordinary Capitalization. Alpha runs inside a hyphen/slash
+    compound are recased independently so a buried acronym still restores, and a
+    minor joining word inside a compound (not its first run) is lowercased
+    (a fabricated example: "ABX-ON-XYZ" -> "AbX-on-XyZ")."""
+    up = core.upper()
+    if up in acr:
+        return acr[up]
+    if up.endswith("S") and up[:-1] in acr:
+        return acr[up[:-1]] + "s"
+    alpha = re.sub(r"[^A-Za-z]", "", core)
+    if len(alpha) >= 2 and _ROMAN_RE.match(alpha):  # roman numeral (II, XVIII)
+        return core.upper()
+
+    idx = [0]
+
+    def _run(m: "re.Match") -> str:
+        seg = m.group(0)
+        first = idx[0] == 0
+        idx[0] += 1
+        u = seg.upper()
+        if u in acr:
+            return acr[u]
+        if u.endswith("S") and u[:-1] in acr:
+            return acr[u[:-1]] + "s"
+        if not first and seg.lower() in _TITLE_MINOR:
+            return seg.lower()
+        return seg[:1].upper() + seg[1:].lower()
+    out = re.sub(r"[A-Za-z]+", _run, core)
+    # Possessive: "ADI'S" -> "ADI's".
+    return re.sub(r"'S\b", "'s", out)
+
+
+def _smart_title(t: str, acr: dict[str, str]) -> str:
+    """Render an all-UPPERCASE title for display: restore learned acronym
+    casing, lowercase minor joining words (except at the start/end), and
+    capitalize the first word and any word after a colon."""
+    toks = t.split()
+    n = len(toks)
+    out = []
+    at_start = True   # first word, or first word after a ':'
+    for i, tok in enumerate(toks):
+        alpha = re.sub(r"[^A-Za-z]", "", tok).lower()
+        if not (tok.upper() in acr or
+                (tok.upper().endswith("S") and tok.upper()[:-1] in acr)) \
+                and 0 < i < n - 1 and alpha in _TITLE_MINOR:
+            rep = tok.lower()
+        else:
+            rep = _recase_token(tok, acr)
+        if at_start:
+            j = next((k for k, c in enumerate(rep) if c.isalpha()), None)
+            if j is not None and rep[j].islower():
+                rep = rep[:j] + rep[j].upper() + rep[j + 1:]
+        out.append(rep)
+        at_start = tok.endswith(":")
+    return " ".join(out)
+
+
+def normalize_presentation(data: dict) -> None:
+    """Run every source-agnostic title/location transform over the data, in
+    place. Order matters: text hygiene first, then trailing-period strip, then
+    chemical-formula subscripts, then ALL-CAPS recasing (which reads a corpus of
+    the now-cleaned, normally-cased strings). Locations are tidied independently.
+    """
+    sessions = data.get("sessions", []) or []
+    talks = data.get("talks", []) or []
+    items = sessions + talks
+
+    # 1. Text hygiene + trailing-period strip on every title.
+    for it in items:
+        if it.get("title"):
+            it["title"] = _strip_trailing_periods(
+                _normalize_title_text(it["title"]))
+
+    # 2. ALL-CAPS recasing. Learn acronym casing from the conference's own
+    #    normally-cased text (any non-shouting title, session details, and
+    #    institution names), then recase only the SHOUTING titles. The curated
+    #    seed fills in acronyms the corpus never wrote in mixed case. Done BEFORE
+    #    the formula pass so subscripting sees normally-cased text — otherwise a
+    #    word like "OF 2" inside an all-caps title would parse as the formula
+    #    O·F₂ ('O' and 'F' are element symbols).
+    # Corpus = the conference's own normally-cased text: every non-shouting
+    # title, plus session details and institution names. The latter two carry
+    # brand/product/company casings (e.g. "NanoSystems", "LioniX", "MDPI") that
+    # may never appear mixed-case in a title, so excluding them would lose those
+    # casings. (Trade-off: an institution-specific ALL-CAPS lab acronym can
+    # occasionally be mis-learned and applied to an ordinary word.)
+    corpus: list[str] = [
+        it["title"] for it in items
+        if it.get("title") and not _is_allcaps_title(it["title"])]
+    for s in sessions:
+        if s.get("details"):
+            corpus.append(s["details"])
+    for t in talks:
+        for inst in t.get("institutions") or []:
+            if inst.get("name"):
+                corpus.append(inst["name"])
+    acr = {**learn_acronyms(corpus), **CURATED_ACRONYMS}
+    n_recased = 0
+    for it in items:
+        ti = it.get("title")
+        if ti and _is_allcaps_title(ti):
+            recased = _smart_title(ti, acr)
+            if recased != ti:
+                it["title"] = recased
+                n_recased += 1
+    if n_recased:
+        print(f"[titles] recased {n_recased} ALL-CAPS title(s) "
+              f"(learned {len(acr)} acronym(s))")
+
+    # 3. Chemical-formula subscripts (a single chokepoint over all titles).
+    n_formula = 0
+    for it in items:
+        t = it.get("title")
+        if not t:
+            continue
+        fixed = _subscriptize_formulas(t)
+        if fixed != t:
+            it["title"] = fixed
+            n_formula += 1
+    if n_formula:
+        print(f"[titles] rendered chemical-formula subscripts in "
+              f"{n_formula} title(s)")
+
+    # 4. Tidy room/location strings.
+    for it in items:
+        for f in ("location", "short_location"):
+            if it.get(f):
+                it[f] = _clean_location(it[f])
+
+
 def enrich_affiliations(data: dict) -> dict:
     sessions = data.get("sessions", [])
     talks = data.get("talks", [])
@@ -1423,18 +1842,13 @@ def enrich_affiliations(data: dict) -> dict:
     #     aliases, and byline rendering all see the cleaned forms.
     normalize_names_in_data(data)
 
-    # 0. Normalize titles: trim trailing whitespace and remove a single
-    #    trailing period (leaving an ellipsis intact), so the rendered HTML
-    #    never shows a sentence-final '.' on session/talk titles. Done once
-    #    here, before serialization, so every place that renders a title
-    #    (bubbles, detail headers, citations, search results) gets the
+    # 0. Normalize presentation of titles and locations (text hygiene, trailing
+    #    period strip, chemical-formula subscripts, ALL-CAPS recasing, location
+    #    tidy). Centralized here so every conference gets it and no processor
+    #    needs to reimplement it. Done before serialization so every place that
+    #    renders a title (bubbles, detail headers, citations, search) gets the
     #    cleaned form.
-    for s in sessions:
-        if s.get("title"):
-            s["title"] = _strip_trailing_periods(s["title"])
-    for t in talks:
-        if t.get("title"):
-            t["title"] = _strip_trailing_periods(t["title"])
+    normalize_presentation(data)
 
     # Render any inline LaTeX in abstract bodies to Unicode / <sup>/<sub>.
     # The processors emit abstracts RAW; this is where that conversion now

@@ -348,92 +348,6 @@ def _to_iso(year: int, month: int, day: int, hhmm: str) -> str:
     return f"{year:04d}-{month:02d}-{day:02d}T{h:02d}:{mn:02d}:00"
 
 
-_MINOR = {"a", "an", "and", "as", "at", "but", "by", "for", "from", "in", "of",
-          "on", "or", "the", "to", "via", "with", "vs", "nor"}
-
-
-def learn_acronyms(corpus: list[str]) -> dict[str, str]:
-    """Learn the canonical casing of acronyms from already-correctly-cased text.
-
-    SPIE prints session titles in ALL CAPS but talk (and conference) titles in
-    normal mixed case, so the talk titles are a ready-made dictionary of how each
-    acronym is actually written ("QCLs", "THz", "mid-IR", "GaAs", "OCT"). We map
-    each token's UPPERCASE form to its most common observed casing, keeping only
-    tokens whose canonical form is genuinely acronym-cased (has an uppercase
-    letter and is not just an ordinary Capitalized word). This is data-driven, so
-    no acronym list is hardcoded."""
-    from collections import Counter
-    forms: dict[str, Counter] = {}
-    for text in corpus:
-        for tok in text.split():
-            core = tok.strip(".,;:!?()[]{}\"'")
-            if len(core) < 2 or not any(c.isalpha() for c in core):
-                continue
-            forms.setdefault(core.upper(), Counter())[core] += 1
-    acr: dict[str, str] = {}
-    for up, counter in forms.items():
-        canon = counter.most_common(1)[0][0]
-        # keep only genuine acronym casing: has an uppercase letter, and isn't a
-        # plain Capitalized word (so "Photonics", "In", "And" are excluded).
-        if any(c.isupper() for c in canon) and \
-                canon != canon[:1].upper() + canon[1:].lower():
-            acr[up] = canon
-    return acr
-
-
-def _recase_token(core: str, acr: dict[str, str]) -> str:
-    """Apply learned acronym casing to one UPPERCASE token, falling back to
-    roman-numeral preservation and ordinary Capitalization."""
-    up = core.upper()
-    if up in acr:
-        return acr[up]
-    if up.endswith("S") and up[:-1] in acr:        # learned singular -> plural
-        return acr[up[:-1]] + "s"
-    alpha = re.sub(r"[^A-Za-z]", "", core).lower()
-    if re.fullmatch(r"[ivxlcdm]{2,}", alpha):       # roman numeral (II, XVIII)
-        return core.upper()
-    # Recase each alpha RUN independently (keeps hyphens/slashes intact), looking
-    # each one up in the learned acronyms first. This restores acronyms buried in
-    # a slash/hyphen compound the corpus never wrote as a whole: a session's
-    # "AR/VR/XR" keeps each learned segment (AR, VR, XR) uppercase even though the
-    # talk titles only ever spelled out "AR/VR" or "AR/VR/MR". Runs with no learned
-    # casing fall back to ordinary Capitalization.
-    def _run(m: re.Match) -> str:
-        seg = m.group(0)
-        u = seg.upper()
-        if u in acr:
-            return acr[u]
-        if u.endswith("S") and u[:-1] in acr:
-            return acr[u[:-1]] + "s"
-        return seg[:1].upper() + seg[1:].lower()
-    return re.sub(r"[A-Za-z]+", _run, core)
-
-
-def _smart_title(t: str, acr: dict[str, str]) -> str:
-    """Render an all-UPPERCASE SPIE session title for display: restore acronym
-    casing learned from talk titles, lowercase minor joining words (except at the
-    start/end), and capitalize the first word and any word after a colon."""
-    toks = t.split()
-    n = len(toks)
-    out = []
-    at_start = True   # first word, or first word after a ':'
-    for i, tok in enumerate(toks):
-        alpha = re.sub(r"[^A-Za-z]", "", tok).lower()
-        if not (tok.upper() in acr or
-                (tok.upper().endswith("S") and tok.upper()[:-1] in acr)) \
-                and 0 < i < n - 1 and alpha in _MINOR:
-            rep = tok.lower()
-        else:
-            rep = _recase_token(tok, acr)
-        # the first word / a word after a colon must start capitalized
-        if at_start:
-            j = next((k for k, c in enumerate(rep) if c.isalpha()), None)
-            if j is not None and rep[j].islower():
-                rep = rep[:j] + rep[j].upper() + rep[j + 1:]
-        out.append(rep)
-        at_start = tok.endswith(":")
-    return " ".join(out)
-
 
 # Compact building abbreviations for the short location shown on bubbles.
 _BLDG_SHORT = {
@@ -985,17 +899,6 @@ def run(pdf_path: Path) -> dict:
 
     talks = list(p.talks.values())
 
-    # Learn acronym casing from the conference's own correctly-cased text (talk
-    # titles + conference titles), then use it to render the ALL-CAPS session
-    # titles with proper acronyms (THz, QCLs, mid-IR, GaAs, OCT, ...).
-    corpus = [t["title"] for t in talks]
-    for sess in p.sessions.values():
-        for tag in sess.get("tags", []):
-            if tag.get("key") == "Conference":
-                v = tag["value"]
-                corpus.append(v.split(": ", 1)[1] if ": " in v else v)
-    acr = learn_acronyms(corpus)
-
     # Merge cross-conference reprinted sessions. A special session (an evening
     # plenary, hot-topics, joint, or "focus" session) is printed in EACH
     # participating conference's pages; because talks are de-duplicated globally
@@ -1055,7 +958,7 @@ def run(pdf_path: Path) -> dict:
                               ["start_ts"] if tid.replace("T-", "", 1) in p.talks
                               else "")
         raw = sess["_disp_raw"]
-        sess["title"] = _smart_title(raw, acr) if raw.isupper() else raw
+        sess["title"] = raw
         p._type_session(sess)
         for k in list(sess):
             if k.startswith("_"):

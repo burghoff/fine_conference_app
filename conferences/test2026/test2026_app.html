@@ -294,6 +294,12 @@ body[data-active-tab="me"] #back-btn[hidden] ~ #page-title {
 @media (hover: hover) {
   .time-header .th-toggle:hover { color: var(--accent); }
 }
+
+.time-header .th-toggle.disabled {
+  opacity: .28;
+  cursor: default;
+  pointer-events: none;
+}
 body[data-active-tab="me"] .time-header .th-text,
 body[data-active-view="session-detail"] .time-header .th-text,
 #me-content .time-header .th-text {
@@ -342,6 +348,13 @@ body.me-resizing .bubble {
 .bubble.clr-gold    { background: var(--c-gold-bg);    border-left-color: var(--c-gold-fg); }
 .bubble.clr-orange  { background: var(--c-orange-bg);  border-left-color: var(--c-orange-fg); }
 
+.bubble.empty-session[data-kind="session"] {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    rgba(128, 128, 128, 0)    0,   rgba(128, 128, 128, 0)    5px,
+    rgba(128, 128, 128, .06)  5px, rgba(128, 128, 128, .06)  10px);
+}
+
 .bubble-loc {
   
   color: inherit;
@@ -388,6 +401,13 @@ body[data-active-view="session-detail"] .bubble[data-kind="talk"],
 #me-content                              .bubble[data-kind="talk"] {
   
   margin-left: calc(22px * var(--sp));
+}
+
+body[data-active-view="session-detail"] .section-title,
+body[data-active-view="session-detail"] .abstract-body {
+  margin-left: calc(22px * var(--sp));
+  position: relative;
+  z-index: 1;
 }
 .bubble.added { box-shadow: inset 0 0 0 1.5px var(--accent); }
 
@@ -726,6 +746,13 @@ body[data-active-view="session-detail"] .detail-head {
   text-decoration: underline dotted var(--muted);
   text-underline-offset: 2px;
   -webkit-tap-highlight-color: var(--accent-soft);
+}
+
+.presider-sep {
+  display: inline-block;
+  margin: 0 0.45em;
+  color: var(--muted);
+  transform: translateY(-0.08em);
 }
 .author-name.clickable:hover,
 .author-name.clickable:active,
@@ -2242,12 +2269,15 @@ function makeBubble(item, opts = {}) {
   const expandable = !!opts.expandable && !isTalk;
   const expanded   = expandable && isSessionExpanded(item.id);
 
+  const emptySession = !isTalk && !isExpandableSession(item.id);
+
   const cls = [
     "bubble",
     `clr-${item.color || "neutral"}`,
     added    ? "added"    : "",
     partial  ? "partial"  : "",
     expanded ? "expanded" : "",
+    emptySession ? "empty-session" : "",
   ].filter(Boolean).join(" ");
 
   const wrap = el("article", {
@@ -2392,10 +2422,11 @@ function presiderByline(item, ctx, abbrev) {
 
   let s;
   if (names.length > 1) {
+
     s = names.map((nm, idx) => {
       const a = (affList[idx] || "").trim();
       return a ? `${nameHTML(nm, a)} · ${esc(a)}` : nameHTML(nm, a);
-    }).join(", ");
+    }).join('<span class="presider-sep">|</span>');
   } else {
     const a = (affDeduped || (affList[0] || "")).trim();
     s = nameHTML(names[0] || presiderRaw, a);
@@ -2773,6 +2804,16 @@ function renderTimeGrouped(container, items, opts = {}) {
   const _byLoc = (a, b) =>
     _locOf(a).localeCompare(_locOf(b), undefined, { numeric: true });
 
+  const _numKey = (it) => {
+    const m = (it.title || "").match(/^(\D+?)\s*(\d+)\b/);
+    return m ? { word: m[1].trim().toLowerCase(), num: parseInt(m[2], 10) } : null;
+  };
+  const _byTie = (a, b) => {
+    const ka = _numKey(a), kb = _numKey(b);
+    if (ka && kb && ka.word && ka.word === kb.word) return ka.num - kb.num;
+    return _byLoc(a, b);
+  };
+
   const reorderBucket = (bucket) => {
     if (bucket.length < 2) return bucket;
     const sessionIdsHere = new Set();
@@ -2780,7 +2821,7 @@ function renderTimeGrouped(container, items, opts = {}) {
       if (!it.session_id) sessionIdsHere.add(it.id);
     }
     
-    if (sessionIdsHere.size === 0) return [...bucket].sort(_byLoc);
+    if (sessionIdsHere.size === 0) return [...bucket].sort(_byTie);
     const childrenOf = {};   
     for (const it of bucket) {
       if (it.session_id && sessionIdsHere.has(it.session_id)) {
@@ -2800,9 +2841,9 @@ function renderTimeGrouped(container, items, opts = {}) {
       (connectorIds.has(it.id) ? sessionsConn : sessionsNoConn).push(it);
     }
 
-    front.sort(_byLoc);
-    sessionsNoConn.sort(_byLoc);
-    sessionsConn.sort(_byLoc);
+    front.sort(_byTie);
+    sessionsNoConn.sort(_byTie);
+    sessionsConn.sort(_byTie);
     const back = [];
     for (const s of sessionsNoConn) {
       back.push(s);
@@ -2963,7 +3004,7 @@ function appendSessionMetaLines(s, container) {
           appendAff(affText);
         }
         if (idx < names.length - 1) {
-          meta.appendChild(document.createTextNode(", "));
+          meta.appendChild(el("span", { class: "presider-sep" }, "|"));
         }
       });
     } else {
@@ -2993,8 +3034,15 @@ function appendSessionMetaLines(s, container) {
     container.appendChild(el("div", { class: "dh-meta" }, tagText));
   }
 
-  if (s.details)
-    container.appendChild(el("div", { class: "dh-meta" }, s.details));
+}
+
+function appendSessionDetails(container, s) {
+  const d = (s && s.details || "").trim();
+  if (!d) return false;
+  container.appendChild(el("div", { class: "section-title" }, "Details"));
+  const safe = esc(d).replace(/&lt;(\/?(?:sup|sub|i|b|em|strong))&gt;/gi, "<$1>");
+  container.appendChild(el("p", { class: "abstract-body", html: safe }));
+  return true;
 }
 
 function buildSessionHead(s) {
@@ -3023,14 +3071,17 @@ function renderSessionDetail(c, sid) {
 
   c.appendChild(buildSessionHead(s));
 
-  if (!s.talk_ids || s.talk_ids.length === 0) {
-    c.appendChild(el("p", { class: "empty" }, "No talks listed for this session."));
-    return;
+  const talks = (s.talk_ids || []).map(id => talkMap[id]).filter(Boolean)
+                 .sort((a,b) => cmpTs(a.start_ts, b.start_ts));
+  if (talks.length) {
+    renderTimeGrouped(c, talks, { skipDateHeaders: true, alwaysAll: true, ignoreTypes: true, inlineTime: true });
   }
 
-  const talks = s.talk_ids.map(id => talkMap[id]).filter(Boolean)
-                 .sort((a,b) => cmpTs(a.start_ts, b.start_ts));
-  renderTimeGrouped(c, talks, { skipDateHeaders: true, alwaysAll: true, ignoreTypes: true, inlineTime: true });
+  const hasDetails = appendSessionDetails(c, s);
+
+  if (!talks.length && !hasDetails) {
+    c.appendChild(el("p", { class: "empty" }, "No talks listed for this session."));
+  }
 }
 
 function buildSessionExpansion(s) {
@@ -3427,6 +3478,14 @@ function renderSearch(c) {
       rebuildSearchResults();
     }, SEARCH_DEBOUNCE_MS);
   });
+
+  input.addEventListener("focus", () => input.select());
+  input.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse" && document.activeElement !== input) {
+      e.preventDefault();
+      input.focus();
+    }
+  });
   ctrl.appendChild(input);
 
   c.appendChild(ctrl);
@@ -3577,7 +3636,8 @@ function _textHitPredicates(q) {
        inText(s.title) || inText(s.id)
     || (Array.isArray(s.tags) && s.tags.some(t => t && (inText(t.value) || inText(t.key))))
     || inText(s.presider) || inText(s.presider_aff)
-    || inText(s.presider_aff_short);
+    || inText(s.presider_aff_short)
+    || inText(s.details);   
   return { talkHit, sessHit };
 }
 
@@ -5649,19 +5709,28 @@ function toggleTimeBucketSessions(ids) {
 }
 
 function makeTimeToggle(ids) {
-  if (!ids || !ids.length) return null;
+
+  ids = ids || [];
+  const disabled = ids.length === 0;
   const open = new Set(state.expandedSessions || []);
   const anyOpen = ids.some(id => open.has(id));
-  const label = anyOpen
-    ? "Collapse sessions at this time"
-    : "Expand all sessions at this time";
-  return el("button", {
-    class: "th-toggle",
+  const label = disabled
+    ? "Nothing to expand at this time"
+    : (anyOpen ? "Collapse sessions at this time"
+               : "Expand all sessions at this time");
+  const btn = el("button", {
+    class: "th-toggle" + (disabled ? " disabled" : ""),
     title: label,
     "aria-label": label,
     html: chevronsSvg(anyOpen ? "up" : "down"),
-    onclick: (e) => { e.stopPropagation(); toggleTimeBucketSessions(ids); },
+    onclick: (e) => {
+      e.stopPropagation();
+      if (!ids.length) return;
+      toggleTimeBucketSessions(ids);
+    },
   });
+  if (disabled) btn.setAttribute("aria-disabled", "true");
+  return btn;
 }
 
 function switchTab(tab) {

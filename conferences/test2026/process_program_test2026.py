@@ -848,8 +848,6 @@ def build_conference_data(conference_name: str,
         sessions[code] = {
             "id":           code,
             "title":        s["title"],
-            "type":         s["stype"],
-            "topic":        s["topic"],
             "date":         s["date"],
             "location":     s["location"],
             "presider":     presider,
@@ -860,6 +858,9 @@ def build_conference_data(conference_name: str,
             "color":        classify_session_color(s["stype"], s["title"]),
             "talk_ids":     [],
         }
+        _tags = _session_tags(s["stype"], s["topic"], code)
+        if _tags:
+            sessions[code]["tags"] = _tags
 
         for t in s["talks"]:
             fid = t["code"]
@@ -958,7 +959,7 @@ def build_conference_data(conference_name: str,
                 "color":         classify_talk_color(
                                      _tag_for(status) + title,
                                      sessions[code]["title"],
-                                     sessions[code]["type"]),
+                                     s["stype"]),
                 "location":      sessions[code]["location"],
             })
 
@@ -1022,33 +1023,30 @@ def _schedule_title_only(raw_rest: str, status: str) -> str:
 # =============================================================================
 # Main — wire the pieces together and write conference_data.json.
 # =============================================================================
-def _collapse_session_tags(sessions):
-    """Collapse each session's legacy ``type``/``topic`` into an ordered list of
-    labelled ``tags`` ({"key", "value"} pairs), shown in the app as
-    "Key: Value · Key: Value". Redundant topics are dropped: empty,
-    identical to the session id, or merely restating the format."""
-    for s in sessions:
-        fmt = (s.pop("type", None) or "").strip()
-        topic = (s.pop("topic", None) or "").strip()
-        tags = []
-        if fmt:
-            tags.append({"key": "Session Type", "value": fmt})
-        tl, fl = topic.casefold(), fmt.casefold()
-        redundant = (
-            not topic
-            or tl == str(s.get("id", "")).casefold()
-            or (bool(fl) and (tl == fl or tl.startswith(fl)))
-        )
-        if not redundant:
-            head = topic.split(":", 1)[0].strip()
-            if ":" in topic and head and " " not in head:
-                k, v = topic.split(":", 1)
-                tags.append({"key": k.strip(), "value": v.strip()})
-            else:
-                tags.append({"key": "Session Topic", "value": topic})
-        if tags:
-            s["tags"] = tags
-    return sessions
+def _session_tags(fmt: str, topic: str, sid: str) -> list[dict]:
+    """Build a session's ordered ``tags`` list ({"key", "value"} pairs) directly
+    from its format/topic, shown in the app as "Key: Value · Key: Value".
+    Redundant topics are dropped: empty, identical to the session id, or merely
+    restating the format. Returns [] when there is nothing to show."""
+    fmt = (fmt or "").strip()
+    topic = (topic or "").strip()
+    tags: list[dict] = []
+    if fmt:
+        tags.append({"key": "Session Type", "value": fmt})
+    tl, fl = topic.casefold(), fmt.casefold()
+    redundant = (
+        not topic
+        or tl == str(sid).casefold()
+        or (bool(fl) and (tl == fl or tl.startswith(fl)))
+    )
+    if not redundant:
+        head = topic.split(":", 1)[0].strip()
+        if ":" in topic and head and " " not in head:
+            k, v = topic.split(":", 1)
+            tags.append({"key": k.strip(), "value": v.strip()})
+        else:
+            tags.append({"key": "Session Topic", "value": topic})
+    return tags
 
 
 def main() -> None:
@@ -1109,7 +1107,6 @@ def main() -> None:
         pdf_affiliation_lines=pdf_affil_lines,
     )
 
-    _collapse_session_tags(data["sessions"])
     with open(OUTPUT_JSON, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False)
     size_kb = OUTPUT_JSON.stat().st_size / 1024
