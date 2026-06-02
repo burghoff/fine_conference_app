@@ -2,7 +2,6 @@ Aalto University, Finland	Aalto
 Aarhus University, Denmark	Aarhus
 Brown University, USA	Brown
 CORIA, France	CORIA
-California Institute of Technology, USA	Caltech
 Columbia University, USA	Columbia
 Duke University, USA	Duke
 ETH, Zurich, USA	ETH Zürich
@@ -47,6 +46,7 @@ University of Regensburg, USA	Regensburg
 University of Rochester, USA	Rochester
 University of Seoul, South Korea	Seoul
 University of São Paulo, Brazil	São Paulo
+University of Texas at Austin	UT Austin
 University of Utah, USA	Utah
 University of Warwick, UK	Warwick
 Waseda University, Japan	Waseda

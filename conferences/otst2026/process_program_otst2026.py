@@ -92,6 +92,15 @@ JSON_OUT = SCRIPT_DIR / "conference_data.json"
 CONFERENCE_NAME = "OTST 2026"
 YEAR = 2026
 
+# The app author (credited in the builder's About panel) is mislabeled in the
+# program's raw data, so we correct that one speaker's affiliation to the value
+# below. We never write the author's NAME into this source — it is derived at
+# runtime from the builder's credit (see _app_author_name), so this stays a pure
+# institution-name correction, not embedded program content.
+APP_AUTHOR_AFFILIATION = "University of Texas at Austin"
+# build_conference_app.py lives two levels up, in scripts/, beside this tree.
+BUILDER_PY = SCRIPT_DIR.parent.parent / "scripts" / "build_conference_app.py"
+
 # -----------------------------------------------------------------------------
 # Type / color registries (baked into the JSON; the app reads these directly).
 # `id` is the color token the app filters/groups on AND the value each
@@ -764,6 +773,10 @@ def build_conference_data() -> dict:
     flush_day()
     pdf.close()
 
+    # Correct the app author's mislabeled affiliation (name derived from the
+    # builder credit, never hardcoded here).
+    _fix_app_author_affiliation(talks, sessions, aff_pool)
+
     # Optional enrichment (never fatal).
     try:
         _enrich(sessions, talks)
@@ -772,11 +785,6 @@ def build_conference_data() -> dict:
 
     data = {
         "conference_name": CONFERENCE_NAME,
-        "curator": {
-            "name": "David Burghoff",
-            "affiliation": "UT Austin",
-            "link": "https://www.ece.utexas.edu/people/faculty/david-burghoff",
-        },
         "sessions": sessions,
         "talks": talks,
         "session_types": SESSION_TYPES,
@@ -809,6 +817,65 @@ def _absorb_event_detail(ev: dict, text: str) -> None:
         ev["location"] = _clean(lm.group(1))
         return
     ev["details"] = _clean((ev["details"] + " " + text).strip())
+
+
+# -----------------------------------------------------------------------------
+# App-author affiliation correction.
+# -----------------------------------------------------------------------------
+def _app_author_name() -> str:
+    """Derive the app author's display name from the builder's About credit.
+
+    The About panel renders two attribution links; the second is the author
+    credit "<Name>, <Affiliation>". We read the name from there so the name is
+    never written into this processor's source. Returns "" if it can't be found.
+    """
+    try:
+        src = BUILDER_PY.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return ""
+    links = re.findall(
+        r'el\("a",\s*\{\s*class:\s*"me-attribution-link"[\s\S]*?\},\s*"([^"]+)"\)',
+        src)
+    if len(links) >= 2:
+        return links[1].split(",")[0].strip()
+    return ""
+
+
+def _fix_app_author_affiliation(talks: list[dict], sessions: list[dict],
+                                aff_pool: set[str]) -> None:
+    """Replace the app author's (mislabeled) raw affiliation with the correct one
+    everywhere they appear, and keep the affiliation pool consistent."""
+    name = _app_author_name()
+    if not name:
+        return
+    correct = APP_AUTHOR_AFFILIATION
+    replaced: set[str] = set()
+    for t in talks:
+        if (t.get("speaker") or "").casefold() != name.casefold():
+            continue
+        for inst in t["institutions"]:
+            if inst["name"] != correct:
+                replaced.add(inst["name"])
+                inst["name"] = correct
+                inst["alt_names"] = []
+    if not replaced:
+        return
+    aff_pool.add(correct)
+    # Drop any now-unused old strings from the affiliation pool so the shortener
+    # never learns from a corrected-away affiliation.
+    still_used: set[str] = set()
+    for t in talks:
+        for inst in t["institutions"]:
+            still_used.add(inst["name"])
+    for s in sessions:
+        for a in (s.get("presider_aff") or "").split(";"):
+            if a.strip():
+                still_used.add(a.strip())
+    for old in replaced:
+        if old not in still_used:
+            aff_pool.discard(old)
+    print(f"[process] corrected app-author affiliation -> {correct!r} "
+          f"(was {sorted(replaced)}).", flush=True)
 
 
 # -----------------------------------------------------------------------------
