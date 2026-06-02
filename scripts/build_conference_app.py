@@ -2104,6 +2104,13 @@ body[data-active-tab="me"] #back-btn[hidden] ~ #page-title {
 @media (hover: hover) {
   .time-header .th-toggle:hover { color: var(--accent); }
 }
+/* A time-header with nothing expandable (only events/breaks at that time) still
+   shows the chevron for alignment, but dimmed and inert. */
+.time-header .th-toggle.disabled {
+  opacity: .28;
+  cursor: default;
+  pointer-events: none;
+}
 body[data-active-tab="me"] .time-header .th-text,
 body[data-active-view="session-detail"] .time-header .th-text,
 #me-content .time-header .th-text {
@@ -2171,6 +2178,22 @@ body.me-resizing .bubble {
 .bubble.clr-lime    { background: var(--c-lime-bg);    border-left-color: var(--c-lime-fg); }
 .bubble.clr-gold    { background: var(--c-gold-bg);    border-left-color: var(--c-gold-fg); }
 .bubble.clr-orange  { background: var(--c-orange-bg);  border-left-color: var(--c-orange-fg); }
+
+/* Empty (talk-less) sessions — meals, breaks, receptions, other standalone
+   events — get a faint diagonal hatch over their colour so they read as
+   "nothing to open here" and aren't confused with expandable, talk-bearing
+   sessions. Only the background-IMAGE is set, so each event keeps its own
+   solid colour from the .clr-* rule above; the mid-grey stripes stay subtle
+   on both light and dark themes. The higher specificity (extra attribute
+   selector) lets this win over the .clr-* shorthand without touching the
+   colour. (Class is "empty-session", NOT "empty" — the latter is the
+   centered, muted empty-STATE placeholder style and must not leak in here.) */
+.bubble.empty-session[data-kind="session"] {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    rgba(128, 128, 128, 0)    0,   rgba(128, 128, 128, 0)    5px,
+    rgba(128, 128, 128, .06)  5px, rgba(128, 128, 128, .06)  10px);
+}
 
 .bubble-loc {
   /* The time/location prefix at the start of the subtitle line. Same font,
@@ -2248,6 +2271,20 @@ body[data-active-view="session-detail"] .bubble[data-kind="talk"],
   /* Nesting indent is whitespace, so it shrinks with small text (via --sp)
      but never grows past its default — matching the vertical-margin rule. */
   margin-left: calc(22px * var(--sp));
+}
+/* In a session detail, the "Details" blurb sits with the (indented) talk
+   bubbles; give its heading and body the SAME indent so they line up with the
+   talk bubbles' left edge rather than the wider head card. The z-index lift is
+   essential: the session-detail connector SVG overlay (position:absolute,
+   z-index:0) paints a blurred page-colored layer OVER static content, dimming
+   anything beneath it — so without this the Details heading/body looked muted
+   next to the talk bubbles (which are themselves lifted). Same fix as
+   .date-header / .notes-title--bright. */
+body[data-active-view="session-detail"] .section-title,
+body[data-active-view="session-detail"] .abstract-body {
+  margin-left: calc(22px * var(--sp));
+  position: relative;
+  z-index: 1;
 }
 .bubble.added { box-shadow: inset 0 0 0 1.5px var(--accent); }
 
@@ -2650,6 +2687,17 @@ body[data-active-view="session-detail"] .detail-head {
   text-decoration: underline dotted var(--muted);
   text-underline-offset: 2px;
   -webkit-tap-highlight-color: var(--accent-soft);
+}
+/* Separator between co-presiders. A little breathing room on each side of the
+   bar (plain spaces in HTML collapse, so the gap is set here) and a touch
+   dimmer so the names read as the content. The "|" glyph sits low (cap-height
+   on top, below the baseline at the bottom); nudge it up so it straddles the
+   text more symmetrically. */
+.presider-sep {
+  display: inline-block;
+  margin: 0 0.45em;
+  color: var(--muted);
+  transform: translateY(-0.08em);
 }
 .author-name.clickable:hover,
 .author-name.clickable:active,
@@ -4102,8 +4150,9 @@ function isSessionExpanded(id) {
 /* A session is only inline-expandable if it actually has talks to show.
    Mirrors buildSessionExpansion's emptiness test EXACTLY (resolvable talks,
    not just a non-empty talk_ids — an id might not resolve via talkMap), so the
-   two never disagree about what "empty" means. An empty session's bubble
-   already shows its full detail, so there's nothing to expand into. */
+   two never disagree about what "empty" means. A talk-less session (a meal,
+   break, or other event) is NOT expandable — a tap opens its standalone detail
+   view (where any `details` blurb is shown), keeping the list bubbles clean. */
 function isExpandableSession(id) {
   const s = sessionMap[id];
   if (!s) return false;
@@ -4209,12 +4258,18 @@ function makeBubble(item, opts = {}) {
   const expandable = !!opts.expandable && !isTalk;
   const expanded   = expandable && isSessionExpanded(item.id);
 
+  // A session with no talks to drill into (a meal, break, reception, or other
+  // standalone event). Hatch it so it reads as "nothing to open here" and
+  // isn't mistaken for an expandable, talk-bearing session.
+  const emptySession = !isTalk && !isExpandableSession(item.id);
+
   const cls = [
     "bubble",
     `clr-${item.color || "neutral"}`,
     added    ? "added"    : "",
     partial  ? "partial"  : "",
     expanded ? "expanded" : "",
+    emptySession ? "empty-session" : "",
   ].filter(Boolean).join(" ");
 
   const wrap = el("article", {
@@ -4440,10 +4495,12 @@ function presiderByline(item, ctx, abbrev) {
 
   let s;
   if (names.length > 1) {
+    // Multiple presiders are separated by a vertical bar (the inner " · "
+    // already separates each presider's name from their affiliation).
     s = names.map((nm, idx) => {
       const a = (affList[idx] || "").trim();
       return a ? `${nameHTML(nm, a)} · ${esc(a)}` : nameHTML(nm, a);
-    }).join(", ");
+    }).join('<span class="presider-sep">|</span>');
   } else {
     const a = (affDeduped || (affList[0] || "")).trim();
     s = nameHTML(names[0] || presiderRaw, a);
@@ -5028,10 +5085,10 @@ function renderTimeGrouped(container, items, opts = {}) {
   const _byLoc = (a, b) =>
     _locOf(a).localeCompare(_locOf(b), undefined, { numeric: true });
   // Same-time tie-break is normally by location, but when two items have titles
-  // of the form "<Word> <Number> …" (e.g. "Workshop 1", "Workshop 2", which may
-  // sit in different rooms) order them by that number instead, so the series
-  // reads 1, 2, 3 rather than by arbitrary room name. Requires the same leading
-  // word; otherwise falls back to location.
+  // of the form "<Word> <Number> …" (a numbered series that may sit in
+  // different rooms) order them by that number instead, so the series reads
+  // 1, 2, 3 rather than by arbitrary room name. Requires the same leading word;
+  // otherwise falls back to location.
   const _numKey = (it) => {
     const m = (it.title || "").match(/^(\D+?)\s*(\d+)\b/);
     return m ? { word: m[1].trim().toLowerCase(), num: parseInt(m[2], 10) } : null;
@@ -5273,7 +5330,7 @@ function appendSessionMetaLines(s, container) {
           appendAff(affText);
         }
         if (idx < names.length - 1) {
-          meta.appendChild(document.createTextNode(", "));
+          meta.appendChild(el("span", { class: "presider-sep" }, "|"));
         }
       });
     } else {
@@ -5306,9 +5363,25 @@ function appendSessionMetaLines(s, container) {
   if (tagText) {
     container.appendChild(el("div", { class: "dh-meta" }, tagText));
   }
+  // NB: `details` is intentionally NOT shown here. Free-text descriptions can
+  // be long (workshop/industry/social blurbs), so they're rendered as a
+  // dedicated "Details" section BELOW the head card — see appendSessionDetails,
+  // mirroring how a talk's Abstract is presented.
+}
 
-  if (s.details)
-    container.appendChild(el("div", { class: "dh-meta" }, s.details));
+/* Render a session's free-text `details` as a "Details" section — a section
+   heading plus a body paragraph, exactly like a talk's Abstract. Returns true
+   when something was appended. Shared by the standalone session-detail view and
+   the Sessions-list inline expansion so both present it identically. Supports
+   the same limited inline markup (<sup>/<sub>/<i>/<b>/<em>/<strong>) the
+   abstract renderer allows; everything else is escaped. */
+function appendSessionDetails(container, s) {
+  const d = (s && s.details || "").trim();
+  if (!d) return false;
+  container.appendChild(el("div", { class: "section-title" }, "Details"));
+  const safe = esc(d).replace(/&lt;(\/?(?:sup|sub|i|b|em|strong))&gt;/gi, "<$1>");
+  container.appendChild(el("p", { class: "abstract-body", html: safe }));
+  return true;
 }
 
 function buildSessionHead(s) {
@@ -5343,17 +5416,24 @@ function renderSessionDetail(c, sid) {
 
   c.appendChild(buildSessionHead(s));
 
-  if (!s.talk_ids || s.talk_ids.length === 0) {
-    c.appendChild(el("p", { class: "empty" }, "No talks listed for this session."));
-    return;
-  }
-
   // No "Talks" heading and no between-bubble time-headers — the header is
   // followed directly by the talk bubbles, each carrying its start time
   // inline in the chip (the room is implied by the session, so it's omitted).
-  const talks = s.talk_ids.map(id => talkMap[id]).filter(Boolean)
+  const talks = (s.talk_ids || []).map(id => talkMap[id]).filter(Boolean)
                  .sort((a,b) => cmpTs(a.start_ts, b.start_ts));
-  renderTimeGrouped(c, talks, { skipDateHeaders: true, alwaysAll: true, ignoreTypes: true, inlineTime: true });
+  if (talks.length) {
+    renderTimeGrouped(c, talks, { skipDateHeaders: true, alwaysAll: true, ignoreTypes: true, inlineTime: true });
+  }
+
+  // Free-text description (workshop/industry/social blurb) goes UNDER the talk
+  // bubbles, in a "Details" section — like a talk's Abstract.
+  const hasDetails = appendSessionDetails(c, s);
+
+  // Only say "no talks" when there's genuinely nothing — an event whose content
+  // IS its Details blurb shouldn't be labelled empty.
+  if (!talks.length && !hasDetails) {
+    c.appendChild(el("p", { class: "empty" }, "No talks listed for this session."));
+  }
 }
 
 /* Sessions list inline expansion: the talk bubbles rendered directly
@@ -5902,6 +5982,19 @@ function renderSearch(c) {
       rebuildSearchResults();
     }, SEARCH_DEBOUNCE_MS);
   });
+  // Select any existing query whenever the field gains focus — tabbing to Find
+  // (which auto-focuses), keyboard focus, or a mouse click — so typing replaces
+  // the old query in one stroke. For a MOUSE click that brings focus we suppress
+  // the default caret placement (which would otherwise collapse the selection)
+  // and focus manually; once focused, clicks/drag-select behave normally. Touch
+  // is left alone (no preventDefault) so the on-screen keyboard still opens.
+  input.addEventListener("focus", () => input.select());
+  input.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse" && document.activeElement !== input) {
+      e.preventDefault();
+      input.focus();
+    }
+  });
   ctrl.appendChild(input);
 
   c.appendChild(ctrl);
@@ -6099,7 +6192,8 @@ function _textHitPredicates(q) {
        inText(s.title) || inText(s.id)
     || (Array.isArray(s.tags) && s.tags.some(t => t && (inText(t.value) || inText(t.key))))
     || inText(s.presider) || inText(s.presider_aff)
-    || inText(s.presider_aff_short);
+    || inText(s.presider_aff_short)
+    || inText(s.details);   // searchable session description (workshop/etc blurb)
   return { talkHit, sessHit };
 }
 
@@ -8987,19 +9081,31 @@ function toggleTimeBucketSessions(ids) {
    Returns null when the bucket holds no expandable session (so the header just
    shows its time text). */
 function makeTimeToggle(ids) {
-  if (!ids || !ids.length) return null;
+  // Always render the chevron so EVERY time-header carries it (consistent
+  // alignment down the list). When a bucket has no expandable sessions — only
+  // events/breaks at that time — the chevron is shown disabled (dimmed, inert)
+  // rather than omitted.
+  ids = ids || [];
+  const disabled = ids.length === 0;
   const open = new Set(state.expandedSessions || []);
   const anyOpen = ids.some(id => open.has(id));
-  const label = anyOpen
-    ? "Collapse sessions at this time"
-    : "Expand all sessions at this time";
-  return el("button", {
-    class: "th-toggle",
+  const label = disabled
+    ? "Nothing to expand at this time"
+    : (anyOpen ? "Collapse sessions at this time"
+               : "Expand all sessions at this time");
+  const btn = el("button", {
+    class: "th-toggle" + (disabled ? " disabled" : ""),
     title: label,
     "aria-label": label,
     html: chevronsSvg(anyOpen ? "up" : "down"),
-    onclick: (e) => { e.stopPropagation(); toggleTimeBucketSessions(ids); },
+    onclick: (e) => {
+      e.stopPropagation();
+      if (!ids.length) return;
+      toggleTimeBucketSessions(ids);
+    },
   });
+  if (disabled) btn.setAttribute("aria-disabled", "true");
+  return btn;
 }
 
 /* Tapping a tab takes you to that section's MAIN list, in the place you last

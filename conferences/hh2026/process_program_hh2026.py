@@ -56,8 +56,8 @@ program text appears in this source per the repo's no-hardcoded-content rule):
         break, award announcement, reception) is a non-technical EVENT.
   * Poster pages — a "Poster Presentations - Session <n>" header (with its own
         date + time range), category sub-headers (Helvetica-Bold ~11pt), then
-        one block per poster starting with a code ("MP-01", "WP-01", "WCP-01")
-        in place of a time; title/authors/affils exactly as for talks.
+        one block per poster starting with an alphanumeric code (e.g.
+        "<LETTERS>-<NN>") in place of a time; title/authors/affils as for talks.
 
 The parser therefore reconstructs each line from pdfplumber's CHARACTER stream
 (the display font uses wide letter-spacing, so word-level extraction is
@@ -281,6 +281,14 @@ def _clean(s: str) -> str:
     return re.sub(r"\s+", " ", (s or "").replace(" ", " ")).strip()
 
 
+def _clean_paragraphs(s: str) -> str:
+    """Like _clean, but preserves paragraph breaks: collapse whitespace WITHIN
+    each paragraph (runs separated by one or more blank lines) and rejoin the
+    non-empty paragraphs with a single blank line."""
+    paras = [_clean(p) for p in re.split(r"\n{2,}", s or "")]
+    return "\n\n".join(p for p in paras if p)
+
+
 def _all_caps(s: str) -> bool:
     """True if the alphabetic content is essentially all upper-case — the signal
     that a timed block is a technical talk title rather than a plain event."""
@@ -296,11 +304,49 @@ def _all_caps(s: str) -> bool:
 # acronym restoration. Ported from the SPIE PW 2025 processor: the program
 # prints talk titles in ALL CAPS but session titles, special-event blurbs and
 # institution names in normal mixed case, so that already-correctly-cased text
-# is a ready-made dictionary of how each acronym is actually written (MEMS,
-# NEMS, AI, LDV, …). Nothing is hardcoded — the acronym casing is learned.
+# is a ready-made dictionary of how each acronym is actually written. Nothing
+# is hardcoded — the acronym casing is learned from that mixed-case corpus.
 # -----------------------------------------------------------------------------
 _MINOR = {"a", "an", "and", "as", "at", "but", "by", "for", "from", "in", "of",
           "on", "or", "the", "to", "via", "with", "vs", "nor"}
+
+# A handful of well-known field acronyms / materials / units never appear in
+# mixed case anywhere in this all-caps-titled program, so they can't be learned
+# from the corpus. These are GENERIC domain vocabulary (not program content),
+# supplied manually so the title-caser restores their canonical casing. Keyed by
+# UPPERCASE form -> canonical; alpha runs of a hyphen/slash compound are looked
+# up here individually, so a buried acronym is still restored even inside a
+# compound the corpus never wrote whole. Curated entries override the learned.
+CURATED_ACRONYMS = {
+    # MEMS / NEMS family
+    "MEMS": "MEMS", "NEMS": "NEMS", "FERRONEMS": "FerroNEMS", "MEM": "MEM",
+    "CMOS": "CMOS",
+    # piezoelectric / wide-bandgap materials & compounds
+    "ALN": "AlN", "ALSCN": "AlScN", "SCALN": "ScAlN", "SC": "Sc", "SIC": "SiC",
+    "GAN": "GaN", "GAAS": "GaAs", "PZT": "PZT", "PMN": "PMN", "PT": "PT",
+    "HZO": "HZO", "HFO": "HfO", "SIO": "SiO", "LITAO": "LiTaO", "LINBO": "LiNbO",
+    "ZNO": "ZnO", "NO": "NO",
+    # transducers / detectors
+    "PMUT": "PMUT", "PMUTS": "PMUTs", "CMUT": "CMUT", "BAW": "BAW", "SAW": "SAW",
+    "SFAT": "SFAT", "SPAD": "SPAD",
+    # devices / processes / measurement
+    "DLP": "DLP", "LDV": "LDV", "DOF": "DOF", "IMU": "IMU", "SOI": "SOI",
+    "PDMS": "PDMS", "PECVD": "PECVD", "VHF": "VHF", "FET": "FET",
+    "BIOFET": "BioFET", "CNT": "CNT", "RF": "RF", "LC": "LC", "DC": "DC",
+    "IR": "IR", "VNC": "VNC", "SU": "SU", "TPP": "TPP", "PP": "PP", "DLW": "DLW",
+    "ML": "ML", "AI": "AI", "RT": "RT", "LAMP": "LAMP", "TCF": "TCF",
+    "TCQ": "TCQ",
+    # chemistry / biology
+    "DNA": "DNA", "RNA": "RNA", "PFOS": "PFOS", "PFAS": "PFAS", "PH": "pH",
+    "OTC": "OTC",
+    # units (lower/mixed case)
+    "MHZ": "MHz", "GHZ": "GHz", "KHZ": "kHz", "MK": "mK", "PPM": "ppm",
+    "NM": "nm",
+    # well-known organizations / brands
+    "ADI": "ADI", "NIST": "NIST", "NRL": "NRL", "CEA": "CEA", "NANOSI": "NanoSI",
+    # word that the strict roman-numeral guard would otherwise miss
+    "VILLI": "Villi",
+}
 
 
 def learn_acronyms(corpus: list[str]) -> dict[str, str]:
@@ -325,29 +371,45 @@ def learn_acronyms(corpus: list[str]) -> dict[str, str]:
     return acr
 
 
+# Strict roman-numeral matcher (so an ordinary word that happens to be made of
+# the letters i/v/x/l/c/d/m — e.g. "VILLI", "CIVIL", "MILL" — is NOT mistaken
+# for a numeral and frozen uppercase).
+_ROMAN_RE = re.compile(
+    r"^M{0,4}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3})$", re.I)
+
+
 def _recase_token(core: str, acr: dict[str, str]) -> str:
-    """Apply learned acronym casing to one UPPERCASE token, falling back to
-    roman-numeral preservation and ordinary Capitalization. Alpha runs inside a
-    hyphen/slash compound are recased independently so a buried acronym still
-    restores."""
+    """Apply acronym casing to one UPPERCASE token, falling back to roman-numeral
+    preservation and ordinary Capitalization. Alpha runs inside a hyphen/slash
+    compound are recased independently so a buried acronym still restores, and a
+    minor joining word inside a compound (not its first run) is lowercased
+    (a fabricated example: "ABX-ON-XYZ" -> "AbX-on-XyZ")."""
     up = core.upper()
     if up in acr:
         return acr[up]
     if up.endswith("S") and up[:-1] in acr:
         return acr[up[:-1]] + "s"
-    alpha = re.sub(r"[^A-Za-z]", "", core).lower()
-    if re.fullmatch(r"[ivxlcdm]{2,}", alpha):       # roman numeral (II, XVIII)
+    alpha = re.sub(r"[^A-Za-z]", "", core)
+    if len(alpha) >= 2 and _ROMAN_RE.match(alpha):  # roman numeral (II, XVIII)
         return core.upper()
+
+    idx = [0]
 
     def _run(m: "re.Match") -> str:
         seg = m.group(0)
+        first = idx[0] == 0
+        idx[0] += 1
         u = seg.upper()
         if u in acr:
             return acr[u]
         if u.endswith("S") and u[:-1] in acr:
             return acr[u[:-1]] + "s"
+        if not first and seg.lower() in _MINOR:
+            return seg.lower()
         return seg[:1].upper() + seg[1:].lower()
-    return re.sub(r"[A-Za-z]+", _run, core)
+    out = re.sub(r"[A-Za-z]+", _run, core)
+    # Possessive: "ADI'S" -> "ADI's".
+    return re.sub(r"'S\b", "'s", out)
 
 
 def _smart_title(t: str, acr: dict[str, str]) -> str:
@@ -504,7 +566,8 @@ def _split_body_fonts(body_lines: list[Line]) -> tuple[str, str]:
             author_parts.append(reg_txt)
             aff_parts.append(obl_txt)
     # Join lines with a space so the last author on one line is not glued to the
-    # first on the next ("…Boning3" + "Michael…").
+    # first on the next (a marker-suffixed surname must not abut the next
+    # author's given name).
     return _clean(" ".join(author_parts)), _clean(" ".join(aff_parts))
 
 
@@ -530,12 +593,48 @@ def _talk_payload_from_lines(content_lines: list[Line],
 
     # --- EVENT: a bold, mixed-case lead line (meal, break, ceremony, award
     # announcement, …). Talk titles are bold ALL-CAPS; a bold line that is not
-    # all-caps is therefore an event label, not a title. ---
+    # all-caps is therefore an event label, not a title.
+    #
+    # A ceremony's body is often a list of officials as "<Role>:" (bold) lines
+    # each followed by a "Name, Affiliation" line — e.g. the opening Welcome and
+    # the closing Award Ceremony. Those people PRESIDE over the event, so they
+    # become its presider(s) rather than free-text details. Any line that isn't
+    # part of such a role/name pair stays as the details blurb. ---
     if (first.content_bold and not first.content_oblique
             and not _all_caps(first.content_text)):
-        details = _clean(" ".join(l.content_text for l in content_lines[1:]))
+        body = content_lines[1:]
+        pres_names: list[str] = []
+        pres_affs: list[str] = []
+        det: list[str] = []
+        i = 0
+        while i < len(body):
+            txt = body[i].content_text.strip()
+            if (body[i].content_bold and txt.endswith(":")
+                    and i + 1 < len(body) and not body[i + 1].content_bold):
+                name_line = body[i + 1].content_text.strip()
+                if "," in name_line:
+                    # "Name, Affiliation" on one line.
+                    nm, _, aff = name_line.partition(",")
+                    consumed = 2
+                else:
+                    # Name alone; the affiliation (if any) is the next regular,
+                    # non-role line — recognised by its comma ("Univ…, USA").
+                    nm, aff, consumed = name_line, "", 2
+                    if i + 2 < len(body) and not body[i + 2].content_bold:
+                        cand = body[i + 2].content_text.strip()
+                        if not cand.endswith(":") and "," in cand:
+                            aff, consumed = cand, 3
+                if nm.strip():
+                    pres_names.append(_clean(nm))
+                    pres_affs.append(_clean(aff))
+                i += consumed
+                continue
+            det.append(txt)
+            i += 1
         return {"is_event": True, "title": first.content_text.strip(),
-                "details": details}
+                "details": _clean(" ".join(det)),
+                "presider": "; ".join(pres_names),
+                "presider_aff": ";".join(pres_affs)}
 
     # --- TALK: the leading run of bold ALL-CAPS lines is the title. Anything
     # after it is the byline — note a single featured speaker's NAME is also
@@ -645,6 +744,56 @@ _SE_WHEN_RE = re.compile(
     % "|".join(w.capitalize() for w in WEEKDAYS), re.I)
 
 
+# Venue keywords that mark a trailing "(...)" in an event title as a ROOM (and
+# not a parenthetical qualifier like "(on your own)"). Format only.
+_ROOM_KW = re.compile(
+    r"(?i)\b(room|ballroom|hall|floor|pavilion|lobby|lawn|suite|cent(?:er|re)|"
+    r"patio|terrace|deck|pool|beach|lounge|garden|foyer|theat(?:er|re)|"
+    r"auditorium|plaza|veranda|courtyard|atrium)\b")
+
+
+def _split_event_location(title: str) -> tuple[str, str]:
+    """Pull a trailing room/venue parenthetical out of an event title into a
+    location: "<Event Name> (<Some> Room)" -> ("<Event Name>", "<Some> Room").
+    A non-venue parenthetical (e.g. "(on your own)") is left in the title."""
+    m = re.search(r"^(.*?)\s*\(([^()]+)\)\s*$", title)
+    if m and _ROOM_KW.search(m.group(2)):
+        return _clean(m.group(1)), _clean(m.group(2))
+    return title, ""
+
+
+# A venue named inside a blurb ("… in the <Some> Room.", "… in the <Name> Jr.
+# Ballroom.") — captured up to a room-type word so an embedded abbreviation
+# period (e.g. "Jr.") doesn't truncate it.
+_VENUE_RE = re.compile(
+    r"\b(?:in|at)\s+the\s+"
+    r"((?:[A-Z][\w.&'’\-]*\s+)*?"     # optional leading proper words (may end ".")
+    r"(?:Room|Ballroom|Hall|Pavilion|Lobby|Lawn|Suite|Center|Centre|Patio|"
+    r"Terrace|Deck|Pool|Beach|Lounge|Garden|Foyer|Theater|Theatre|Auditorium|"
+    r"Plaza|Veranda|Courtyard|Atrium))\b")
+
+
+def _refine_blurb(text: str) -> tuple[str, str]:
+    """Split an event blurb into (venue, substantive_details). The venue (if the
+    blurb names one) belongs in `location`; any sentence carrying clock times
+    ("18:00 - 21:00") is bare logistics and is dropped from the details, leaving
+    only the descriptive prose. Paragraph breaks are preserved, and a blurb that
+    is ALL logistics (a one-line "held … in …") collapses to an empty details
+    string."""
+    venue = ""
+    m = _VENUE_RE.search(text)
+    if m:
+        venue = _clean(m.group(1))
+    paras: list[str] = []
+    for p in text.split("\n\n"):
+        kept = [s for s in re.split(r"(?<=[.!?])\s+", p)
+                if not re.search(r"\d{1,2}:\d{2}", s)]
+        kt = _clean(" ".join(kept))
+        if kt:
+            paras.append(kt)
+    return venue, "\n\n".join(paras)
+
+
 def _se_key(text: str) -> str | None:
     """Normalised join key for a Special-Events header or a session title, so the
     two can be matched: 'workshop <n>', 'industry', or 'rump' (None = no match)."""
@@ -657,6 +806,91 @@ def _se_key(text: str) -> str | None:
     if "rump session" in low:
         return "rump"
     return None
+
+
+# Words ignored when matching a session title to a front-matter description
+# header, so a day-program event matches its front-matter write-up even when
+# one side adds a weekday prefix or an "Announcement"/"Presentation" suffix.
+_DESC_STOP = {
+    "the", "a", "an", "of", "and", "in", "on", "for", "to", "with", "at", "by",
+    "or", "amp",
+    "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+    "announcement", "announcements", "presentation", "presentations",
+    "event", "events", "session", "sessions",
+}
+
+
+def _sig_words(text: str) -> set[str]:
+    """Significant (matchable) words of a title/header: lowercase alphanumerics,
+    minus stopwords, day names, and 'announcement'/'session' noise."""
+    out: set[str] = set()
+    for t in re.findall(r"[a-z0-9]+", (text or "").lower()):
+        if t in _DESC_STOP:
+            continue
+        if t.isdigit() or len(t) >= 2:
+            out.add(t)
+    return out
+
+
+def _parse_frontmatter_descriptions(
+        lines: list["Line"]) -> list[tuple[set[str], str]]:
+    """Harvest every front-matter (pre-program) blurb: each event/award header —
+    a ~10-12pt bold ALL-CAPS line (Awards, Social Events, …; the big ~16pt
+    section banners are skipped) — followed by its FULL body text up to the next
+    header. Returns [(significant-word set of the header, full body text)] for
+    matching against session titles. Only the front matter (before the first day
+    header) is scanned."""
+    end = next((i for i, ln in enumerate(lines) if _DAY_RE.match(ln.text)),
+               len(lines))
+    region = lines[:end]
+    out: list[tuple[set[str], str]] = []
+    for idx, ln in enumerate(region):
+        t = ln.text.strip()
+        if not (_is_header_class(ln) and _all_caps(t)
+                and ln.content_size < 13):     # 16pt = section banner, skip
+            continue
+        # Collect the body, preserving PARAGRAPH breaks. Blank lines are dropped
+        # during extraction, so a paragraph break shows up as a larger-than-
+        # normal vertical gap (or a page change); mark those with a "\n\n" the
+        # app renders as a real break (its details box is white-space:pre-wrap).
+        parts: list[str] = []
+        prev = None
+        for ln2 in region[idx + 1:]:
+            if _is_header_class(ln2):           # next event/section header
+                break
+            if prev is not None:
+                gap = (ln2.page != prev.page) or (ln2.top - prev.top > 16)
+                parts.append("\n\n" if gap else " ")
+            parts.append(ln2.text)
+            prev = ln2
+        text = _clean_paragraphs("".join(parts))
+        if text:
+            out.append((_sig_words(t), text))
+    return out
+
+
+def _match_frontmatter(title: str,
+                       entries: list[tuple[set[str], str]]) -> str | None:
+    """Find the front-matter blurb whose header matches a session title. An
+    exact significant-word match wins; otherwise one set being a subset of the
+    other (with >= 2 words on the smaller side, so a lone generic word can't
+    latch onto a longer header that merely contains it)."""
+    sw = _sig_words(title)
+    if not sw:
+        return None
+    sub = None
+    sub_score = 0
+    for hw, text in entries:
+        if not hw:
+            continue
+        if sw == hw:
+            return text
+        inter = len(sw & hw)
+        if inter > sub_score and (
+                (hw <= sw and len(hw) >= 2) or (sw <= hw and len(sw) >= 2)):
+            sub, sub_score = text, inter
+    return sub
+    return out
 
 
 def _parse_special_events(lines: list["Line"]) -> dict[str, dict]:
@@ -731,8 +965,6 @@ def build_conference_data() -> dict:
 
     sessions: list[dict] = []
     talks: list[dict] = []
-    # Schedule items for end-time backfill: (day_key, start_min, obj, kind).
-    timed: list[dict] = []
     aff_pool: set[str] = set()
 
     sess_seq = 0
@@ -762,6 +994,7 @@ def build_conference_data() -> dict:
     mode = "pre"                        # 'pre' | 'day' | 'poster' | 'done'
     banner_session: dict | None = None  # session that TALKS attach to
     last_session: dict | None = None    # session a chair attaches to
+    open_for_close: dict | None = None  # session an "Adjourn" would close/end
     poster_session: dict | None = None  # current poster catalog session
     poster_pending_meta = False         # poster header just seen; want date line
     skip_next_event = False             # consume a poster-pointer's folded line
@@ -793,7 +1026,7 @@ def build_conference_data() -> dict:
     def _flush_block() -> None:
         nonlocal block_lines, block_start, block_end, block_is_poster
         nonlocal block_code, banner_session, last_session, talk_seq
-        nonlocal skip_next_event
+        nonlocal skip_next_event, open_for_close
         if not block_lines and not block_code:
             block_lines, block_start, block_end = [], None, None
             block_is_poster, block_code = False, ""
@@ -852,11 +1085,22 @@ def build_conference_data() -> dict:
             start_ts = _iso(cur_dom, cur_month, bs) if (bs and cur_dom) else None
             end_ts = _iso(cur_dom, cur_month, be) if (be and cur_dom) else None
 
+            # Adjournment ("Adjourn", "Workshop Adjourns") is NOT content — it is
+            # only the marker for when a session / the conference ENDS. We never
+            # emit it as a session or a talk; instead we stamp the currently-open
+            # session's closing time with it (so the session's span — and its
+            # last item — end exactly there) and close it. See AGENTS.md
+            # ("Adjournment is an end marker, not content").
+            if re.search(r"(?i)\badjourn", payload["title"]):
+                if open_for_close is not None and start_ts:
+                    open_for_close["_closing_ts"] = start_ts
+                banner_session = None
+                return
+
             # A Sunday Workshop runs a half-day and OWNS its internal agenda
-            # items (Lunch, a panel, the closing "Adjourn"). Fold those into the
-            # workshop as Event-typed talk-rows rather than scattering them as
-            # standalone sessions. An "Adjourn" marks the workshop's end, so it
-            # closes the session (the next workshop banner reopens one).
+            # items (a mid-workshop Lunch, a panel discussion). Fold those into
+            # the workshop as Event-typed talk-rows rather than scattering them
+            # as standalone sessions.
             if banner_session is not None \
                     and banner_session["format"] == "Sunday Workshop":
                 talk_seq += 1
@@ -874,20 +1118,24 @@ def build_conference_data() -> dict:
                     "color": "rose", "location": "",
                 })
                 banner_session["talk_ids"].append(tid)
-                if start_ts:
-                    timed.append({"day": (cur_month, cur_dom), "start": bs,
-                                  "obj": talks[-1], "kind": "talk"})
-                if re.match(r"^adjourn\b", payload["title"], re.I):
-                    banner_session = None      # workshop concluded
                 return
 
-            ev = _new_session(payload["title"], "rose", "Event",
+            ev_title, ev_loc = _split_event_location(payload["title"])
+            ev = _new_session(ev_title, "rose", "Event",
                               start_ts=start_ts, end_ts=end_ts,
                               details=payload.get("details", ""))
+            if ev_loc:
+                ev["location"] = ev_loc
+            # A ceremony's role-people (each listed under a "<Role>:" label)
+            # preside over the event — record them as presiders, not details.
+            if payload.get("presider"):
+                ev["presider"] = payload["presider"]
+                ev["presider_aff"] = payload.get("presider_aff", "")
+                for a in (payload.get("presider_aff") or "").split(";"):
+                    if _clean(a):
+                        aff_pool.add(_clean(a))
             last_session = ev
-            if start_ts:
-                timed.append({"day": (cur_month, cur_dom),
-                              "start": bs, "obj": ev, "kind": "session"})
+            open_for_close = ev          # a later "Adjourn" ends this event
             return
 
         # ---- timed TALK ----
@@ -895,6 +1143,7 @@ def build_conference_data() -> dict:
             banner_session = _new_session(
                 f"{_weekday(cur_month, cur_dom)} Program", "blue", "Session")
             last_session = banner_session
+            open_for_close = banner_session
         skip_next_event = False
         talk_seq += 1
         tid = f"T{talk_seq:03d}"
@@ -919,9 +1168,6 @@ def build_conference_data() -> dict:
         }
         talks.append(t)
         banner_session["talk_ids"].append(tid)
-        if start_ts:
-            timed.append({"day": (cur_month, cur_dom), "start": bs,
-                          "obj": t, "kind": "talk"})
 
     def _weekday(month, dom) -> str:
         import datetime as _dt
@@ -934,7 +1180,7 @@ def build_conference_data() -> dict:
 
     def _flush_banner() -> None:
         nonlocal pending_banner, banner_session, last_session, poster_session
-        nonlocal skip_next_event
+        nonlocal skip_next_event, open_for_close
         if not pending_banner:
             return
         title = _clean(" ".join(pending_banner))
@@ -953,6 +1199,7 @@ def build_conference_data() -> dict:
         banner_session = _new_session(title, kind["session_color"],
                                       kind["format"], topic=kind["short"])
         last_session = banner_session
+        open_for_close = banner_session
         skip_next_event = False
 
     # =====================================================================
@@ -1089,31 +1336,66 @@ def build_conference_data() -> dict:
 
     _flush_block(); _flush_chair(); _flush_banner()
 
-    # ---- backfill talk/event end times from the next item that day ----
-    timed.sort(key=lambda d: (d["day"], _to_min(d["start"])))
-    for i, item in enumerate(timed):
-        obj = item["obj"]
-        if obj.get("end_ts"):
-            continue
-        nxt = timed[i + 1] if i + 1 < len(timed) else None
-        if nxt and nxt["day"] == item["day"]:
-            mth, dom = item["day"]
-            obj["end_ts"] = _iso(dom, mth, nxt["start"])
-        elif obj.get("start_ts"):
-            obj["end_ts"] = _bump(obj["start_ts"], 15)
-
-    # ---- banner session times = span of their talks ----
     by_id = {t["id"]: t for t in talks}
+
+    # ---- session START times first (earliest child); talk-less event sessions
+    #      already carry their own start. ----
     for s in sessions:
-        if s["format"] in ("Event", "Poster Session"):
-            continue
-        kids = [by_id[i] for i in s["talk_ids"] if i in by_id]
-        starts = [k["start_ts"] for k in kids if k.get("start_ts")]
-        ends = [k["end_ts"] for k in kids if k.get("end_ts")]
+        starts = [by_id[i]["start_ts"] for i in s["talk_ids"]
+                  if i in by_id and by_id[i].get("start_ts")]
         if starts:
             s["start_ts"] = min(starts)
-        if ends:
+
+    # The sorted set of top-level session starts, for "what begins next that
+    # day" lookups (the single-track days; the parallel Sunday workshops instead
+    # carry an explicit adjournment time, so they never rely on this).
+    _starts = sorted({s["start_ts"] for s in sessions if s.get("start_ts")})
+
+    def _next_start_after(ts: str | None) -> str | None:
+        if not ts:
+            return None
+        return next((x for x in _starts if x[:10] == ts[:10] and x > ts), None)
+
+    # ---- per-session talk end-times, in each session's own document order.
+    #      Doing this PER session (not over a global time-sorted list) is what
+    #      makes the parallel Sunday workshops come out right: their start times
+    #      interleave, so a global "next item" backfill would cross between
+    #      concurrent workshops. A talk runs until the next talk in the same
+    #      session that starts later; the LAST talk runs to the session's
+    #      adjournment time (_closing_ts) if recorded, else to whatever begins
+    #      next that day, else a 15-minute default. ----
+    for s in sessions:
+        kids = [by_id[i] for i in s["talk_ids"] if i in by_id]
+        for i, k in enumerate(kids):
+            if k.get("end_ts"):
+                continue
+            later = next((k2["start_ts"] for k2 in kids[i + 1:]
+                          if k2.get("start_ts") and (not k.get("start_ts")
+                                                     or k2["start_ts"] > k["start_ts"])),
+                         None)
+            if later:
+                k["end_ts"] = later
+            elif s.get("_closing_ts"):
+                k["end_ts"] = s["_closing_ts"]
+            elif k.get("start_ts"):
+                k["end_ts"] = _next_start_after(k["start_ts"]) \
+                    or _bump(k["start_ts"], 15)
+
+    # ---- session spans: end = adjournment time if recorded, else the latest
+    #      child end; talk-less sessions with no end run to the next item that
+    #      day (or a half-hour default). ----
+    for s in sessions:
+        if s["format"] == "Poster Session":
+            continue
+        ends = [by_id[i]["end_ts"] for i in s["talk_ids"]
+                if i in by_id and by_id[i].get("end_ts")]
+        if s.get("_closing_ts"):
+            s["end_ts"] = s["_closing_ts"]
+        elif ends:
             s["end_ts"] = max(ends)
+        elif not s.get("end_ts") and s.get("start_ts"):
+            s["end_ts"] = _next_start_after(s["start_ts"]) \
+                or _bump(s["start_ts"], 30)
 
     # ---- enrich special-event sessions with their descriptive blurbs + room
     #      from the Special Events section that precedes the schedule. ----
@@ -1132,6 +1414,29 @@ def build_conference_data() -> dict:
         log(f"  special-events: {len(special)} blurbs, enriched "
             f"{n_enriched} session(s).")
 
+    # ---- enrich any session still lacking details with the matching
+    #      front-matter blurb: award write-ups (award announcements) and
+    #      social-event descriptions, etc. ----
+    frontmatter = _parse_frontmatter_descriptions(lines)
+    if frontmatter:
+        n_fm = 0
+        for s in sessions:
+            if s["details"]:
+                continue
+            desc = _match_frontmatter(s["title"], frontmatter)
+            if not desc:
+                continue
+            # Route bare location/time logistics to the proper fields and keep
+            # only the substantive prose as details.
+            venue, prose = _refine_blurb(desc)
+            if venue and not s["location"]:
+                s["location"] = venue
+            if prose:
+                s["details"] = prose
+                n_fm += 1
+        log(f"  front-matter: {len(frontmatter)} blurbs, enriched "
+            f"{n_fm} session(s).")
+
     # ---- render the ALL-CAPS talk/poster titles into normal title case,
     #      restoring acronym casing learned from the conference's own
     #      mixed-case text (session titles, special-event blurbs, institution
@@ -1146,7 +1451,9 @@ def build_conference_data() -> dict:
     for t in talks:
         for inst in t["institutions"]:
             corpus.append(inst.get("name") or "")
-    acr = learn_acronyms(corpus)
+    # Curated well-known acronyms override anything learned, and fill the gaps
+    # for terms that never appear in mixed case anywhere in the program.
+    acr = {**learn_acronyms(corpus), **CURATED_ACRONYMS}
     n_recased = 0
     for t in talks:
         if _all_caps(t["title"]):
@@ -1183,14 +1490,6 @@ def _synth_content_line(ln: Line) -> Line:
     return Line(ln.page, cc or ln.chars)
 
 
-def _to_min(hhmm: str) -> int:
-    try:
-        h, m = hhmm.split(":")
-        return int(h) * 60 + int(m)
-    except Exception:
-        return 0
-
-
 def _bump(iso_ts: str, minutes: int) -> str:
     import datetime as _dt
     dt = _dt.datetime.fromisoformat(iso_ts) + _dt.timedelta(minutes=minutes)
@@ -1202,6 +1501,7 @@ def _bump(iso_ts: str, minutes: int) -> str:
 # =============================================================================
 def _collapse_session_tags(sessions: list[dict]) -> None:
     for s in sessions:
+        s.pop("_closing_ts", None)          # internal adjournment marker
         fmt = (s.pop("format", None) or "").strip()
         topic = (s.pop("topic", None) or "").strip()
         tags = []

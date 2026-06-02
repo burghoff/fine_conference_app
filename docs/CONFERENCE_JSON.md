@@ -91,7 +91,7 @@ A session is the structurally larger unit (it owns talks). Fields:
 | `short_location` | Optional | Compact room/venue for the bubble chip in lists/search/schedule (e.g. `"MS 151 (U Mezz)"` for `"Moscone South, Room 151 (Upper Mezz)"`). When absent, bubbles fall back to `location`. Talks inherit their session's `short_location` unless they set their own. |
 | `presider` | Optional | Presider name(s). Multiple separated by `;` or ` and `. |
 | `presider_aff` | Optional | **RAW** presider affiliation string(s), `;`-separated and positionally aligned to `presider` names. The builder shortens these and may backfill missing ones from papers the presider authored. |
-| `details` | Optional | Free-text shown in the detail header. |
+| `details` | Optional | Free-text **session description** or other helpful information about the session — e.g. a workshop/short-course abstract, an award's purpose, a social event's blurb, or logistics ("posters are A0 portrait; pins provided"). The app renders it as a dedicated **"Details"** section below the session (the way a talk's abstract is shown) and includes it in search. Prefer putting substantive prose here rather than cramming it into `tags`. Many sessions legitimately have none; supply it whenever the program offers a description worth surfacing. |
 | `talk_ids` | Recommended | Ordered list of child talk `id`s. Drives the talk list inside a session detail. |
 
 The builder **adds** `presider_aff_short` and `presider_affs_short` (you do not

@@ -158,6 +158,22 @@ reusing an existing type is almost always the better call.
   / `Poster` talk); two *similar-but-different* names is the worst case and is
   forbidden. That is why the oral grouping is `Technical`, not `Oral` (SPIE uses
   "Oral" as a talk genre, which would collide).
+- **Adjournment is an end marker, not content.** A program line like "Adjourn",
+  "Adjournment", "Workshop Adjourns", or "Session ends" is *not* a session or a
+  talk — it only records *when* the enclosing session (or the whole conference)
+  ends. Do not emit it as either; instead use its timestamp to set the
+  enclosing session's `end_ts` (or to backfill the preceding item's `end_ts`),
+  then drop it. The same goes for any pure "the room closes now" marker that
+  carries no speaker, title, or content of its own.
+- **Long-form event descriptions go in `details`; bare logistics do not.** When
+  the program offers a genuine *description* of an event — a workshop/short-
+  course abstract, an award's purpose, a social event's write-up — put that
+  prose in the session's `details`. But do NOT put bare location/time logistics
+  there (a one-liner of the shape "&lt;event&gt; will be held &lt;day&gt;
+  &lt;start&gt;–&lt;end&gt; in &lt;venue&gt;"): that belongs in the usual fields
+  — extract the venue into `location` and the times into `start_ts`/`end_ts`,
+  and leave `details` for the substantive text (empty if, once the logistics
+  sentence is removed, nothing of substance remains).
 
 ### The seven types
 

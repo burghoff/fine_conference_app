@@ -29,11 +29,11 @@ required: yes
 produced_by: fetch
 description: The official Hilton Head 2026 Final Program PDF — the single,
   authoritative source for the entire technical program. It contains the
-  Special Events descriptions, the Sunday-through-Thursday day-by-day schedule
-  (plenary / rising-star / invited speakers, the numbered technical Sessions,
-  the Sunday Workshops, the SEMI MSIG Industry Session, and the social/
-  housekeeping events), and the three Poster Presentation sessions. The
-  processor reads ONLY this file and emits conference_data.json from it.
+  front-matter special-event and award descriptions, the day-by-day schedule
+  (plenary / invited / contributed speaker blocks, the numbered technical
+  sessions, the Sunday workshops, an industry session, and social/housekeeping
+  events), and the poster-presentation sessions. The processor reads ONLY this
+  file and emits conference_data.json from it.
 manual: Open https://www.hh2026.org/files/HiltonHead2026_Program.pdf in a
   browser (or right-click the "Program" download link on
   https://www.hh2026.org/program/ ) and save the PDF into this folder's data/
