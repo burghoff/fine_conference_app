@@ -67,6 +67,24 @@ fetcher downloads.
       Implement `fetch_program_<slug>.py` to download those into `data/`. If
       the source needs a login, see the login section below.
 
+      **Explore the rest of the site, don't stop at the one URL the user
+      gave.** A conference website usually spreads program content across
+      several linked pages, and the user will rarely enumerate them all. When
+      you're given a site, follow its own
+      navigation and look for any page that carries programmatic information —
+      a Program / Schedule / Agenda page, a Speakers / Invited Speakers /
+      Plenaries page, an Events / Social Events overview, Short Courses /
+      Tutorials / Workshops, Posters, an abstract book or proceedings link,
+      etc. Fetch each such page into `data/` (one file per source) and fold
+      whatever is relevant into `conference_data.json`: speaker pages often
+      supply the presider/invited-speaker names and affiliations the schedule
+      omits, events pages add non-talk sessions (receptions, ceremonies, lab
+      tours), and so on. Prefer pulling this from the site over leaving the
+      program incomplete. The same rules still apply — no program content in
+      tracked source (it lives in `data/`), respect terms and any login
+      wall, and skip pages that are purely marketing with no program substance.
+      When in doubt about whether a page is worth including, ask the user.
+
    - **Manual files.** If automated download is not viable (no public URL,
       complex auth, terms of service that forbid scraping, etc.), the user
       drops files into `data/` themselves. Write a minimal
@@ -165,6 +183,16 @@ reusing an existing type is almost always the better call.
   enclosing session's `end_ts` (or to backfill the preceding item's `end_ts`),
   then drop it. The same goes for any pure "the room closes now" marker that
   carries no speaker, title, or content of its own.
+- **A bare withdrawn/cancelled marker is not an item.** A line that carries only
+  a status word — "Withdrawn", "Cancelled"/"Canceled", "(Cancelled)", "No show",
+  or similar — with no title, speaker, or abstract of its own must NOT be emitted
+  as a talk or a session. It only annotates the item it follows: drop the marker
+  and, if the preceding talk/session is what it refers to, set that item's
+  `withdrawn` flag. Emit a withdrawn/cancelled item ONLY when it actually carries
+  content (a real title and/or author) — then keep it as that talk/session with
+  `withdrawn: true`, which the app hides by default behind "Show concluded". In
+  other words: content present → keep it, marked withdrawn; content absent → it's
+  just a marker, so drop it (don't manufacture an empty "Cancelled" item).
 - **Long-form event descriptions go in `details`; bare logistics do not.** When
   the program offers a genuine *description* of an event — a workshop/short-
   course abstract, an award's purpose, a social event's write-up — put that

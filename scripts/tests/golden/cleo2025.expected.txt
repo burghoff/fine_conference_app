@@ -435,7 +435,7 @@ Center for Remote Health Technologies and Systems, Texas A&M Engineering Experim
 Center for Research in Photonics, University of Ottawa	Ottawa
 Center for Research in Photonics, University of Ottawa, Ottawa, ON, Canada	Ottawa
 Center for research nanoscience and technology, Indian Institute of Technology Bombay, Mumbai, Maharashtra, India	IIT Bombay
-Center for research nanoscience and technology, Indian Institute of Technology, Bombay, Mumbai, India	Indian Institute of Technology
+Center for research nanoscience and technology, Indian Institute of Technology, Bombay, Mumbai, India	IIT Bombay
 Center of Materials Science and Optoelectronic Engineering, University of Chinese Academy of Science, Beijing, China	UCAS
 Center of Quantum Research & Technologies, University of Oklahoma, Norman, OK, United States	Oklahoma
 Center of Quantum Science and Engineering, EPFL	EPFL
@@ -670,7 +670,7 @@ Department of Chemistry, Tokyo University of Science, Tokyo, Japan	Tokyo Science
 Department of Chemistry, University of Colorado Boulder, Boulder, CO, United States	CU Boulder
 Department of Chemistry, University of Illinois at Urbana-Champaign, Urbana, IL, United States	UIUC
 Department of Chemistry, University of Rochester, Rochester, NY, United States	Rochester
-Department of Computer Science and Engineering, Indian Institute of Technology, Roorkee, Roorkee, India	Indian Institute of Technology
+Department of Computer Science and Engineering, Indian Institute of Technology, Roorkee, Roorkee, India	IIT Roorkee
 Department of Computer Science and Engineering, Washington University, St. Louis, MO, United States	WashU
 Department of Computer Science, Pomona College, Claremont, CA, United States	Pomona College
 Department of Computer Science, University of Rochester, Rochester, NY, United States	Rochester
@@ -749,7 +749,7 @@ Department of Electronic Engineering, Tsinghua University, Beijing, Beijing, Chi
 Department of Electronic Engineering, Tsinghua University, Beijing, China	Tsinghua
 Department of Electronic Materials Engineering, Research School of Physics, The Australian National University, Canberra	ANU
 Department of Electronic and Computer Engineering, Hong Kong University of Science and Technology, Hong Kong, China	HKUST
-Department of Electronics and Electrical Communication Engineering, Indian Institute of Technology, Kharagpur, India, Kolkata, West Bengal, India	Indian Institute of Technology
+Department of Electronics and Electrical Communication Engineering, Indian Institute of Technology, Kharagpur, India, Kolkata, West Bengal, India	IIT Kharagpur
 Department of Electronics and Electrical Engineering, Faculty of Science and Technology, Keio University, Yokohama, Japan	Keio
 Department of Electronics and Electrical Engineering, Keio University, Yokohama, Kanagawa, Japan	Keio
 Department of Electronics and Nanoengineering, Aalto University, Espoo, Finland	Aalto
@@ -856,7 +856,7 @@ Department of Physics, Indian Institute of Science, Bangalore, Bangalore, Karnat
 Department of Physics, Indian Institute of Technology Delhi, New Delhi, Delhi, India	IIT Delhi
 Department of Physics, Indian Institute of Technology Jodhpur, Jodhpur, Rajasthan, India	IIT Jodhpur
 Department of Physics, Indian Institute of Technology Kharagpur, Kharagpur, West Bengal, India	IIT Kharagpur
-Department of Physics, Indian Institute of Technology, Roorkee, Roorkee, India	Indian Institute of Technology
+Department of Physics, Indian Institute of Technology, Roorkee, Roorkee, India	IIT Roorkee
 Department of Physics, Institute of Science Tokyo, Meguro-ku, Tokyo, Japan	Tokyo Tech
 Department of Physics, KAIST, Daejeon, Korea (the Republic of)	KAIST
 Department of Physics, Keio University, Yokohama, Kanagawa, Japan	Keio
@@ -1090,7 +1090,7 @@ Electrical Engineering, California Institute of Technology, Pasadena , CA, Unite
 Electrical Engineering, California Institute of Technology, Pasadena, CA, United States	Caltech
 Electrical Engineering, Caltech, Altadena, CA, United States	Caltech
 Electrical Engineering, Columbia University, New York, NY, United States	Columbia
-Electrical Engineering, Indian Institute of Technology, Madras, Chennai, Tamil Nadu, India	Indian Institute of Technology
+Electrical Engineering, Indian Institute of Technology, Madras, Chennai, Tamil Nadu, India	IIT Madras
 Electrical Engineering, KAIST, Daejeon, Korea (the Republic of)	KAIST
 Electrical Engineering, King Saud University, Riyadh, Saudi Arabia	King Saud
 Electrical Engineering, Purdue University, West Lafayette, IN, United States	Purdue
@@ -1562,8 +1562,8 @@ IIT KHARAGPUR	IIT Kharagpur
 IIT Madras	IIT Madras
 IIT Madras, Chennai, India	IIT Madras
 IIT Roorkee	IIT Roorkee
-IIT, Guwahati, India	IIT
-IIT, Hyderabad, India	IIT
+IIT, Guwahati, India	IIT Guwahati
+IIT, Hyderabad, India	IIT Hyderabad
 IMRA	IMRA
 IMRA America, Inc.	IMRA
 IMRA America, Inc., Ann Arbor, MI, United States	IMRA
@@ -1628,10 +1628,10 @@ Indian Institute of Technology Madras	IIT Madras
 Indian Institute of Technology Madras, Chennai, India	IIT Madras
 Indian Institute of Technology Roorkee	IIT Roorkee
 Indian Institute of Technology Roorkee, Roorkee	IIT Roorkee
-Indian Institute of Technology, Bombay	Indian Institute of Technology
-Indian Institute of Technology, Kanpur, Uttar Pradesh, India	Indian Institute of Technology
-Indian Institute of Technology, Kharagpur, India	Indian Institute of Technology
-Indian Institute of Technology, Madras	Indian Institute of Technology
+Indian Institute of Technology, Bombay	IIT Bombay
+Indian Institute of Technology, Kanpur, Uttar Pradesh, India	IIT Kanpur
+Indian Institute of Technology, Kharagpur, India	IIT Kharagpur
+Indian Institute of Technology, Madras	IIT Madras
 Indiana University Indianapolis	IU Bloomington
 Industrial Technology Research Institute	Industrial Technology Research Institute
 Infleqtion	Infleqtion

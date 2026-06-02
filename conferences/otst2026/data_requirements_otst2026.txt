@@ -1,0 +1,53 @@
+# data_requirements_otst2026.txt
+#
+# Manifest of the input files the OTST 2026 scripts need in data/.
+# Read by make_app.py to decide whether the downloader must run and to print
+# manual-download instructions if anything is missing.
+#
+# Format (line-oriented; see make_app.py::_parse_requirements):
+#   manual_steps_written: <date>           # top-level metadata (optional)
+#   [file: <glob pattern>]                 # one block per required input
+#     required:    yes | no                # default yes
+#     produced_by: <script that creates it>
+#     description: <what it is>            # may wrap onto indented lines
+#     manual:      <how to fetch by hand>  # may wrap onto indented lines
+#   #  Lines starting with '#' are comments; blank lines end a wrapped value.
+
+manual_steps_written: 02-Jun-2026
+
+[file: Full_Program_OTST_2026.pdf]
+  required:    yes
+  produced_by: fetch_program_otst2026.py
+  description: The full OTST 2026 conference program PDF. This is the SOURCE OF
+    RECORD: the processor reads it with pdfplumber and parses its day-by-day
+    detailed schedule (sessions, chairs, keynote/invited/contributed talks, the
+    poster catalog, and the Sunday tutorials) into conference_data.json. It is a
+    two-column layout (time | content) in which talk TITLES are bold, author
+    NAMES are regular, and AFFILIATIONS are italic — the parser keys on those
+    font runs and the right-aligned paper numbers (e.g. "Mo-A1-1", "P1").
+  manual:      Download
+    http://www.otst2026.org/assets/Full_Program_OTST_2026.pdf and save it to
+    data/Full_Program_OTST_2026.pdf . (The site is served over plain HTTP and
+    its HTTPS certificate is invalid, so fetch the http:// URL.) The link is the
+    "Full Conference Program (PDF)" on http://www.otst2026.org/program.html .
+
+[file: program.html]
+  required:    no
+  produced_by: fetch_program_otst2026.py
+  description: The OTST 2026 Program page HTML. OPTIONAL enrichment only: the
+    processor pulls the four tutorial abstracts and the poster-board logistics
+    from it to flesh out the Tutorial talks and the Poster session. If absent,
+    those items simply carry no abstract / extra detail; the schedule itself
+    comes entirely from the program PDF above.
+  manual:      Download http://www.otst2026.org/program.html and save it to
+    data/program.html .
+
+[file: directions.html]
+  required:    no
+  produced_by: fetch_program_otst2026.py
+  description: The OTST 2026 "Venue & Excursions" page HTML. OPTIONAL enrichment
+    only: the processor folds the list of local excursions into the details of
+    the Friday "Excursions" event. If absent, that event simply carries no
+    description.
+  manual:      Download http://www.otst2026.org/directions.html and save it to
+    data/directions.html .

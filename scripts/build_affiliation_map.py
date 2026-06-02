@@ -206,6 +206,19 @@ def normalize(s: str) -> str:
     s = re.sub(r'\breasearch\b', 'research', s)
     s = re.sub(r'\bmetropokitan\b', 'metropolitan', s)
     s = re.sub(r'\bpolytechinic\b', 'polytechnic', s)
+    # City/location MISSPELLINGS that change which campus anchor a string
+    # resolves to. Explicit and word-boundary anchored, like the lists above, so
+    # a legit token is never touched. "los angles" -> "los angeles" lets the UCLA
+    # campus anchor match instead of falling back to a bare "UC". (Only typos
+    # that feed an ANCHOR belong here; a misspelling with no anchor — e.g.
+    # "Shenzen" for "Shenzhen" — is shortened from the raw string by the fallback
+    # and can't be folded here.)
+    s = re.sub(r'\blos angles\b', 'los angeles', s)
+    # The Indian IITs are often written "Indian Institute of Technology, <City>"
+    # / "IIT, <City>" with a comma before the campus. Drop that comma so the
+    # per-campus anchors below (which key on "... technology delhi" etc.) match
+    # the comma form too, instead of falling through to the bare-IIT anchor.
+    s = re.sub(r'\b(indian institute of technology|iit),', r'\1', s)
     s = re.sub(r'\s+', ' ', s)
     return s.strip()
 

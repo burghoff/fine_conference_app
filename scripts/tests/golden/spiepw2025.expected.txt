@@ -1075,7 +1075,7 @@ Indian Institute of Technology Gandhinagar (India)	Indian Institute of Technolog
 Indian Institute of Technology Guwahati (India)	IIT Guwahati
 Indian Institute of Technology Kharagpur (India)	IIT Kharagpur
 Indian Institute of Technology Madras (India)	IIT Madras
-Indian Institute of Technology, Kharagpur (India)	Indian Institute of Technology
+Indian Institute of Technology, Kharagpur (India)	IIT Kharagpur
 Indian Space Research Organisation (India)	Indian Space Research Organisation
 Indiana Univ. (United States)	IU Bloomington
 Indiana Univ. Bloomington (United States)	IU Bloomington

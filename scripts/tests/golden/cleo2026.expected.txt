@@ -1722,7 +1722,7 @@ Indian Institute of Technology Madras	IIT Madras
 Indian Institute of Technology Roorkee	IIT Roorkee
 Indian Institute of Technology Ropar	Indian Institute of Technology Ropar
 Indian Institute of Technology, Chennai, India	Indian Institute of Technology
-Indian Institute of Technology, Delhi	Indian Institute of Technology
+Indian Institute of Technology, Delhi	IIT Delhi
 Indian institue of Technology (IIT) Indore	IIT Indore
 Indiana University Bloomington	IU Bloomington
 Indiana University Bloomington, Elizabethtown, PA, United States	IU Bloomington
@@ -2694,7 +2694,7 @@ Optics Valley Laboratory	Optics Valley Lab
 Optics Valley Laboratory, Wuhan, China	Optics Valley Lab
 Optics Valley Laboratory, Wuhan, Hubei, China	Optics Valley Lab
 Optics and Photonics Centre, Indian Institute of Technology Delhi, South, Delhi, Delhi, India	IIT Delhi
-Optics and Photonics Centre, Indian Institute of Technology, Delhi, New Delhi , India	Indian Institute of Technology
+Optics and Photonics Centre, Indian Institute of Technology, Delhi, New Delhi , India	IIT Delhi
 Optics and Photonics, National Central University, Taoyuan, Taiwan	National Central
 Optics, University of Rochester, Rochester, NY, United States	Rochester
 Optisiv Ltd.	Optisiv

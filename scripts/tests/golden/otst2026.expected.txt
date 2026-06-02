@@ -1,0 +1,52 @@
+Aalto University, Finland	Aalto
+Aarhus University, Denmark	Aarhus
+Brown University, USA	Brown
+CORIA, France	CORIA
+California Institute of Technology, USA	Caltech
+Columbia University, USA	Columbia
+Duke University, USA	Duke
+ETH, Zurich, USA	ETH Zürich
+Georgia Institute of Technology, USA	Georgia Tech
+Georgia Tech-CNRS, France	Georgia Tech
+Hamamatsu Photonics K.K., Japan	Hamamatsu
+Harvard University, USA	Harvard
+INRS-EMT, Canada	INRS-EMT
+Indian Institute of Technology, Delhi, India	IIT Delhi
+Los Alamos National Laboratory, USA	LANL
+Massachusetts Institute of Technology, USA	MIT
+McGill University, Canada	McGill
+Michigan State University, USA	Michigan State
+Nagoya University, Japan	Nagoya
+National University of Singapore, Singapore	NUS
+North Carolina State University, USA	NC State
+Okayama University, Japan	Okayama
+Princeton University, USA	Princeton
+RIKEN, Japan	RIKEN
+Ruhr University Bochum, Germany	RUB
+SLAC National Accelerator Lab, USA	SLAC
+Shenzen University, China	Shenzen
+Shenzhen University, China	Shenzhen
+Stony Brook University, USA	SUNY Stony Brook
+Syracuse University, USA	Syracuse
+Technical University of Denmark, Denmark	DTU
+US Army DEVCOM, USA	DEVCOM
+Universite de Lorraine, France	Lorraine
+University at Buffalo, USA	at Buffalo
+University of Birmingham, UK	Birmingham
+University of California, Los Angeles, USA	UCLA
+University of California, Los Angles, USA	UCLA
+University of Kaiserslautern, Germany	Kaiserslautern
+University of Missouri-Kansas City, USA	UMKC
+University of New South Wales, Sydney, Australia	UNSW
+University of North Texas, Denton, USA	North Texas
+University of North Texas, USA	North Texas
+University of Oxford, UK	Oxford
+University of Pennsylvania, USA	UPenn
+University of Regensburg, Germany	Regensburg
+University of Regensburg, USA	Regensburg
+University of Rochester, USA	Rochester
+University of Seoul, South Korea	Seoul
+University of São Paulo, Brazil	São Paulo
+University of Utah, USA	Utah
+University of Warwick, UK	Warwick
+Waseda University, Japan	Waseda
