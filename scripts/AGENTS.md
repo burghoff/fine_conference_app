@@ -164,6 +164,40 @@ identifiers.
    writes `conferences/<slug>/<slug>_app.html`. Open it in a browser and
    iterate on the processor until the program renders correctly.
 
+   **Proofread the extracted content, don't just confirm it renders.** Parsing
+   a PDF or HTML program almost always introduces some mangled text, and a page
+   that lays out cleanly can still be full of garbled strings. After the
+   processor runs, read through a representative spread of **session/talk
+   titles, author lists, and affiliations** (across different days, session
+   types, and source pages) and fix the processor until they are clean.
+
+   **Prioritize the bubble.** The bubble — the card shown in the list,
+   schedule, search, and session-expansion views — is by far the most
+   user-facing surface, and most users never open the detail page. A bubble
+   shows only three things: the **title**, the compact **byline** (`First …
+   Last` author, with the speaker bolded), and the **short-location** chip. So
+   garbled text there is what people actually see — check those first and most
+   carefully. The full author list, affiliations, and abstract live on the
+   detail page (still worth checking, but secondary). Watch for the usual
+   extraction damage:
+
+   - **Titles:** leftover HTML entities (`&mu;`, `&amp;`), encoding mojibake
+     (`Ã©` for `é`), hyphen-split words from line breaks (`broad- band`),
+     missing or doubled spaces, stray markup/LaTeX, embedded newlines, and
+     truncated or run-together titles.
+   - **Authors:** names split or merged, initials mangled, diacritics dropped,
+     the wrong person marked as speaker, or title/affiliation text leaking into
+     the author list.
+   - **Affiliations:** truncated, garbled, concatenated across authors, or
+     attached to the wrong author.
+
+   The builder normalizes some of this generically (HTML entities, ALL-CAPS
+   titles, micrometre units, name casing, trailing punctuation), but it can
+   only fix what it can recognize — anything source-specific (bad word splits,
+   misattributed authors, dropped fields) must be corrected in the processor.
+   When you spot an error class, fix its cause in the parser rather than the one
+   instance, then re-run and re-check.
+
 6. **Add the conference to the affiliation-map regression suite.** Once the
    processor is stable, register the new conference's affiliation strings with
    the regression harness at `scripts/tests/` so any future tweak to anchors

@@ -1083,6 +1083,37 @@ def _looks_like_non_name(name: str) -> bool:
     return False
 
 
+# Strong "this string is an institution, not a person" signal — used both to
+# guard the Surname,Given flip below and by the build-time content lint.
+_INSTITUTION_RE = re.compile(
+    r"\b(?:Universit|Universidad|Università|Institut|Istituto|College|"
+    r"Laborator|Laboratoire|Department|Dépt|Dept\b|Centre|Center|Ctr\.|"
+    r"Complexe|Institute|Academy|Ecole|École|Politecnico|Politechnika|"
+    r"GmbH|Ltd|Inc\.|Co\.,|Nanoscienze|Nanotecnologia|Photonique)\b")
+
+_NAME_SUFFIXES = {"jr", "sr", "ii", "iii", "iv", "v", "phd", "md", "msc",
+                  "bsc", "esq", "frs", "ph.d", "m.d"}
+
+
+def _flip_last_first(name: str) -> str:
+    """Flip a 'Surname, Given' name to 'Given Surname'. Deliberately
+    conservative — fires ONLY in the unambiguous case: exactly one comma, a
+    single-token surname before it, and a single-token given name after it (not
+    a suffix, not an institution). So 'Doe, Jane' -> 'Jane Doe', but
+    'Smith, Jr.', 'Doe, MIT', and ambiguous multi-token forms like
+    'Lee Wei, Wesley Wong' / 'Francis, Chung-Ming Lau' are left untouched (the
+    content lint flags those for the processor to resolve instead of guessing)."""
+    m = re.match(r"^([A-Za-z][\w'’\-]*),\s+([A-Za-z][\w'’.\-]*)$", name.strip())
+    if not m:
+        return name
+    surname, given = m.group(1), m.group(2).strip()
+    if given.rstrip(".").lower() in _NAME_SUFFIXES:
+        return name
+    if _INSTITUTION_RE.search(given):
+        return name
+    return f"{given} {surname}"
+
+
 def normalize_person_name(name: str) -> str:
     """Normalize a single human-name string per the rules described above.
     Idempotent. Returns the input unchanged when it carries no fixable
@@ -1091,6 +1122,14 @@ def normalize_person_name(name: str) -> str:
         return name
     if _looks_like_non_name(name):
         return name
+    name = _flip_last_first(name)
+    # Any comma still present is a stray intra-name separator or a suffix
+    # delimiter ("Paulo C. Dainese, Jr."), not a flippable Surname,Given form
+    # (those are handled above) — drop it so the bubble byline never shows a
+    # comma. Skip when the tail looks like an institution (a "Name, Univ. of X"
+    # leak), which must not be merged into the name.
+    if "," in name and not _INSTITUTION_RE.search(name):
+        name = re.sub(r"\s*,\s*", " ", name).strip()
     tokens = name.split()
     if not tokens:
         return name
@@ -1539,6 +1578,17 @@ def _fix_micron_units(s: str) -> str:
     return _MICRON_UNIT_RE.sub(rf"\1\2{_MICRON}m", s)
 
 
+def _strip_stray_trailing_bracket(s: str) -> str:
+    """Drop an angle bracket left dangling at the very END of a title (e.g.
+    '…Modern Computing Pool<') — a common truncation/markup artifact. A real
+    inequality keeps its operand ('>80%', 'M²<1.1'), so a TRAILING bare bracket
+    has nothing to compare and is junk. Only the trailing position is touched;
+    a leading '<5 nm…' is a legitimate inequality and is left alone."""
+    if not s:
+        return s
+    return re.sub(r"\s*[<>]+\s*$", "", s).rstrip()
+
+
 # --- Chemical-formula subscripts (ported from the ECIO 2026 processor) -------
 # All IUPAC element symbols (1- and 2-letter). Membership is case-sensitive at
 # the call site (symbol must start uppercase, second letter lowercase).
@@ -1880,6 +1930,7 @@ def normalize_presentation(data: dict) -> None:
             t = html.unescape(it["title"])
             t = _normalize_title_text(t)
             t = _fix_micron_units(t)
+            t = _strip_stray_trailing_bracket(t)
             it["title"] = _strip_trailing_periods(t)
 
     # 1b. Render inline LaTeX residue a source occasionally leaves in a title —
@@ -1954,6 +2005,68 @@ def normalize_presentation(data: dict) -> None:
         for f in ("location", "short_location"):
             if it.get(f):
                 it[f] = _clean_location(it[f])
+
+
+def _lint_content(data: dict) -> None:
+    """Non-destructive build-time check: warn about likely-mangled text in the
+    user-facing BUBBLE fields (title, byline first/last author + speaker,
+    short_location) and in the author list, so problems surface in the build log
+    during curation. NEVER mutates — the fix belongs in the conference's
+    processor, where the author↔affiliation association still exists."""
+    import collections
+    ENT = re.compile(r"&(?:[a-zA-Z][a-zA-Z0-9]*|#\d+|#x[0-9a-fA-F]+);")
+    CTRL = re.compile(r"[\r\n\t]")
+    MOJI = re.compile(r"Ã[\x80-\xbf]|Â[°±©]|â€|ï¿½|�")
+    hits = collections.Counter()
+    samples = collections.defaultdict(list)
+
+    def flag(cat: str, val: str) -> None:
+        hits[cat] += 1
+        if len(samples[cat]) < 3 and val not in samples[cat]:
+            samples[cat].append(val)
+
+    sessions = data.get("sessions", []) or []
+    talks = data.get("talks", []) or []
+    for it in sessions + talks:
+        ti = it.get("title") or ""
+        if ENT.search(ti):
+            flag("title: residual HTML entity", ti)
+        if CTRL.search(ti):
+            flag("title: control char", ti)
+        if MOJI.search(ti):
+            flag("title: mojibake", ti)
+        if re.search(r"[<>]\s*$", ti):
+            flag("title: trailing angle bracket", ti)
+        for fld in ("first_author", "last_author", "speaker", "presider"):
+            v = it.get(fld) or ""
+            if not v:
+                continue
+            if _INSTITUTION_RE.search(v):
+                flag(f"{fld}: looks like an institution", v)
+            if any(c.isdigit() for c in v):
+                flag(f"{fld}: contains a digit", v)
+            if ENT.search(v) or MOJI.search(v) or CTRL.search(v):
+                flag(f"{fld}: garbled text", v)
+            if "," in v and fld != "presider":
+                flag(f"{fld}: contains a comma (Last,First or merged name?)", v)
+        sl = it.get("short_location") or ""
+        if ENT.search(sl) or CTRL.search(sl) or MOJI.search(sl):
+            flag("short_location: garbled", sl)
+        for a in it.get("authors") or []:
+            nm = (a.get("name") or "").strip()
+            if nm and _INSTITUTION_RE.search(nm):
+                flag("authors[]: institution in author list", nm)
+
+    total = sum(hits.values())
+    if not total:
+        print("[lint] bubble/author content: no likely-mangled fields detected")
+        return
+    print(f"[lint] {total} likely-mangled field(s) detected "
+          "(NOT auto-fixed — correct these in the processor):")
+    for cat in sorted(hits):
+        print(f"[lint]   {hits[cat]:4d}  {cat}")
+        for s in samples[cat]:
+            print(f"[lint]            e.g. {s!r}")
 
 
 def enrich_affiliations(data: dict) -> dict:
@@ -2218,6 +2331,7 @@ def enrich_affiliations(data: dict) -> dict:
     data["sessions"] = sorted(sessions, key=_ts_key)
     data["talks"] = sorted(talks, key=_ts_key)
 
+    _lint_content(data)
     return data
 
 
@@ -6553,6 +6667,22 @@ function _namePrefixSuggestMatch(qName, cand) {
   return _givenConsistent(qName.given, cand.pname.given);
 }
 
+/* Does the folded query q begin a WORD inside the folded candidate string?
+   A word boundary is the string start OR any spot right after a non-alphanumeric
+   character — so spaces, hyphens, slashes, parens, dots, ampersands all split.
+   This is what lets an INTERIOR or HYPHENATED part match: "austin" → "ut austin",
+   "cristina" → "ileana-cristina benea-chelmus", while a plain leading prefix
+   ("fed" → "federico capasso") is just the i===0 case. */
+function _wordPrefixHit(fold, q) {
+  if (!fold || !q) return false;
+  let i = fold.indexOf(q);
+  while (i >= 0) {
+    if (i === 0 || !/[a-z0-9]/.test(fold[i - 1])) return true;
+    i = fold.indexOf(q, i + 1);
+  }
+  return false;
+}
+
 /* How many sessions+talks a tapped pill would actually return — the SAME
    counts the landing results page computes (affil via _affilHitPredicates,
    name via recordMatchesPersonName). Pills always carry the full canonical
@@ -6582,16 +6712,19 @@ function _suggestionResultCount(disp, mode) {
 
    Nothing fires until 3 characters are typed.
 
-   AFFILIATIONS match as a literal prefix of the typed text: "UM " → "UM
-   Dearborn"/"UMKC", "Michigan" → "Michigan"/"Michigan State".
+   AFFILIATIONS match when the typed text begins ANY word of the affiliation
+   (a word-boundary prefix, splitting on spaces/hyphens/punctuation): "UM " →
+   "UM Dearborn"/"UMKC", "Michigan" → "Michigan"/"Michigan State", and an
+   interior word like "Austin" → "UT Austin".
 
    AUTHOR NAMES match through the initials-robust person-name logic shared
    with co-author search: a partial surname ("Capas" → "Capasso"), a name
    missing middle initials ("Scott Diddams" → "Scott A. A. Diddams"), or
    given-name initials ("Q. Hu" → "Qing Hu") all hit, while wrong initials
-   never do ("Qing Hu" ↛ "Qili Hu"). When the query is a SINGLE word, it is
-   additionally tried as a FIRST name — "David" → "David Burghoff", "Fed" →
-   "Federico Capasso" — using the same exact/3+ char-prefix rule as surnames.
+   never do ("Qing Hu" ↛ "Qili Hu"). When the query is a SINGLE word, it ALSO
+   matches at the start of any word of a name — interior and hyphenated parts
+   included — so "David" → "David Burghoff", "Fed" → "Federico Capasso", and
+   "Cristina" → "Ileana-Cristina Benea-Chelmus".
 
    Candidates are gathered from both passes, then the final list is the THREE
    with the most underlying results, in descending count order (ties keep the
@@ -6609,29 +6742,36 @@ function suggestionsFor(raw, limit = 3) {
     cand.push({ disp, mode });
   };
 
-  // Affiliation prefix pass.
+  // Affiliation pass: match the typed text at the start of ANY word of the
+  // affiliation, not just the whole string — so "austin" surfaces "UT Austin"
+  // and "michigan" still surfaces "Michigan"/"Michigan State".
   for (const it of pools.affs) {
-    if (it.fold.startsWith(q)) add(it.disp, "affil");
+    if (_wordPrefixHit(it.fold, q)) add(it.disp, "affil");
   }
 
-  // Author-name pass (initials-robust). Parse the raw query as a person name.
+  // Author-name pass. Parse the raw query as a person name for the initials-
+  // robust structured matching; a single-word query ALSO matches the typed
+  // fragment against any word of a name (interior + hyphenated parts).
   const qName = parsePersonName(raw);
   const singleWord = (raw || "").trim().split(/\s+/).filter(Boolean).length === 1;
-  // Run the name pass when there's either a usable surname (2+ letters) OR a
-  // given name anchoring a partial surname ("David B" — surname "b" alone is
-  // too short, but the leading "David" makes it safe).
   const hasGiven = !!(qName && qName.given.length);
-  if (qName && qName.surname && (qName.surname.length >= 2 || hasGiven)) {
+  // Structured matching is worth running when there's a usable surname (2+
+  // letters) OR a given name anchoring a partial surname ("David B" — surname
+  // "b" alone is too short, but the leading "David" makes it safe).
+  const runStructured = !!(qName && qName.surname && (qName.surname.length >= 2 || hasGiven));
+  if (runStructured || singleWord) {
     for (const it of pools.names) {
-      // Surname (exact / 3+ prefix) + initials match.
-      if (_nameSuggestMatch(qName, it)) { add(it.disp, "name"); continue; }
-      // Given name + still-typing partial surname ("David B" → David Burghoff).
-      if (_namePrefixSuggestMatch(qName, it)) { add(it.disp, "name"); continue; }
-      // Single-word queries also try the token as a FIRST name.
-      if (singleWord && it.pname && it.pname.given.length &&
-          _surnameSuggestMatch(qName.surname, it.pname.given[0])) {
-        add(it.disp, "name");
+      if (runStructured) {
+        // Surname (exact / 3+ prefix) + initials match.
+        if (_nameSuggestMatch(qName, it)) { add(it.disp, "name"); continue; }
+        // Given name + still-typing partial surname ("David B" → David Burghoff).
+        if (_namePrefixSuggestMatch(qName, it)) { add(it.disp, "name"); continue; }
       }
+      // Single-word query: match the typed fragment at the start of ANY word of
+      // the full name — first/middle/last and each hyphenated sub-part. So
+      // "cristina" → "Ileana-Cristina Benea-Chelmus", "fed" → "Federico Capasso",
+      // "capas" → "Capasso".
+      if (singleWord && _wordPrefixHit(it.fold, q)) { add(it.disp, "name"); }
     }
   }
 

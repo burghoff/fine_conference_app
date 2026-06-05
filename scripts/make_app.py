@@ -77,9 +77,9 @@ What a run does, for the chosen subdirectory <sub> (under `conferences/`):
   5. Run build_conference_app.py in scripts/ (it writes conference_app.html
      there).
   6. Move that conference_app.html into <sub>/, renamed to <sub>_app.html
-     (e.g. cleo2026_app.html), move the affiliation_map.txt the builder wrote
-     in scripts/ into <sub>/data/ as well, and clean up the staged JSON copy in
-     scripts/.
+     (e.g. cleo2026_app.html), and clean up the staged JSON copy in scripts/.
+     (The builder no longer drops an affiliation_map.txt — it holds the map in
+     memory — so there is nothing extra to move.)
 
 Assumed layout:
 
@@ -170,9 +170,11 @@ BUILDER = ROOT / "build_conference_app.py"
 # stored, named file into ROOT under DATA_JSON_NAME so the builder finds it.
 DATA_JSON_NAME = "conference_data.json"
 BUILT_HTML_NAME = "conference_app.html"
-# The builder runs build_affiliation_map.py, which writes this map file next to
-# itself in ROOT. We move it into the conference subdirectory's data/ directory
-# after the build, since it's a per-conference data artifact.
+# Historically build_affiliation_map.py dropped this map file next to itself in
+# ROOT and we moved it into the conference's data/ directory. The builder is now
+# pure (it returns the map in memory and writes nothing), so it is no longer
+# produced. The name is retained ONLY so the data/ hash below keeps ignoring any
+# legacy copy that may still be sitting in an older conference's data/ directory.
 AFFILIATION_MAP_NAME = "affiliation_map.txt"
 # The requirements manifest is named per-subdirectory, e.g. cleo2026 ->
 # data_requirements_cleo2026.txt . _requirements_name() builds that name.
@@ -180,8 +182,8 @@ DATA_DIRNAME = "data"
 # Cache marker: a hash of the data/ directory's contents, stored INSIDE data/.
 # Before processing we compare a freshly-computed hash of data/ against this; if
 # they match (and conference_data.json already exists) we skip the processor.
-# The hash deliberately ignores this file itself and the affiliation map (which
-# the builder later drops into data/), so neither perturbs the cache.
+# The hash deliberately ignores this file itself and any legacy affiliation map
+# left in data/ by an older build, so neither perturbs the cache.
 DATA_HASH_NAME = ".data_hash"
 
 
@@ -426,8 +428,9 @@ def _hash_data_dir(data_dir: Path) -> str:
     any input file changes the result. Two files are deliberately excluded so
     the cache isn't perturbed by our own bookkeeping:
       - the stored hash file itself (DATA_HASH_NAME), and
-      - the affiliation map (AFFILIATION_MAP_NAME), which the builder writes
-        into data/ AFTER processing — it's an output, not a processor input.
+      - a legacy affiliation map (AFFILIATION_MAP_NAME) that an older build may
+        have left in data/ — it was an output, not a processor input. The
+        current builder no longer produces it.
     Files are processed in sorted relative-path order for a stable digest."""
     import hashlib
 
@@ -558,8 +561,6 @@ def _build_one(subdir_name: str, force_download: bool, force_process: bool) -> "
     root_json = ROOT / DATA_JSON_NAME
     root_html = ROOT / BUILT_HTML_NAME
     final_html = subdir / final_html_name
-    root_affmap = ROOT / AFFILIATION_MAP_NAME
-    final_affmap = data_dir / AFFILIATION_MAP_NAME
 
     # Requirements manifest is what tells us which files must exist in data/.
     reqs: list[dict] = []
@@ -714,20 +715,8 @@ def _build_one(subdir_name: str, force_download: bool, force_process: bool) -> "
         if final_html.exists():
             final_html.unlink()
         shutil.move(str(root_html), str(final_html))
-
-        # Also move the affiliation map the builder wrote in ROOT into the
-        # conference subdirectory's data/ directory (it's a per-conference data
-        # artifact). Clobber any existing copy there.
-        if root_affmap.exists():
-            print(f"[make]   moving {AFFILIATION_MAP_NAME} into "
-                  f"{subdir.name}/{DATA_DIRNAME}/", flush=True)
-            data_dir.mkdir(parents=True, exist_ok=True)
-            if final_affmap.exists():
-                final_affmap.unlink()
-            shutil.move(str(root_affmap), str(final_affmap))
-        else:
-            print(f"[make]   note: builder produced no {AFFILIATION_MAP_NAME} "
-                  "in root; nothing to move.", flush=True)
+        # (The builder keeps the affiliation map in memory and writes no
+        # affiliation_map.txt, so there is nothing else to move here.)
     finally:
         # Always clean up the staged JSON copy and restore any backup.
         if root_json.exists():

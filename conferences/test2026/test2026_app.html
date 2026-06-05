@@ -3468,6 +3468,16 @@ function _namePrefixSuggestMatch(qName, cand) {
   return _givenConsistent(qName.given, cand.pname.given);
 }
 
+function _wordPrefixHit(fold, q) {
+  if (!fold || !q) return false;
+  let i = fold.indexOf(q);
+  while (i >= 0) {
+    if (i === 0 || !/[a-z0-9]/.test(fold[i - 1])) return true;
+    i = fold.indexOf(q, i + 1);
+  }
+  return false;
+}
+
 const _suggestCountCache = new Map();
 function _suggestionResultCount(disp, mode) {
   const key = mode + "\u0000" + disp;
@@ -3502,24 +3512,24 @@ function suggestionsFor(raw, limit = 3) {
   };
 
   for (const it of pools.affs) {
-    if (it.fold.startsWith(q)) add(it.disp, "affil");
+    if (_wordPrefixHit(it.fold, q)) add(it.disp, "affil");
   }
 
   const qName = parsePersonName(raw);
   const singleWord = (raw || "").trim().split(/\s+/).filter(Boolean).length === 1;
-
   const hasGiven = !!(qName && qName.given.length);
-  if (qName && qName.surname && (qName.surname.length >= 2 || hasGiven)) {
+
+  const runStructured = !!(qName && qName.surname && (qName.surname.length >= 2 || hasGiven));
+  if (runStructured || singleWord) {
     for (const it of pools.names) {
-      
-      if (_nameSuggestMatch(qName, it)) { add(it.disp, "name"); continue; }
-      
-      if (_namePrefixSuggestMatch(qName, it)) { add(it.disp, "name"); continue; }
-      
-      if (singleWord && it.pname && it.pname.given.length &&
-          _surnameSuggestMatch(qName.surname, it.pname.given[0])) {
-        add(it.disp, "name");
+      if (runStructured) {
+        
+        if (_nameSuggestMatch(qName, it)) { add(it.disp, "name"); continue; }
+        
+        if (_namePrefixSuggestMatch(qName, it)) { add(it.disp, "name"); continue; }
       }
+
+      if (singleWord && _wordPrefixHit(it.fold, q)) { add(it.disp, "name"); }
     }
   }
 

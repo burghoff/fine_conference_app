@@ -14,8 +14,6 @@ from __future__ import annotations
 import contextlib
 import difflib
 import io
-import tempfile
-from pathlib import Path
 
 import pytest
 
@@ -23,25 +21,21 @@ from conftest import (
     GOLDEN_DIR,
     discover_fixtures,
     load_affiliation_sources,
-    render_map,
 )
 
 FIXTURES = discover_fixtures()
 
 
 def _build_quiet(builder, sources: list) -> dict[str, str]:
-    """Run build() with its chatty stdout suppressed and its .txt side-effect
-    directed to a throwaway temp file.
+    """Run build() with its chatty stdout suppressed.
 
-    build() always writes a text dump of the mapping. Passing out_txt=None
-    means "use the default path" (affiliation_map.txt in the cwd) — NOT "skip
-    the write" — so without redirection every test run would leave an
-    affiliation_map.txt behind in the working directory. We point it at a
-    file inside a TemporaryDirectory that vanishes on the way out.
+    build() is pure now — it returns the mapping and writes no file — so this
+    just silences the [affil] progress logging for clean test output. The text
+    rendering used below comes from builder.render_text(), the same pure
+    function the CLI uses.
     """
-    with contextlib.redirect_stdout(io.StringIO()), \
-         tempfile.TemporaryDirectory() as td:
-        return builder.build(sources, out_txt=Path(td) / "affiliation_map.txt")
+    with contextlib.redirect_stdout(io.StringIO()):
+        return builder.build(sources)
 
 
 # A repo with no fixtures yet shouldn't look "green" — that would hide the fact
@@ -57,7 +51,7 @@ def test_fixtures_exist():
 def test_golden_map_unchanged(builder, slug, update_golden, promote_golden):
     """Byte-for-byte: this conference's map today == its frozen snapshot."""
     sources = load_affiliation_sources(slug)
-    actual = render_map(_build_quiet(builder, sources))
+    actual = builder.render_text(_build_quiet(builder, sources))
 
     golden_path = GOLDEN_DIR / f"{slug}.expected.txt"
 

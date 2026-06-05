@@ -2689,7 +2689,7 @@ def _consolidate_accent_variants(mapping: dict[str, str]) -> dict[str, str]:
 # Driver
 # ---------------------------------------------------------------------------
 
-def build(data: dict | list, out_txt: Path | None = None) -> dict[str, str]:
+def build(data: dict | list) -> dict[str, str]:
     """Build the raw-affiliation -> short-name mapping.
 
     `data` is the dict the processor bundles into conference_data.json. This
@@ -2702,14 +2702,13 @@ def build(data: dict | list, out_txt: Path | None = None) -> dict[str, str]:
     Callers may pass either the whole JSON (a dict with an "affiliation_sources"
     list) or the bare list itself.
 
+    Pure apart from progress logging: it RETURNS the mapping and writes no file.
+    Normal app builds (build_conference_app.py) just use the returned dict — no
+    affiliation_map.txt is dropped on disk. Callers that want a text dump (the
+    CLI's --out, the regression tests) render it themselves via render_text().
     Verbose by design: the canonicalization is summarized on stdout, prefixed
     `[affil]` to match the convention build_conference_app.py uses for
     affiliation-related logs.
-
-    Side effect: writes the mapping as a tab-separated text file. By default
-    it lands at ``affiliation_map.txt`` in the current directory; pass
-    ``out_txt`` to override. The file is small and the caller usually wants
-    it on disk for inspection.
     """
     print('[affil] building map from the processor data JSON')
     if isinstance(data, dict):
@@ -2742,44 +2741,27 @@ def build(data: dict | list, out_txt: Path | None = None) -> dict[str, str]:
           f'{n_fallback:,} used the fallback shortener')
     print(f'[affil] built map: {len(mapping):,} raw -> {n_short:,} short names')
 
-    if out_txt is None:
-        out_txt = Path('affiliation_map.txt')
-    try:
-        write_text(mapping, out_txt)
-        print(f'[affil] wrote {out_txt}')
-    except OSError as e:
-        # Don't fail the whole build_conference_app run just because we couldn't
-        # drop the txt file (read-only volume, permission issue, etc.) —
-        # the in-memory mapping is what the caller actually needs.
-        print(f'[affil] (could not write {out_txt}: {e})')
-
     return mapping
 
 
-def write_text(mapping: dict[str, str], out: Path) -> None:
-    """Write the mapping as a tab-separated text file.
+def render_text(mapping: dict[str, str]) -> str:
+    """Return the mapping as a deterministic, tab-separated text block.
 
-    Format:
-      # header comment lines
-      <raw_affiliation>\t<canonical_short_name>
-      ...
+    One ``<raw_affiliation>\t<canonical_short_name>`` line per entry, sorted by
+    raw key, with a trailing newline. Tab is the separator (rather than comma)
+    because the raw affiliation keys themselves contain many commas; any tab or
+    newline embedded in a key/value is defanged to a space so each mapping stays
+    on exactly one line.
 
-    Tab is used as separator (rather than comma) because the raw affiliation
-    keys themselves contain many commas. Sorted alphabetically by key.
+    This is a PURE function — it touches no filesystem. It's what the regression
+    tests compare against their golden snapshots and what the CLI prints/writes.
     """
-    lines = [
-        '# Mapping from raw conference affiliation strings to canonical short names.',
-        f'# Auto-generated. {len(mapping)} unique affiliation strings -> '
-        f'{len(set(mapping.values()))} canonical short names.',
-        '# Format: <raw_affiliation>\\t<canonical_short_name>',
-        '',
-    ]
+    lines = []
     for k in sorted(mapping):
-        # Defensive: replace any embedded tabs/newlines in the raw key with spaces.
         kk = k.replace('\t', ' ').replace('\n', ' ')
         vv = mapping[k].replace('\t', ' ').replace('\n', ' ')
         lines.append(f'{kk}\t{vv}')
-    out.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+    return '\n'.join(lines) + '\n'
 
 
 def main() -> None:
@@ -2788,13 +2770,20 @@ def main() -> None:
     ap.add_argument('--data', default='conference_data.json',
                     help='Path to the data JSON the processor produces.')
     ap.add_argument('--out', default=None,
-                    help='Where to write the affiliation map text file. '
-                         'Defaults to affiliation_map.txt in the cwd.')
+                    help='Optional path to write the rendered map to. If '
+                         'omitted, the map is printed to stdout and NO file is '
+                         'written.')
     args = ap.parse_args()
     with open(args.data, encoding='utf-8') as f:
         data = json.load(f)
-    out = Path(args.out) if args.out else None
-    build(data, out_txt=out)
+    text = render_text(build(data))
+    if args.out:
+        Path(args.out).write_text(text, encoding='utf-8')
+        print(f'[affil] wrote {args.out}')
+    else:
+        # No --out: emit to stdout so a caller can redirect if they want a file,
+        # but nothing is dropped on disk by default.
+        print(text, end='')
 
 
 if __name__ == '__main__':

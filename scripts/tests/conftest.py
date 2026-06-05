@@ -104,14 +104,7 @@ def load_affiliation_sources(slug: str) -> list:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def render_map(mapping: dict[str, str]) -> str:
-    """Deterministic, diff-friendly text rendering of the map: one
-    'raw<TAB>short' line per entry, sorted by raw key. Mirrors the module's own
-    write_text() format (minus the auto-generated header, which carries counts
-    that would create noise in diffs)."""
-    lines = []
-    for k in sorted(mapping):
-        kk = k.replace("\t", " ").replace("\n", " ")
-        vv = mapping[k].replace("\t", " ").replace("\n", " ")
-        lines.append(f"{kk}\t{vv}")
-    return "\n".join(lines) + "\n"
+# The deterministic, diff-friendly text rendering used by the golden snapshots
+# (one 'raw<TAB>short' line per entry, sorted by raw key) lives in the module
+# itself as build_affiliation_map.render_text(). Tests call that directly via the
+# `builder` fixture, so there is no separate copy to drift out of sync here.

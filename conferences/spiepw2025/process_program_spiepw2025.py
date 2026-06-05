@@ -199,7 +199,22 @@ INST_KW = re.compile(
     r"Klinik|Clinic|Hochschule|Zentrum|Consiglio|Consejo|GmbH|Ltd|Inc\.|Corp|"
     r"LLC|Company|Therapeutics|"
     r"Photonics|Optics|Systems|Technologies|CNRS|CEA|NASA|NIST|NTT|IBM|AIST|"
-    r"Optronics|Aerospace|Semiconductor|Microsystems)", re.IGNORECASE)
+    r"Optronics|Aerospace|Semiconductor|Microsystems|"
+    # Non-English institution-type words (generic vocabulary, not program
+    # content): Italian "Istituto", Spanish "Universidad", French "Ecole"/
+    # "École"/"Recherche"/"Photonique", etc.
+    r"Istituto|Universidad|Ecole|École|Recherche|Photonique)", re.IGNORECASE)
+
+# A STRICTER institution keyword set for deciding that a *name* segment is
+# actually an institution (the interleaved-affiliation guard in parse_people).
+# It contains only distinctive multi-letter institution words — NO acronyms or
+# substring-prone tokens — so it never trips on a real surname (the broad
+# INST_KW above matches e.g. 'Aist' via 'AIST' and 'Corpuz' via 'Corp', which is
+# fine for structural splitting but would wrongly discard those authors here).
+_INST_NAME_KW = re.compile(
+    r"\b(?:Universit|Universidad|Institut|Istituto|Laborator|Laboratoire|"
+    r"Lab\.|Ctr\.|Politecnico|Hochschule|Ecole|École|Recherche|Photonique|"
+    r"Nanoscienze|Nanotecnolog)\b", re.IGNORECASE)
 # A BARE legal-entity suffix segment: the suffix token alone, optionally trailed
 # by its country marker and nothing else ("S.L. (Spain)", "Inc. (United States)",
 # "GmbH"). Anchored to end so it does NOT match a company whose NAME merely
@@ -315,6 +330,15 @@ def parse_people(block: str) -> list[tuple[str, list[str]]]:
         if not g:
             continue
         names, insts = _parse_group(g)
+        # Affiliations are sometimes interleaved among the author names rather
+        # than listed all-at-end, so the names/institutions split above can
+        # leave an institution sitting in `names`. Any "name" segment carrying
+        # an institution keyword is not a person — move it to the affiliation
+        # list so it never becomes an author (or the bubble byline).
+        kept = []
+        for n in names:
+            (insts.append(n) if _INST_NAME_KW.search(n) else kept.append(n))
+        names = kept
         # Drop affiliations that are too long to be a real institution name —
         # these are descriptive prose that leaked past the upstream guards.
         insts = [i for i in insts if len(i) <= 160]
