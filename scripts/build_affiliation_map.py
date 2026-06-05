@@ -1071,6 +1071,9 @@ _ANCHORS_SRC: list = [
     ('donostia international physics center', 'Donostia International Physics Center'),
     ('radiantis', 'Radiantis'),
     ('microliquid', 'Microliquid'),
+    # iPRONICS (Valencia) — drop the "Programmable Photonics" descriptor and the
+    # "S.L." legal tail the fallback would otherwise keep.
+    ('ipronics', 'iPRONICS'),
 
     # ---- Portugal ----------------------------------------------------------
     ('instituto de telecomunicacoes', 'Instituto de Telecomunicações'),

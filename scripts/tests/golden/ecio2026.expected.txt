@@ -303,7 +303,7 @@ Varian Semiconductor, Applied Materials	Varian Semiconductor
 Xanadu	Xanadu
 Yeditepe University	Yeditepe
 Zurich Instruments	Zurich Instruments
-iPRONICS Programmable Photonics S.L.	iPRONICS Programmable Photonics
+iPRONICS Programmable Photonics S.L.	iPRONICS
 imec	imec
 the Chinese University of Hong Kong]	CUHK
 vario-optics	vario-optics
