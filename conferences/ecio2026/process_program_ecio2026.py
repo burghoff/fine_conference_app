@@ -21,19 +21,18 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-"""process_program_ecio2026.py — PROCESS ONLY.
-
-The "processor" half of the ECIO 2026 pipeline. Reads ONLY what fetch put into
-data/ (no network), and emits a clean conference_data.json next to itself.
+"""Processor: reads only what the fetcher placed in data/ (no network) and
+emits a clean conference_data.json next to itself.
 
 Inputs (under data/):
-    ECIO26_DetailedSchedule.pdf   the wide A3 grid of every session/talk
-    ECIO26_Concise.pdf            one-page program-overview (currently used only
-                                  as a cross-check; the skeleton below is the
-                                  authoritative session list)
+    *_DetailedSchedule.pdf   the wide A3 grid of every session/talk
+    *_Concise.pdf            one-page program-overview (currently used only
+                             as a cross-check; the discovered skeleton below
+                             is the authoritative session list)
 
-ECIO publishes no abstract book and no per-talk page, so this processor cannot
-recover full author lists, affiliations, or abstracts. Each talk carries only
+The conference publishes no abstract book and no per-talk page, so this
+processor cannot recover full author lists, affiliations, or abstracts from
+the detailed schedule alone. Each talk in that source carries only
 its title and a single presenting-author name (what the schedule grid prints).
 
 Strategy
@@ -245,8 +244,8 @@ ROW_TOL = 3.5
 # 13pt is a clean separator — normal word-to-word gaps inside titles are
 # 2-6pt, and hyphenated compounds carry NO internal space (pdfplumber emits
 # "Single-Photon" as one word). The smallest title→speaker gap we measured
-# in the ECIO 2026 PDF was ~13.9pt (a representative title-then-speaker row),
-# so the threshold sits just under that.
+# on the detailed-schedule PDF was ~13.9pt (a representative title-then-
+# speaker row), so the threshold sits just under that.
 SPEAKER_GAP_PT = 13.0
 # The session-track topic header above each block is rendered in a slightly
 # larger font (4.56pt) than talk text (4.08pt). Used to filter topic words out
@@ -982,7 +981,7 @@ def _discover_skeleton(
         # ("Sunday Student Event") wrapping the day's three components as
         # talks. The container's room is the most-frequently-mentioned room
         # in the day's event rows.
-        sun_events = _discover_sun_events(rows, band)
+        sun_events = _discover_sun_events(rows, band, plenary_room)
         if sun_events:
             talks: list[dict] = []
             rooms_seen: dict[str, int] = {}
@@ -1049,54 +1048,69 @@ def _split_title_room(text: str) -> tuple[str, str]:
     return text.strip(), ""
 
 
+def _row_full_text(row: dict) -> str:
+    """Concatenate every word on the row (skipping the leftmost time-slot
+    label) into a single space-joined string. Used by Sunday classification
+    where the PDF interleaves a heading and a multi-column panel list onto
+    one row — column-specific extraction can't reliably tell which token
+    belongs to which logical chunk."""
+    ws = [w for w in row["words"]
+          if w["x0"] >= TIME_X_RANGE[1] or not TIME_RE.match(w["text"])]
+    ws.sort(key=lambda w: w["x0"])
+    return _join_words(ws).strip()
+
+
 def _discover_sun_events(
-    rows: list[dict], band: tuple[float, float]
+    rows: list[dict], band: tuple[float, float], plenary_room: str,
 ) -> list[dict]:
     """For Sunday, walk time-slot rows in the band and emit one event per
-    classifiable row. Skips Registration rows. Each event carries
-    {title, room, start_min, end_min}."""
+    keyword-classifiable row. Skips Registration rows. Each event carries
+    {title, room, start_min, end_min}.
+
+    The cell layout on Sunday is messy — a sub-event heading and a panel
+    roster can sit on the same row spanning multiple columns — so we
+    classify off the FULL row's concatenated text by looking for distinctive
+    keyword groups (workshop / bench / pizza), rather than per-column
+    pattern matching."""
     out: list[dict] = []
     rows_in_band = sorted(
         [r for r in rows if band[0] <= r["top"] <= band[1]],
         key=lambda r: r["top"])
     for r in rows_in_band:
-        # On Sunday the column-1 cell is empty; the event text sits in the
-        # right band, which we treat as columns 2 + 3 here.
-        text = _row_column_text(r, 2)
+        text = _row_full_text(r)
         if not text:
-            text = _row_column_text(r, 3)
-        if not text:
-            cell = [w for w in r["words"]
-                    if 55.0 <= (w["x0"] + w["x1"]) / 2 < 1100.0
-                    and not TIME_RE.match(w["text"])]
-            cell.sort(key=lambda w: w["x0"])
-            text = _join_words(cell).strip()
-        if not text:
-            continue
-        if _is_registration_row(text):
             continue
         slots = _row_left_time_slots(r["words"], r["top"])
         if not slots:
             continue
         start_min = slots[0][0]
         end_min = slots[-1][1]
-        cls = _classify_special_row(text)
-        if cls is None:
+        lower = text.lower()
+        if lower.startswith("registration"):
             continue
-        kind, _fields = cls
-        if kind == "student_workshop":
-            title = "Student Workshop"
-        elif kind == "bench":
-            title = "Bench to Business Symposium"
-        elif kind == "pizza":
+        # Order matters: check the most-specific keywords first.
+        if "pizza" in lower:
             title = "Networking Pizza Dinner"
+        elif "bench" in lower and "business" in lower:
+            title = "Bench to Business Symposium"
+        elif ("scientific communication" in lower
+              or "student workshop" in lower
+              or ("workshop" in lower and "panel" not in lower)):
+            title = "Student Workshop"
         else:
             continue
-        # Re-extract the room by splitting the FULL cell text at the first
-        # top-level comma (not inside parens). The regexes used by the
-        # classifier match too greedily for cells with parenthetical
-        # asides in the title.
-        _, room = _split_title_room(text)
+        # Room: when the row mentions the auditorium token the plenary
+        # rows use, fall back to the canonical plenary_room label parsed
+        # from a clean Plenary-Session row elsewhere on the page. The
+        # Sunday rows interleave tokens from the heading and a panel list,
+        # so an inline regex on the row's joined text loses the parens.
+        room = ""
+        plenary_token = plenary_room.split(" (", 1)[0] if plenary_room else ""
+        if plenary_token and plenary_token in text:
+            room = plenary_room
+        else:
+            # Fall back: split at the last top-level comma.
+            _, room = _split_title_room(text)
         out.append({"title": title, "room": room,
                     "start_min": start_min, "end_min": end_min})
     return out
@@ -1424,11 +1438,12 @@ def _talk_time_window(
     a_top, a_start, a_end = slots[closest_idx]
     dist_a = abs(y - a_top)
 
-    # Invited talks are 30-minute slots on the ECIO grid: extend the anchor to
-    # the next slot's end (or pull in the previous slot's start, if the row is
-    # actually above the closest slot). The "Invited:" tag in the title is the
-    # authoritative signal — geometry alone can't tell a 15- from a 30-minute
-    # row when an invited row sits flush with one of the two slots it covers.
+    # Invited talks take two consecutive 15-minute slots on this grid:
+    # extend the anchor to the next slot's end (or pull in the previous
+    # slot's start, if the row is actually above the closest slot). The
+    # "Invited:" tag in the title is the authoritative signal — geometry
+    # alone can't tell a 15- from a 30-minute row when an invited row sits
+    # flush with one of the two slots it covers.
     if is_invited:
         if closest_idx + 1 < len(slots) and y >= a_top - 1.0:
             return a_start, slots[closest_idx + 1][2]
@@ -1929,8 +1944,8 @@ def _harvest_per_slot_talks(
     slot_minutes: int,
 ) -> list[dict]:
     """For a per-slot industry block: assign each harvested cell to a
-    fixed-length time slot, in Y order. The PDF prints six 10-min slots for
-    the ECIO industry blocks; this function maps the first cell to
+    fixed-length time slot, in Y order. The PDF prints N consecutive
+    `slot_minutes`-long slots; this function maps the first cell to
     [start, start+slot_minutes), the second to the next slot, and so on.
 
     Returns a list of dicts {title, speaker, aff, start_min, end_min}.
@@ -2001,14 +2016,13 @@ _INV_SECTION_HEADER_RE = re.compile(r"^SC\d+\b")
 # =============================================================================
 # Conference planner — per-session PRESIDER extraction
 #
-# The program is also published on a conference planner at
-# https://ecio2026.abstractcentral.com/planner.jsp . Its expanded DOM is the
-# only public source that lists each technical session's presider(s). Each
-# session header paragraph looks like:
+# The program is also published on a third-party planner whose expanded DOM
+# is the only public source that lists each technical session's presider(s).
+# Each session header paragraph looks like:
 #
-#   <p class="pagecontents"><strong><b>M1B. Light Emitters</b></strong><br>
-#     Presider(s): Raphael Butte (École Polytechnique Fédérale de Lausanne)<br>
-#     8:30 AM - 10:15 AM; Room HG E1.1</p>
+#   <p class="pagecontents"><strong><b><CODE>. <Title></b></strong><br>
+#     Presider(s): <Name> (<Affiliation>)<br>
+#     <Time>; Room <Room></p>
 #
 # The leading code (M1B, T2A, W3B, …) is the SAME code the detailed-schedule PDF
 # uses for that session, so we key the presider map by it and attach the
@@ -2302,8 +2316,8 @@ def _load_invited_index(path: Path) -> InvitedIndex:
 
 
 # =============================================================================
-# Web enrichment: optional HTML pages from the ECIO website that fill in detail
-# the detailed-schedule PDF doesn't render. Each parser is tolerant of small
+# Web enrichment: optional HTML pages from the conference website that fill
+# in detail the detailed-schedule PDF doesn't render. Each parser is tolerant of small
 # CMS-block markup drift (extra spans, attribute reordering, &-entities)
 # and returns a small typed struct. _load_web_enrichment() ties them together
 # into a single `enrichment` dict that main() consults by session_id and
@@ -2420,7 +2434,7 @@ def _parse_plenary_html(html_text: str) -> list[dict]:
         })
     # Defensive: drop records whose "name" doesn't look like a person name
     # (contains a colon, is implausibly long, or matches the SC\d+ section
-    # header pattern used elsewhere on the ECIO site).
+    # header pattern the invited-speakers page uses elsewhere).
     out = [r for r in out
            if r["name"] and ":" not in r["name"] and len(r["name"]) <= 60
            and not _INV_SECTION_HEADER_RE.match(r["name"])]
@@ -2438,117 +2452,112 @@ _WORKSHOP_PLACEHOLDER_PHRASES = (
 
 def _parse_workshops_html(html_text: str) -> list[dict]:
     """Return [{position, title, chair, panelists: [{name, aff, talk_title}]}, …]
-    for each workshop on the page. The page has 2 workshops, each opening
-    with a "WORKSHOP N" paragraph; the H2 immediately after carries the
-    workshop topic. Inside each block, panelists are laid out as:
-        <p><strong>Name</strong></p>
-        <p><em>Affiliation</em></p>
-        <p><strong>"Talk Title"</strong></p>     (optional)
-    Each row is one <p>; we walk paragraphs in document order and classify
-    them by content."""
+    for each workshop on the page.
+
+    Page structure (per workshop):
+        <p>WORKSHOP N</p>            ← position marker, optional chair line
+        <h2>Workshop topic</h2>
+        <p>Workshop Chair: <chair name></p>     (optional)
+        <div class="wp-block-columns ...">
+            <div class="wp-block-column ...">    ← left column
+                <p><strong>Name</strong></p>
+                <p><em>Affiliation</em></p>
+            </div>
+            <div class="wp-block-column ...">    ← right column
+                <p><strong>Talk title</strong></p>  (may be unquoted or quoted)
+            </div>
+        </div>
+        (repeat one column-group per panelist)
+
+    We extract each column-group's strong/em tokens directly: strong[0] is
+    the panelist name, em[0] is the affiliation, strong[1] is the talk
+    title. A talk-title equal to the placeholder "Workshop Panelist" (or
+    "Coming soon…") means the website hasn't posted the real title yet —
+    we keep it as empty string so the schedule shows the generic talk
+    placeholder instead.
+    """
     body = _html_extract_main(html_text)
-    chunks: list[tuple[str, str, str]] = []
-    for m in re.finditer(r"<(h2|p)\b[^>]*>(.*?)</\1>",
-                         body, re.IGNORECASE | re.DOTALL):
-        kind = m.group(1).lower()
-        raw = m.group(2)
-        plain = _html_strip_to_text(raw)
-        if plain:
-            chunks.append((kind, raw, plain))
+
+    # Workshop boundaries: locate every "WORKSHOP N" marker and the H2
+    # heading that immediately follows it. The page sometimes splits the
+    # marker across inline tags (e.g. "<strong>WORKSHOP </strong>...
+    # <strong>2</strong>"), so we tolerate intervening HTML in the regex.
+    marker_re = re.compile(r"WORKSHOP\s*(?:<[^>]+>\s*)*(\d+)",
+                           re.IGNORECASE)
+    h2_re = re.compile(r"<h2\b[^>]*>(.*?)</h2>", re.IGNORECASE | re.DOTALL)
+    markers = list(marker_re.finditer(body))
+    h2s = list(h2_re.finditer(body))
+
+    # Column groups: every <div class="wp-block-columns ...">…</div> region.
+    # The regex is depth-naive — we don't actually balance the closing tags.
+    # We treat the slice from one wp-block-columns opener to the next as a
+    # single panelist group; the page's groups are flat enough for this to
+    # work in practice.
+    col_open_re = re.compile(
+        r'<div class="wp-block-columns[^"]*"', re.IGNORECASE)
+    col_opens = [m.start() for m in col_open_re.finditer(body)]
+
+    def _column_strong_em(start: int, end: int) -> tuple[list[str], list[str]]:
+        chunk = body[start:end]
+        strongs = [_html_strip_to_text(m.group(1)) for m in re.finditer(
+            r"<strong\b[^>]*>(.*?)</strong>", chunk,
+            re.IGNORECASE | re.DOTALL)]
+        ems = [_html_strip_to_text(m.group(1)) for m in re.finditer(
+            r"<em\b[^>]*>(.*?)</em>", chunk,
+            re.IGNORECASE | re.DOTALL)]
+        return [s for s in strongs if s], [e for e in ems if e]
 
     workshops: list[dict] = []
-    cur_workshop: dict | None = None
-    cur_panelist: dict | None = None
+    for i, marker in enumerate(markers):
+        position = int(marker.group(1))
+        next_marker_start = (markers[i + 1].start()
+                             if i + 1 < len(markers) else len(body))
+        # Workshop topic: the first H2 after this marker but before the
+        # next one.
+        title = ""
+        for hm in h2s:
+            if marker.end() <= hm.start() < next_marker_start:
+                title = _html_strip_to_text(hm.group(1))
+                break
+        # Chair: search the slice between the marker and the first column
+        # group for a "Workshop Chair: <name>" string.
+        chair = ""
+        first_col_after = next(
+            (o for o in col_opens if o > marker.end()), next_marker_start)
+        pre = body[marker.end():min(first_col_after, next_marker_start)]
+        m_chair = re.search(r"Workshop\s*Chair[:\s]*([^<\n]+)",
+                            pre, re.IGNORECASE)
+        if m_chair:
+            chair = _html_strip_to_text(m_chair.group(1)).strip()
 
-    def _flush_panelist() -> None:
-        nonlocal cur_panelist
-        if cur_workshop is not None and cur_panelist is not None and (
-            cur_panelist["name"] or cur_panelist["aff"]
-        ):
-            cur_workshop["panelists"].append(cur_panelist)
-        cur_panelist = None
-
-    def _flush_workshop() -> None:
-        nonlocal cur_workshop
-        _flush_panelist()
-        if cur_workshop is not None:
-            workshops.append(cur_workshop)
-            cur_workshop = None
-
-    for kind, raw, plain in chunks:
-        plain_lower = plain.lower()
-
-        # Workshop-header paragraph: short, contains "WORKSHOP N", no chair /
-        # panelist keyword.
-        m_h = _WORKSHOP_HEAD_RE.search(plain)
-        if (kind == "p" and m_h
-                and "chair" not in plain_lower
-                and "panelist" not in plain_lower
-                and len(plain) < 40):
-            _flush_workshop()
-            pos_str = m_h.group(1)
-            position = int(pos_str) if pos_str else len(workshops) + 1
-            cur_workshop = {
-                "position": position, "title": "", "chair": "",
-                "panelists": [],
-            }
-            continue
-
-        if cur_workshop is None:
-            continue
-
-        # Workshop topic from the H2 following the header.
-        if kind == "h2" and not cur_workshop["title"]:
-            cur_workshop["title"] = plain
-            continue
-
-        # Chair line: name follows the colon in the same paragraph.
-        if "workshop chair" in plain_lower:
-            after = plain.split(":", 1)[1].strip() if ":" in plain else ""
-            cur_workshop["chair"] = after
-            _flush_panelist()
-            continue
-
-        # Placeholder: closes the current panelist without modifying fields.
-        if plain_lower in _WORKSHOP_PLACEHOLDER_PHRASES:
-            _flush_panelist()
-            continue
-
-        strong_texts = [_html_strip_to_text(m.group(1)) for m in re.finditer(
-            r"<strong\b[^>]*>(.*?)</strong>", raw,
-            re.IGNORECASE | re.DOTALL)]
-        em_texts = [_html_strip_to_text(m.group(1)) for m in re.finditer(
-            r"<em\b[^>]*>(.*?)</em>", raw,
-            re.IGNORECASE | re.DOTALL)]
-        strong_texts = [t for t in strong_texts if t]
-        em_texts = [t for t in em_texts if t]
-
-        # Affiliation paragraph: italic-only.
-        if em_texts and not strong_texts:
-            if cur_panelist is not None:
-                cur_panelist["aff"] = em_texts[0]
-            continue
-
-        # Talk-title paragraph: the plain text begins or ends with a quote.
-        stripped = plain.strip()
-        if (stripped[:1] in _INV_QUOTE_CHARS
-                or stripped[-1:] in _INV_QUOTE_CHARS):
-            if cur_panelist is not None:
-                cur_panelist["talk_title"] = _html_strip_quote_chars(stripped)
-            continue
-
-        # Panelist name: opens a new panelist record.
-        if strong_texts:
-            _flush_panelist()
-            if _WORKSHOP_HEAD_RE.fullmatch(strong_texts[0].strip()):
+        # Walk each column group inside this workshop's range.
+        panelists: list[dict] = []
+        group_offsets = [o for o in col_opens
+                         if marker.end() <= o < next_marker_start]
+        # Add a sentinel "end" so the last group has a defined slice end.
+        group_offsets_with_end = group_offsets + [next_marker_start]
+        for j in range(len(group_offsets)):
+            g_start = group_offsets_with_end[j]
+            g_end = group_offsets_with_end[j + 1]
+            strongs, ems = _column_strong_em(g_start, g_end)
+            if not strongs:
                 continue
-            cur_panelist = {
-                "name": " ".join(strong_texts).strip(),
-                "aff": "", "talk_title": "",
-            }
-            continue
-
-    _flush_workshop()
+            name = strongs[0].strip()
+            aff = ems[0].strip() if ems else ""
+            talk_title = strongs[1].strip() if len(strongs) > 1 else ""
+            # Strip curly/straight quotes wrapping the title.
+            talk_title = _html_strip_quote_chars(talk_title)
+            # Placeholder titles → empty so the schedule shows its own
+            # generic placeholder ("Workshop Panelist") instead.
+            if talk_title.lower() in (
+                "workshop panelist", "coming soon", "coming soon..",
+                "coming soon ..", "coming soon ...",
+            ):
+                talk_title = ""
+            panelists.append({"name": name, "aff": aff,
+                              "talk_title": talk_title})
+        workshops.append({"position": position, "title": title,
+                          "chair": chair, "panelists": panelists})
     return workshops
 
 
@@ -2557,73 +2566,76 @@ def _parse_workshops_html(html_text: str) -> list[dict]:
 def _parse_student_event_html(html_text: str) -> dict:
     """Return {workshop?, bench?, pizza?} dicts for the three sub-events on
     the page. Each carries any of: title, location, start, end. The bench
-    record also carries `panelists: [{name, aff}, …]` parsed from the
-    <em>Name, Affiliation</em> paragraphs between the bench header and the
-    pizza header."""
+    record also carries `panelists: [{name, aff}, …]` parsed from the list
+    items that follow the bench heading.
+
+    The page lays each sub-event out as a heading tag of the form
+        <h5>TIME-TIME <strong>Title</strong>, <em>Location</em></h5>
+    followed by either a <p>description</p> or a <ul> of panelists. We scan
+    every <h2>..<h6> on the page (the current render uses <h5>) and pair
+    each classifiable heading with the HTML chunk that follows it up to
+    the next heading."""
     body = _html_extract_main(html_text)
-    paras = re.findall(r"<p\b[^>]*>(.*?)</p>",
-                       body, re.IGNORECASE | re.DOTALL)
-    out: dict = {"workshop": {}, "bench": {}, "pizza": {}}
-    section: str | None = None
     time_re = re.compile(
         r"(\d{1,2}:\d{2})\s*[-\u2013\u2014]\s*(\d{1,2}:\d{2})")
+    out: dict = {"workshop": {}, "bench": {}, "pizza": {}}
 
-    def _heading_title(text: str) -> str:
-        """Pull the sub-event title out of a heading paragraph of the form
-        "<start>-<end> <Title>, <location>": drop the leading time range and
-        take the text up to the first comma (the location follows it)."""
-        s = text
-        mt = time_re.search(s)
-        if mt:
-            s = s[mt.end():]
-        s = s.strip(" \t\u2013\u2014-")
-        return s.split(",", 1)[0].strip()
+    heading_re = re.compile(r"<h[2-6]\b[^>]*>(.*?)</h[2-6]>",
+                            re.IGNORECASE | re.DOTALL)
+    headings: list[tuple[int, int, str]] = []
+    for m in heading_re.finditer(body):
+        plain = _html_strip_to_text(m.group(1))
+        if plain and time_re.search(plain):
+            headings.append((m.start(), m.end(), plain))
 
-    for raw in paras:
-        plain = _html_strip_to_text(raw)
-        if not plain:
+    def _classify(text: str) -> str | None:
+        low = text.lower()
+        if "scientific communication" in low or "student workshop" in low:
+            return "workshop"
+        if "bench" in low and "business" in low:
+            return "bench"
+        if "pizza" in low:
+            return "pizza"
+        return None
+
+    for i, (h_start, h_end, plain) in enumerate(headings):
+        kind = _classify(plain)
+        if not kind:
             continue
-        lower = plain.lower()
-        # The three sub-events are each introduced by a heading paragraph that
-        # contains the sub-event name; we take the title from that heading text
-        # rather than hard-coding it, so a re-worded program stays in sync.
-        if "workshop on scientific communication" in lower:
-            section = "workshop"
-            out[section]["title"] = _heading_title(plain)
-        elif "bench to business" in lower:
-            section = "bench"
-            out[section]["title"] = _heading_title(plain)
-        elif "pizza dinner" in lower or "networking and pizza" in lower:
-            section = "pizza"
-            out[section]["title"] = _heading_title(plain)
+        rec = out[kind]
+        mt = time_re.search(plain)
+        if mt:
+            rec["start"] = mt.group(1)
+            rec["end"] = mt.group(2)
+        rest = plain[mt.end():].strip() if mt else plain
+        rest = rest.strip(" \t-\u2013\u2014")
+        if "," in rest:
+            title, location = rest.split(",", 1)
+            rec["title"] = title.strip()
+            rec["location"] = location.strip()
         else:
-            # Continuation: bench panelists are
-            # <em>Name, <role…>, <a>Company</a></em>. The name is the text
-            # before the first comma; the affiliation is the linked company
-            # name (an <a>) — the comma-separated bits between them are job
-            # titles (e.g. "Co-Founder, CEO") which we drop. Fall back to the
-            # last comma-segment when a panelist line carries no link.
-            if section == "bench" and "," in plain and len(plain) < 200:
-                name = plain.split(",", 1)[0].strip()
+            rec["title"] = rest
+
+        if kind == "bench":
+            body_end = (headings[i + 1][0]
+                        if i + 1 < len(headings) else len(body))
+            chunk = body[h_end:body_end]
+            for li in re.finditer(r"<li\b[^>]*>(.*?)</li>",
+                                  chunk, re.IGNORECASE | re.DOTALL):
+                li_raw = li.group(1)
+                li_plain = _html_strip_to_text(li_raw)
+                if not li_plain or "," not in li_plain:
+                    continue
+                name = li_plain.split(",", 1)[0].strip()
                 m_a = re.search(r"<a\b[^>]*>(.*?)</a>",
-                                raw, re.IGNORECASE | re.DOTALL)
+                                li_raw, re.IGNORECASE | re.DOTALL)
                 if m_a:
                     aff = _html_strip_to_text(m_a.group(1)).strip()
                 else:
-                    aff = plain.rsplit(",", 1)[-1].strip()
-                out[section].setdefault("panelists", []).append(
+                    aff = li_plain.rsplit(",", 1)[-1].strip()
+                rec.setdefault("panelists", []).append(
                     {"name": name, "aff": aff})
-            continue
-        m_t = time_re.search(plain)
-        if m_t:
-            out[section]["start"] = m_t.group(1)
-            out[section]["end"] = m_t.group(2)
-        m_loc = re.search(r"<em\b[^>]*>(.*?)</em>",
-                          raw, re.IGNORECASE | re.DOTALL)
-        if m_loc:
-            loc = _html_strip_to_text(m_loc.group(1))
-            if loc and loc.lower() not in ("th",):
-                out[section]["location"] = loc
+
     return out
 
 
@@ -2803,9 +2815,9 @@ _AGENDA_DAY_RE = re.compile(
 # A room-column header cell: "Room HG F1". The label after "Room " is the room
 # name we attach to every session/event sitting in that column.
 _AGENDA_ROOM_RE = re.compile(r"^\s*Room\s+(.+?)\s*$", re.IGNORECASE)
-# A leading "<CODE> • " on an event/session cell. The bullet is U+2022; ECIO
-# also occasionally renders it as "*". The code is the program's own session
-# label (M1A, P11, T4A, …) — format, not content.
+# A leading "<CODE> • " on an event/session cell. The bullet is U+2022; the
+# page also occasionally renders it as "*". The code is the program's own
+# session label (M1A, P11, T4A, …) — format, not content.
 _AGENDA_CODE_RE = re.compile(r"^\s*([A-Za-z]{1,3}\d{1,3}[A-Za-z]?)\s*[•*]\s*(.*)$")
 # Placeholder "locations" that carry no real venue — treated as no location.
 _AGENDA_NO_LOC = {"", "location to be announced", "tba", "to be announced"}
@@ -3336,7 +3348,7 @@ def _collapse_session_tags(sessions):
 def main() -> None:
     _bootstrap_pdfplumber()
     log("=" * 72)
-    log(f"[config] ECIO 2026 PROCESSOR")
+    log(f"[config] {CONFERENCE_NAME} PROCESSOR")
     log(f"[config]   input PDF       : {INPUT_PDF}")
     log(f"[config]   invited HTML    : {INPUT_INVITED_HTML}")
     log(f"[config]   enrichment HTML : {DATA_DIR} (6 optional files)")
