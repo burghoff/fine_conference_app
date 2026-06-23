@@ -1,0 +1,20 @@
+# data_requirements_ime2026.txt -- IME 2026
+#
+# Structured manifest of the data files that the fetch (downloader) and process
+# scripts in this directory rely on. make_app.py reads this file to decide
+# whether a download can be skipped.
+
+generated_for: ime2026
+manual_steps_written: 2026-06-23
+
+[file: IME2026_ProgramBook.pdf]
+required: yes
+produced_by: fetch
+description: Official IME 2026 Program Book PDF. The downloader discovers the
+  current "View PDF" link from https://ime2026.org/agenda/ and saves the PDF
+  under this stable filename for offline processing.
+manual: Open https://ime2026.org/agenda/ in a browser, click "View PDF", and
+  save the resulting PDF into this folder's data/ subdirectory as exactly
+  IME2026_ProgramBook.pdf . The linked filename carries a date/version suffix,
+  so re-derive the link from the agenda page when the organizers publish a
+  refresh.
