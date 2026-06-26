@@ -5,16 +5,26 @@
 # whether a download can be skipped.
 
 generated_for: ime2026
-manual_steps_written: 2026-06-23
+manual_steps_written: 2026-06-26
 
 [file: IME2026_ProgramBook.pdf]
 required: yes
 produced_by: fetch
 description: Official IME 2026 Program Book PDF. The downloader discovers the
-  current "View PDF" link from https://ime2026.org/agenda/ and saves the PDF
-  under this stable filename for offline processing.
-manual: Open https://ime2026.org/agenda/ in a browser, click "View PDF", and
-  save the resulting PDF into this folder's data/ subdirectory as exactly
-  IME2026_ProgramBook.pdf . The linked filename carries a date/version suffix,
-  so re-derive the link from the agenda page when the organizers publish a
-  refresh.
+  current "View Program Book" PDF link from https://ime2026.org/agenda/ and
+  saves the PDF under this stable filename for offline processing.
+manual: Open https://ime2026.org/agenda/View%20Program%20book.pdf in a browser
+  (or click "View Program Book" from https://ime2026.org/agenda/ ) and save
+  the resulting PDF into this folder's data/ subdirectory as exactly
+  IME2026_ProgramBook.pdf .
+
+[file: IME2026_AbstractBook.pdf]
+required: yes
+produced_by: fetch
+description: Official IME 2026 Abstract Book PDF for concurrent sessions. The
+  processor uses it to attach presenter affiliations and abstracts to the
+  scheduled concurrent talks parsed from the program book.
+manual: Open https://ime2026.org/agenda/View%20Abstract%20book.pdf in a
+  browser (or click "View Abstract Book" from https://ime2026.org/agenda/ )
+  and save the resulting PDF into this folder's data/ subdirectory as exactly
+  IME2026_AbstractBook.pdf .

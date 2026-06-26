@@ -11,12 +11,10 @@
 
 """Processor for IME 2026.
 
-Reads only data/IME2026_ProgramBook.pdf and emits conference_data.json.  The
-current PDF is a program book, not a full abstract book: concurrent-session rows
-carry time, presenter, title, chair, stream, and room, while plenary pages also
-carry a speaker bio and abstract.  This processor therefore emits complete
-schedule metadata and presenter-style author records for concurrent talks, plus
-plenary abstracts where available.
+Reads data/IME2026_ProgramBook.pdf for the schedule skeleton and
+data/IME2026_AbstractBook.pdf for concurrent-session abstracts.  The program
+book supplies time, title, presenter, chair, stream, and room; the abstract book
+adds affiliation-bearing presenter records and full abstract text.
 """
 
 from __future__ import annotations
@@ -25,6 +23,7 @@ import json
 import re
 import subprocess
 import sys
+import unicodedata
 from pathlib import Path
 
 
@@ -35,6 +34,7 @@ def log(msg: str) -> None:
 SCRIPT_DIR = Path(__file__).resolve().parent
 DATA_DIR = SCRIPT_DIR / "data"
 INPUT_PDF = DATA_DIR / "IME2026_ProgramBook.pdf"
+INPUT_ABSTRACT_PDF = DATA_DIR / "IME2026_AbstractBook.pdf"
 OUTPUT_JSON = SCRIPT_DIR / "conference_data.json"
 
 CONFERENCE_NAME = "IME 2026"
@@ -75,6 +75,9 @@ HONORIFICS = {
     "Mr.", "Ms.", "Mrs.", "Dr.", "Prof.", "Professor", "Associate", "Assistant"
 }
 ROOM_PREFIXES = ("Hoam Hall", "Law School")
+NOISE_RE = re.compile(
+    r"^(?:DAY\s+\d+|Abstract Book|: Concurrent Sessions|\d+)$", re.I
+)
 
 
 def _bootstrap_pdfplumber() -> None:
@@ -115,6 +118,18 @@ def _clean(s: str) -> str:
     s = re.sub(r"\bUniversit-yWisconsin\b", "University-Wisconsin", s)
     s = re.sub(r"\bL aw School\b", "Law School", s)
     return s.strip()
+
+
+def _norm_match(s: str) -> str:
+    s = _clean(s).lower()
+    s = unicodedata.normalize("NFKD", s)
+    s = "".join(ch for ch in s if not unicodedata.combining(ch))
+    s = re.sub(r"[^a-z0-9]+", " ", s)
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def _tokens(s: str) -> set[str]:
+    return {t for t in _norm_match(s).split() if len(t) > 2}
 
 
 def _parse_date(lines: list[str]) -> str:
@@ -182,6 +197,183 @@ def _speaker_aff(speaker: str) -> tuple[str, str]:
     if m:
         return _clean(m.group(1)), _clean(m.group(2))
     return speaker, ""
+
+
+def _speaker_line(line: str) -> tuple[list[str], str] | None:
+    """Parse 'Dr. A / Prof. B (Affiliation)' from an abstract entry."""
+    line = _clean(line)
+    m = re.match(r"(.+?)\s*\((.+)\)$", line)
+    if not m:
+        return None
+    names_blob, aff = m.groups()
+    if not any(h.rstrip(".").lower() in names_blob.lower() for h in HONORIFICS):
+        return None
+    names = [_clean(x) for x in re.split(r"\s*/\s*", names_blob) if _clean(x)]
+    if not names:
+        return None
+    return names, _clean(aff)
+
+
+def _parse_abstract_book(pdf_path: Path) -> dict[str, list[dict]]:
+    """Return abstracts grouped by session id."""
+    if not pdf_path.exists():
+        raise SystemExit(
+            f"[fatal] Abstract PDF not found: {pdf_path}\n"
+            "        Run fetch_program_ime2026.py first.")
+    import pdfplumber
+
+    grouped: dict[str, list[dict]] = {}
+    cur_session = ""
+    title_lines: list[str] = []
+    abstract_lines: list[str] = []
+    names: list[str] = []
+    aff = ""
+    state = "idle"
+
+    def flush() -> None:
+        nonlocal title_lines, abstract_lines, names, aff, state
+        if cur_session and title_lines and names:
+            title = _clean(" ".join(title_lines))
+            abstract = _clean(" ".join(abstract_lines))
+            grouped.setdefault(cur_session, []).append({
+                "session_id": cur_session,
+                "title": title,
+                "names": list(names),
+                "affiliation": aff,
+                "abstract": abstract,
+                "norm_title": _norm_match(title),
+                "tokens": _tokens(title),
+                "speaker_norms": [_norm_match(n) for n in names],
+            })
+        title_lines = []
+        abstract_lines = []
+        names = []
+        aff = ""
+        state = "idle"
+
+    with pdfplumber.open(pdf_path) as pdf:
+        log(f"[read] Abstract PDF pages: {len(pdf.pages)}")
+        for page in pdf.pages:
+            raw_lines = (page.extract_text(x_tolerance=1, y_tolerance=3) or "").splitlines()
+            page_lines = [_clean(x) for x in raw_lines]
+            i = 0
+            while i < len(page_lines):
+                line = page_lines[i]
+                i += 1
+                if not line or NOISE_RE.match(line):
+                    continue
+                sm = SESSION_RE.match(line)
+                if sm:
+                    flush()
+                    cur_session = sm.group(1)
+                    state = "title"
+                    continue
+                if not cur_session:
+                    continue
+                parsed_speaker = _speaker_line(line)
+                if state == "title" and parsed_speaker is None:
+                    # Some long affiliations wrap onto the next line(s), e.g.
+                    # "Prof. X (Department ..., Chinese" / "University ...)".
+                    # Try a short same-page join before treating the line as
+                    # another title fragment.
+                    has_honorific = any(
+                        h.rstrip(".").lower() in line.lower()
+                        for h in HONORIFICS
+                    )
+                    if has_honorific and "(" in line and ")" not in line:
+                        joined = line
+                        consumed = 0
+                        for j in range(i, min(i + 3, len(page_lines))):
+                            nxt = page_lines[j]
+                            if not nxt or NOISE_RE.match(nxt) or SESSION_RE.match(nxt):
+                                break
+                            joined = f"{joined} {nxt}"
+                            consumed += 1
+                            parsed_speaker = _speaker_line(joined)
+                            if parsed_speaker:
+                                i += consumed
+                                break
+                if state == "title" and parsed_speaker:
+                    names, aff = parsed_speaker
+                    state = "abstract"
+                    continue
+                if state == "title":
+                    title_lines.append(line)
+                elif state == "abstract":
+                    abstract_lines.append(line)
+        flush()
+    return grouped
+
+
+def _score_abstract_match(talk: dict, entry: dict) -> float:
+    title = _norm_match(talk.get("title", ""))
+    if not title or not entry["norm_title"]:
+        return 0.0
+    if title == entry["norm_title"]:
+        return 1.0
+    tt = _tokens(title)
+    et = entry["tokens"]
+    jacc = (len(tt & et) / len(tt | et)) if (tt or et) else 0.0
+    speaker = _norm_match(talk.get("speaker", ""))
+    speaker_match = False
+    if speaker:
+        for sn in entry["speaker_norms"]:
+            if speaker == sn or speaker in sn or sn in speaker:
+                speaker_match = True
+                break
+    contain_bonus = (
+        0.15 if (title in entry["norm_title"] or entry["norm_title"] in title)
+        else 0.0
+    )
+    if speaker_match:
+        return min(1.0, max(0.72, jacc + 0.35 + contain_bonus))
+    # Without a presenter-name match, allow only near-certain title matches.
+    # The abstract book can contain session entries in a different order from
+    # the program, and some titles share broad insurance/risk vocabulary.
+    if jacc >= 0.74 or (contain_bonus and jacc >= 0.60):
+        return min(1.0, jacc + contain_bonus)
+    return 0.0
+
+
+def _apply_abstract_overlay(talks: dict[str, dict],
+                            abstracts_by_session: dict[str, list[dict]]) -> tuple[int, set[str]]:
+    """Attach abstract-book metadata to schedule talks. Returns match count + affs."""
+    affs: set[str] = set()
+    used: set[tuple[str, int]] = set()
+    matched = 0
+    for talk in sorted(talks.values(), key=lambda t: (t["session_id"], t["start_ts"])):
+        sid = talk["session_id"]
+        candidates = abstracts_by_session.get(sid, [])
+        best_i = -1
+        best_score = 0.0
+        for i, entry in enumerate(candidates):
+            if (sid, i) in used:
+                continue
+            score = _score_abstract_match(talk, entry)
+            if score > best_score:
+                best_i, best_score = i, score
+        if best_i < 0 or best_score < 0.38:
+            continue
+        entry = candidates[best_i]
+        used.add((sid, best_i))
+        matched += 1
+
+        talk["title"] = entry["title"]
+        talk["abstract"] = entry["abstract"]
+        names = entry["names"]
+        aff = entry["affiliation"]
+        if aff:
+            affs.add(aff)
+        talk["speaker"] = names[0]
+        talk["presenter"] = names[0]
+        talk["speaker_pos"] = 0
+        talk["first_author"] = names[0]
+        talk["last_author"] = names[-1] if len(names) > 1 else names[0]
+        insts = [1] if aff else []
+        talk["authors"] = [{"name": n, "insts": list(insts)} for n in names]
+        if aff:
+            talk["institutions"] = [{"n": 1, "name": aff}]
+    return matched, affs
 
 
 def _parse_concurrent_page(page, page_no: int) -> tuple[list[dict], list[dict], set[str]]:
@@ -422,8 +614,9 @@ def _manual_events() -> list[dict]:
 def main() -> None:
     log("=" * 72)
     log("[config] IME 2026 PROCESSOR starting up.")
-    log(f"[config]   input PDF : {INPUT_PDF}")
-    log(f"[config]   JSON out  : {OUTPUT_JSON}")
+    log(f"[config]   program PDF  : {INPUT_PDF}")
+    log(f"[config]   abstract PDF : {INPUT_ABSTRACT_PDF}")
+    log(f"[config]   JSON out     : {OUTPUT_JSON}")
     log("=" * 72)
     if not INPUT_PDF.exists():
         raise SystemExit(
@@ -438,7 +631,7 @@ def main() -> None:
     affs: set[str] = set()
 
     with pdfplumber.open(INPUT_PDF) as pdf:
-        log(f"[read] PDF pages: {len(pdf.pages)}")
+        log(f"[read] Program PDF pages: {len(pdf.pages)}")
         for page_no, page in enumerate(pdf.pages, 1):
             lines = (page.extract_text(x_tolerance=1, y_tolerance=3) or "").splitlines()
             psess, ptalk, paffs = _parse_plenary_page(lines)
@@ -456,6 +649,13 @@ def main() -> None:
 
     for ev in _manual_events():
         sessions.setdefault(ev["id"], ev)
+
+    abstracts_by_session = _parse_abstract_book(INPUT_ABSTRACT_PDF)
+    n_abs = sum(len(v) for v in abstracts_by_session.values())
+    matched, abstract_affs = _apply_abstract_overlay(talks, abstracts_by_session)
+    affs.update(abstract_affs)
+    log(f"[abstracts] parsed {n_abs} concurrent abstract(s); "
+        f"matched {matched}/{len(talks)} schedule talk(s).")
 
     sessions_out = sorted(sessions.values(), key=lambda s: (s.get("start_ts", ""), s["id"]))
     talks_out = sorted(talks.values(), key=lambda t: (t.get("start_ts", ""), t["id"]))
