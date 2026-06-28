@@ -906,6 +906,44 @@ body[data-active-view="session-detail"] .detail-head {
 
 .notes-textarea--tall { min-height: 104px; }
 
+.session-delay {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 22px;
+  
+  margin-left: calc(34px * var(--sp));
+  font-size: calc(12px * var(--fs));
+  color: var(--muted);
+}
+.session-delay-label { white-space: nowrap; }
+.session-delay-input {
+  width: 3em;
+  padding: 4px 6px;
+  font: inherit;
+  font-size: calc(13px * var(--fs));
+  text-align: right;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color .15s ease, background .15s ease;
+}
+.session-delay-input:focus {
+  border-color: var(--accent);
+  background: var(--surface);
+}
+
+.session-delay-input::-webkit-outer-spin-button,
+.session-delay-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.session-delay-input { -moz-appearance: textfield; appearance: textfield; }
+.session-delay-unit { white-space: nowrap; }
+
 #scroll-indicator {
   
   flex: 0 0 auto;
@@ -1817,6 +1855,8 @@ function defaultState() {
       me:       [{ view: "list", scrollY: 0 }],
     },
     searchQuery: "",
+
+    sessionDelays: {},
     hiddenTypes: [],          
     typesPanelOpen: false,
     lastSyncAt: null,         
@@ -1892,6 +1932,8 @@ function loadState() {
     }
     
     if (!["copy", "share"].includes(s.exportMethod)) s.exportMethod = "copy";
+
+    s.sessionDelays = sanitizeDelays(s.sessionDelays);
     return s;
   } catch (_) { return defaultState(); }
 }
@@ -1907,6 +1949,8 @@ let state = loadState();
 
 const sessionMap = Object.fromEntries(DATA.sessions.map(s => [s.id, s]));
 const talkMap    = Object.fromEntries(DATA.talks.map(t => [t.id, t]));
+
+applySessionDelays();
 
 function effectiveLocation(item) {
   if (item.location != null) return item.location;   
@@ -2070,6 +2114,39 @@ function nowMs() {
 }
 
 function tsToDate(ts) { return ts ? new Date(ts) : null; }
+
+function sanitizeDelays(raw) {
+  const out = {};
+  if (raw && typeof raw === "object") {
+    for (const id in raw) {
+      const n = Math.round(Number(raw[id]));
+      if (isFinite(n) && n !== 0) out[id] = n;
+    }
+  }
+  return out;
+}
+
+function shiftTs(ts, minutes) {
+  if (!ts || !minutes) return ts;
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return ts;
+  d.setMinutes(d.getMinutes() + minutes);
+  const p = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+       + `T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+function applySessionDelays() {
+  const delays = state.sessionDelays || {};
+  const shiftItem = (item, mins) => {
+    if (item._baseStart === undefined) item._baseStart = item.start_ts || null;
+    if (item._baseEnd === undefined)   item._baseEnd   = item.end_ts   || null;
+    item.start_ts = shiftTs(item._baseStart, mins);
+    item.end_ts   = shiftTs(item._baseEnd,   mins);
+  };
+  for (const s of DATA.sessions) shiftItem(s, delays[s.id] || 0);
+  for (const t of DATA.talks)    shiftItem(t, delays[t.session_id] || 0);
+}
 
 function isPast(item) {
   const d = tsToDate(item.end_ts);
@@ -3174,6 +3251,52 @@ function renderSessionDetail(c, sid) {
   if (!talks.length && !hasDetails) {
     c.appendChild(el("p", { class: "empty" }, "No talks listed for this session."));
   }
+
+  appendSessionDelayControl(c, s);
+}
+
+function appendSessionDelayControl(container, s) {
+  if (!state.sessionDelays) state.sessionDelays = {};
+  const current = state.sessionDelays[s.id];
+
+  const row = el("div", { class: "session-delay" });
+  const inputId = `session-delay-${s.id}`;
+  row.appendChild(el("label", {
+    class: "session-delay-label",
+    for: inputId,
+  }, "Shift this session by"));
+
+  const input = el("input", {
+    class: "session-delay-input",
+    id: inputId,
+    type: "number",
+    step: "5",
+    inputmode: "numeric",
+    placeholder: "0",
+    title: "Shift this session and all its talks by this many minutes",
+  });
+  if (current) input.value = String(current);
+
+  const commit = () => {
+    const n = Math.round(Number(input.value));
+    const next = (isFinite(n) && n !== 0) ? n : 0;
+    const prev = state.sessionDelays[s.id] || 0;
+    if (next === prev) return;            
+    if (next === 0) delete state.sessionDelays[s.id];
+    else state.sessionDelays[s.id] = next;
+    saveState();
+    applySessionDelays();
+
+    rerenderPreservingAnchor();
+  };
+  input.addEventListener("change", commit);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); input.blur(); }
+  });
+
+  row.appendChild(input);
+  row.appendChild(el("span", { class: "session-delay-unit" }, "min"));
+  container.appendChild(row);
 }
 
 function buildSessionExpansion(s) {
@@ -4505,6 +4628,8 @@ function exportState() {
     hiddenTypes: state.hiddenTypes,
     selectedDates: state.selectedDates,
     notes: state.notes,
+
+    sessionDelays: state.sessionDelays,
     
     meWidth: state.meWidth,
 
@@ -4606,6 +4731,10 @@ function importState(code) {
     if (_sessionIds.has(key)) delete mergedNotes[key];
   }
 
+  const mergedDelays = sanitizeDelays(state.sessionDelays);
+  const incomingDelays = sanitizeDelays(data.sessionDelays);
+  for (const id in incomingDelays) mergedDelays[id] = incomingDelays[id];
+
   Object.assign(state, {
     schedule:       merged,
     scheduleLog:    mergedLog,
@@ -4615,6 +4744,7 @@ function importState(code) {
     hiddenTypes:    Array.isArray(data.hiddenTypes) ? data.hiddenTypes : [],
     selectedDates:  selDates,
     notes:          mergedNotes,
+    sessionDelays:  mergedDelays,
 
     meWidth:        (typeof data.meWidth === "number" && isFinite(data.meWidth))
                       ? data.meWidth
@@ -4623,6 +4753,8 @@ function importState(code) {
   });
   saveState();
   applyMeWidth();
+
+  applySessionDelays();
   render();
   return { added, removed };
 }

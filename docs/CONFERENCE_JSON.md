@@ -53,6 +53,7 @@ get a working app. The keys below are the contract.
 | `session_types` | Optional | Type registry and colors for the Sessions tab. Built-in defaults used if absent. |
 | `talk_types` | Optional | Type registry and colors for the Talks tab. Built-in defaults used if absent. |
 | `affiliation_sources` | Optional | One flat, de-duplicated list of raw affiliation strings the affiliation shortener learns from. |
+| `acronyms` | Optional | Map of `UPPERCASE -> canonical` acronym casings to preserve through the builder's ALL-CAPS title recasing. Use for acronym-only titles (e.g. single-word session/thrust names) that never appear mixed-case for the builder to learn. Entries override the learned/curated casings. |
 
 ## Timestamps
 

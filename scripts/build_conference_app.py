@@ -1973,7 +1973,14 @@ def normalize_presentation(data: dict) -> None:
         for inst in t.get("institutions") or []:
             if inst.get("name"):
                 corpus.append(inst["name"])
-    acr = {**learn_acronyms(corpus), **CURATED_ACRONYMS}
+    # A conference may also supply its own acronyms to preserve, keyed
+    # UPPERCASE -> canonical, via an optional top-level "acronyms" map in the
+    # data. This covers acronym-only titles (e.g. single-word session/thrust
+    # names) that never appear mixed-case in the corpus for learn_acronyms to
+    # pick up. Data-supplied entries take precedence over learned/curated ones.
+    data_acr = {str(k).upper(): str(v)
+                for k, v in (data.get("acronyms") or {}).items()}
+    acr = {**learn_acronyms(corpus), **CURATED_ACRONYMS, **data_acr}
     n_recased = 0
     for it in items:
         ti = it.get("title")
@@ -3538,6 +3545,51 @@ body[data-active-view="session-detail"] .detail-head {
    the box starts at four lines. */
 .notes-textarea--tall { min-height: 104px; }
 
+/* ── Session delay control (bottom of a Session detail view) ──────────
+   A quiet single row: a muted label, a small minutes input, and a unit.
+   Deliberately understated — it's a power-user nudge for when a session is
+   running behind, not a primary action, so it reads like fine print. */
+.session-delay {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 22px;
+  /* Indent to line up with the talk TEXT above: the bubbles carry a
+     calc(17px * var(--sp)) margin in a session-detail view, plus a ~17px inner
+     text inset — so ~34px lands the label under the talk titles. */
+  margin-left: calc(34px * var(--sp));
+  font-size: calc(12px * var(--fs));
+  color: var(--muted);
+}
+.session-delay-label { white-space: nowrap; }
+.session-delay-input {
+  width: 3em;
+  padding: 4px 6px;
+  font: inherit;
+  font-size: calc(13px * var(--fs));
+  text-align: right;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color .15s ease, background .15s ease;
+}
+.session-delay-input:focus {
+  border-color: var(--accent);
+  background: var(--surface);
+}
+/* Hide the native number-spinner arrows — the value is typed (or set via the
+   step keys), so the up/down stepper buttons are just visual clutter. */
+.session-delay-input::-webkit-outer-spin-button,
+.session-delay-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.session-delay-input { -moz-appearance: textfield; appearance: textfield; }
+.session-delay-unit { white-space: nowrap; }
+
 /* ── Sticky scroll indicator (current date + time) ─────────────────── */
 #scroll-indicator {
   /* A flex child between the top bar and #content: when shown it takes its own
@@ -4274,6 +4326,15 @@ function defaultState() {
       me:       [{ view: "list", scrollY: 0 }],
     },
     searchQuery: "",
+    // Per-session running-delay, in minutes: { sessionId: <int minutes> }.
+    // Set from the input at the bottom of a Session detail view to account for
+    // a session running behind (or ahead). The delay shifts that session's
+    // start/end AND every one of its talks by the same amount — applied to the
+    // in-memory item timestamps by applySessionDelays(), so it flows through
+    // every view (lists, schedule, time headers, past/now grouping) uniformly.
+    // Persisted locally and carried in the sync payload so the shift travels
+    // between devices with the schedule.
+    sessionDelays: {},
     hiddenTypes: [],          // color tokens to hide globally
     typesPanelOpen: false,
     lastSyncAt: null,         // epoch ms of last successful Paste (import)
@@ -4384,6 +4445,9 @@ function loadState() {
     }
     // Validate the export-icon preference; anything unknown falls back to Copy.
     if (!["copy", "share"].includes(s.exportMethod)) s.exportMethod = "copy";
+    // Validate per-session delays: keep only finite, whole-minute, non-zero
+    // entries (a 0 means "no shift", so it's dropped to keep the map lean).
+    s.sessionDelays = sanitizeDelays(s.sessionDelays);
     return s;
   } catch (_) { return defaultState(); }
 }
@@ -4404,6 +4468,11 @@ let state = loadState();
 /* indexes */
 const sessionMap = Object.fromEntries(DATA.sessions.map(s => [s.id, s]));
 const talkMap    = Object.fromEntries(DATA.talks.map(t => [t.id, t]));
+
+// Fold any persisted per-session delays into the in-memory item timestamps so
+// every subsequent read (sorting, time headers, past/now grouping, displayed
+// ranges) sees the shifted times. Idempotent — recomputes from cached bases.
+applySessionDelays();
 
 // An item's location, falling back to its parent session's location when the
 // item is a talk whose own location is UNSPECIFIED. The two empty cases are
@@ -4637,6 +4706,53 @@ function nowMs() {
 }
 
 function tsToDate(ts) { return ts ? new Date(ts) : null; }
+
+/* Coerce a raw {id: minutes} delay map into a clean one: only entries whose
+   value is a finite whole number of minutes other than 0 survive (0 means "no
+   shift"). Tolerates string values (e.g. from an <input>) by rounding. Used by
+   both loadState and importState so the map never carries junk. */
+function sanitizeDelays(raw) {
+  const out = {};
+  if (raw && typeof raw === "object") {
+    for (const id in raw) {
+      const n = Math.round(Number(raw[id]));
+      if (isFinite(n) && n !== 0) out[id] = n;
+    }
+  }
+  return out;
+}
+
+/* Shift a local-ISO timestamp ("YYYY-MM-DDThh:mm:ss") by `minutes`, returning
+   the same local-ISO format so string ordering (cmpTs) and date slicing
+   (ts.slice(0,10)) keep working unchanged. A falsy ts, zero shift, or an
+   unparseable value is returned untouched. */
+function shiftTs(ts, minutes) {
+  if (!ts || !minutes) return ts;
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return ts;
+  d.setMinutes(d.getMinutes() + minutes);
+  const p = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+       + `T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+/* Re-apply state.sessionDelays to the in-memory item timestamps. Each item
+   keeps an immutable copy of its ORIGINAL start/end (cached on first run as
+   _baseStart/_baseEnd) so this is idempotent — it always recomputes from the
+   base, never compounds. A session is shifted by its own delay; a talk by its
+   parent session's delay. Call after loadState, after any import, and whenever
+   a delay is edited, then re-render so the new times surface everywhere. */
+function applySessionDelays() {
+  const delays = state.sessionDelays || {};
+  const shiftItem = (item, mins) => {
+    if (item._baseStart === undefined) item._baseStart = item.start_ts || null;
+    if (item._baseEnd === undefined)   item._baseEnd   = item.end_ts   || null;
+    item.start_ts = shiftTs(item._baseStart, mins);
+    item.end_ts   = shiftTs(item._baseEnd,   mins);
+  };
+  for (const s of DATA.sessions) shiftItem(s, delays[s.id] || 0);
+  for (const t of DATA.talks)    shiftItem(t, delays[t.session_id] || 0);
+}
 
 function isPast(item) {
   const d = tsToDate(item.end_ts);
@@ -6252,6 +6368,61 @@ function renderSessionDetail(c, sid) {
   if (!talks.length && !hasDetails) {
     c.appendChild(el("p", { class: "empty" }, "No talks listed for this session."));
   }
+
+  // Bottom of the view: the quiet "shift this session" control.
+  appendSessionDelayControl(c, s);
+}
+
+/* The running-delay input at the very bottom of a Session detail. Entering a
+   number of minutes shifts this session AND all its talks by that amount (a
+   negative value moves them earlier), to cope with a session running behind.
+   Committed on change/Enter — not per keystroke — so applying the shift and
+   re-rendering doesn't fight the field for focus. The value persists (saveState)
+   and travels in the sync payload (see exportState/importState). */
+function appendSessionDelayControl(container, s) {
+  if (!state.sessionDelays) state.sessionDelays = {};
+  const current = state.sessionDelays[s.id];
+
+  const row = el("div", { class: "session-delay" });
+  const inputId = `session-delay-${s.id}`;
+  row.appendChild(el("label", {
+    class: "session-delay-label",
+    for: inputId,
+  }, "Shift this session by"));
+
+  const input = el("input", {
+    class: "session-delay-input",
+    id: inputId,
+    type: "number",
+    step: "5",
+    inputmode: "numeric",
+    placeholder: "0",
+    title: "Shift this session and all its talks by this many minutes",
+  });
+  if (current) input.value = String(current);
+
+  const commit = () => {
+    const n = Math.round(Number(input.value));
+    const next = (isFinite(n) && n !== 0) ? n : 0;
+    const prev = state.sessionDelays[s.id] || 0;
+    if (next === prev) return;            // nothing changed — leave the view be
+    if (next === 0) delete state.sessionDelays[s.id];
+    else state.sessionDelays[s.id] = next;
+    saveState();
+    applySessionDelays();
+    // Repaint so the head meta time, the talk bubbles, and any other view of
+    // these items pick up the shifted times; keep the scroll position so the
+    // user stays on the control they just used.
+    rerenderPreservingAnchor();
+  };
+  input.addEventListener("change", commit);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); input.blur(); }
+  });
+
+  row.appendChild(input);
+  row.appendChild(el("span", { class: "session-delay-unit" }, "min"));
+  container.appendChild(row);
 }
 
 /* Sessions list inline expansion: the talk bubbles rendered directly
@@ -8123,6 +8294,9 @@ function exportState() {
     hiddenTypes: state.hiddenTypes,
     selectedDates: state.selectedDates,
     notes: state.notes,
+    // Per-session running-delays (minutes). Old clients ignore this field;
+    // new clients merge it (see importState).
+    sessionDelays: state.sessionDelays,
     // Wide-screen Me-pane width preference (CSS px; null = default 1/3).
     meWidth: state.meWidth,
     // NOTE: navigation state (activeTab / tabStacks / searchQuery) is
@@ -8265,6 +8439,13 @@ function importState(code) {
     if (_sessionIds.has(key)) delete mergedNotes[key];
   }
 
+  // SESSION DELAYS: additive merge, incoming wins where both name the same
+  // session. Like notes, an import can ADD/UPDATE a shift from another device
+  // but never silently clears a local one the incoming code doesn't mention.
+  const mergedDelays = sanitizeDelays(state.sessionDelays);
+  const incomingDelays = sanitizeDelays(data.sessionDelays);
+  for (const id in incomingDelays) mergedDelays[id] = incomingDelays[id];
+
   // Navigation state (activeTab / tabStacks / searchQuery) is intentionally NOT
   // imported: the code no longer carries it, and we leave the receiver exactly
   // where it is. That's safe in both layouts — on narrow the Paste control only
@@ -8280,6 +8461,7 @@ function importState(code) {
     hiddenTypes:    Array.isArray(data.hiddenTypes) ? data.hiddenTypes : [],
     selectedDates:  selDates,
     notes:          mergedNotes,
+    sessionDelays:  mergedDelays,
     // Adopt the incoming pane width if it's a sane number; otherwise keep
     // whatever this device already had. applyMeWidth() (called below)
     // re-clamps it to the current viewport.
@@ -8290,6 +8472,9 @@ function importState(code) {
   });
   saveState();
   applyMeWidth();
+  // Re-fold the merged delays into the item timestamps before painting so the
+  // imported shifts take effect immediately across every view.
+  applySessionDelays();
   render();
   return { added, removed };
 }
