@@ -271,6 +271,9 @@ def _load_overview_text() -> str:
 # -----------------------------------------------------------------------------
 _ABS_TITLE_FONT_MIN = 13.0   # title-font cutoff in pt
 _ABS_BODY_FONT_MIN  = 9.0    # below this is usually a superscript / footnote
+_ABS_REF_FONT_MIN   = 7.5    # reference text never falls below this; smaller
+                             # lines in the reference region are figure axis
+                             # labels / sub-panel junk on a spill page
 _ABS_LINE_TOL = 2.5          # word-Δ within which two words share a line
 
 _ABS_LABEL_RE = re.compile(
@@ -317,6 +320,13 @@ _ABS_STOP_RE = re.compile(
     r"^\s*(?:\d{0,2}\.?\s*)?(References?|Acknowledg(?:e?ments?)?|"
     r"Bibliograph(?:y|ie|ies)|Funding|Author\s+contributions?|"
     r"Competing\s+interests?|Data\s+availability)\b",
+    re.IGNORECASE)
+# Figure/table caption start: "Figure 1.", "Fig. 1:", "Fig 1A)", "Table 2-".
+# Used both to drop caption paragraphs from the abstract body and to stop
+# reference collection when a caption (or the figure block) follows the
+# reference list on a spill page.
+_ABS_CAPTION_RE = re.compile(
+    r"^(?:Figure|Fig\.?|Table|Tab\.?)\s*\d+[A-Za-z]?\s*[:.\-–—)]",
     re.IGNORECASE)
 # Inline "1.Introduction" / "2.Results" pattern pdfplumber sometimes merges
 # with the previous sentence. Used to TRIM the final string. We require a
@@ -531,30 +541,16 @@ def _parse_reference_entries(ref_lines: list[str]) -> dict[int, str]:
     return entries
 
 
-def _parse_book_page(lines, get_more_pages) -> tuple[str, str] | None:
-    """Return (title, abstract) iff this PDF page begins a talk.
+def _book_paper_start_title(lines) -> tuple[str, int] | None:
+    """If `lines` is the start of a paper page in the book, return
+    (title, first_post_title_line_index). Otherwise None.
 
-    Strategy:
-      1. Title comes from the consecutive title-font lines at the top.
-      2. Page must carry a talk-page signature within the next ~10 lines
-         (Contact Email, an email address, a numbered affiliation, or any
-         affiliation line containing an institution keyword). Front-matter
-         pages (Welcome, Committees, Information, Scientific Program …)
-         lack all of those.
-      3. Look for an explicit "Short Abstract" / "Abstract" label and start
-         collecting from after it. If no label is found, fall back to
-         "first prose line after the header block" — this captures the
-         pages whose authors didn't include a labelled short abstract but
-         whose talk body is still useful as an abstract surrogate.
-      4. Consume body lines (page-by-page via `get_more_pages`, which
-         yields the next page's lines) until we hit either a References /
-         Acknowledgments / Bibliography section, the next talk's title-
-         font run, or the abstract hits the size cap.
-
-    `get_more_pages` is a generator that yields the next page's `lines`
-    each time it is called. We use it to spill the abstract across pages
-    so the collector matches the user's "err on the side of including
-    too much" preference."""
+    Detection: the page must lead with one or more consecutive title-font
+    lines, and within the next ~12 lines carry a "talk page signature" —
+    a Contact Email marker, an email address, a numbered affiliation, or
+    a line that contains an institution keyword. Front-matter pages
+    (Welcome, Committees, Scientific Program, …) lead with the same
+    large font but lack the signature."""
     if not lines:
         return None
     first_size = lines[0][0]
@@ -568,7 +564,6 @@ def _parse_book_page(lines, get_more_pages) -> tuple[str, str] | None:
     title = re.sub(r"\s+", " ", " ".join(title_parts)).strip()
     if len(title) < 8:
         return None
-    # Talk-page signature within the next ~12 lines.
     sig_seen = False
     for k in range(i, min(i + 12, len(lines))):
         size, words = lines[k][0], lines[k][1]
@@ -583,6 +578,64 @@ def _parse_book_page(lines, get_more_pages) -> tuple[str, str] | None:
             break
     if not sig_seen:
         return None
+    return title, i
+
+
+def _book_page_is_poster(lines) -> bool:
+    """Return True when a paper-start page is actually a POSTER laid out
+    as a 2-D collage of panels rather than a single-column abstract. Such
+    pages have no readable linear "abstract"; the extracted text is just
+    scattered slide fragments, so we emit the talk with an empty abstract
+    (the poster PDF itself is still attached and viewable).
+
+    Two independent tells, each well clear of any normal abstract page:
+      - rotated / overflow text blocks, which pdfplumber reports at a
+        NEGATIVE x0 (a single-column page never has any); or
+      - a very wide horizontal spread of text combined with many tiny
+        fragment lines (panels and captions strewn across the width)."""
+    body = [(s, x0) for (s, _w, _t, x0) in lines
+            if 5 <= s < _ABS_TITLE_FONT_MIN]
+    if len(body) < 8:
+        return False
+    xs = [x0 for _s, x0 in body]
+    n_neg = sum(1 for x in xs if x < 0)
+    span = max(xs) - min(xs)
+    n_tiny = sum(1 for s, _x in body if s < 7.5)
+    if n_neg >= 2:
+        return True
+    if span > 500 and n_tiny >= 10:
+        return True
+    return False
+
+
+def _parse_book_page(lines, get_more_pages) -> tuple[str, str] | None:
+    """Return (title, abstract) iff this PDF page begins a talk.
+
+    Strategy:
+      1. Confirm the page IS a paper start (via _book_paper_start_title)
+         and take the title.
+      2. Look for an explicit "Short Abstract" / "Abstract" label and start
+         collecting from after it. If no label is found, fall back to
+         "first prose line after the header block" — this captures the
+         pages whose authors didn't include a labelled short abstract but
+         whose talk body is still useful as an abstract surrogate.
+      3. Consume body lines (page-by-page via `get_more_pages`, which
+         yields the next page's lines) until we hit either a References /
+         Acknowledgments / Bibliography section, the next talk's title-
+         font run, or the abstract hits the size cap.
+
+    `get_more_pages` is a generator that yields the next page's `lines`
+    each time it is called. We use it to spill the abstract across pages
+    so the collector matches the user's "err on the side of including
+    too much" preference."""
+    hit = _book_paper_start_title(lines)
+    if hit is None:
+        return None
+    title, i = hit
+    # Poster pages carry no linear abstract — emit the title with an
+    # empty abstract (the poster PDF is still attached for viewing).
+    if _book_page_is_poster(lines):
+        return title, ""
     # Find abstract start: (a) explicit Abstract label, or (b) first prose
     # line after the header block.
     abs_start_idx = None
@@ -672,12 +725,26 @@ def _parse_book_page(lines, get_more_pages) -> tuple[str, str] | None:
             if size >= _ABS_TITLE_FONT_MIN:
                 return True
             text = _abs_line_text(words)
-            # References mode: just collect lines into refs_lines.
+            # References mode: collect lines into refs_lines. Stop the
+            # whole walk once a figure/table caption or an
+            # acknowledgment/funding section appears — on a spill page the
+            # reference list is often followed by the figure block and an
+            # Acknowledgment paragraph, and without this they'd be glued
+            # onto the last reference entry as continuation lines.
             if refs_mode[0]:
                 if re.match(r"^\s*\d{1,3}\s*$", text):
                     continue
                 if re.match(r"^\s*[ivxlcIVXLC]+\s*$", text):
                     continue
+                if _ABS_CAPTION_RE.match(text) or _ABS_STOP_RE.match(text):
+                    return True
+                # Sub-body-size text in the reference region is the
+                # figure block (axis labels, sub-panel letters) that a
+                # spill page often places ABOVE the "Figure N" caption —
+                # references themselves are always body-sized, so a tiny
+                # line here means the reference list has ended.
+                if size < _ABS_REF_FONT_MIN:
+                    return True
                 refs_lines.append(text)
                 continue
             # Found References header — switch modes, keep walking.
@@ -773,10 +840,7 @@ def _parse_book_page(lines, get_more_pages) -> tuple[str, str] | None:
     # between body paragraphs and have no reading value once the figure
     # itself isn't carried over. Matches Figure 1:, Fig. 1:, Fig 1.,
     # Figure 1A:, etc.
-    _CAPTION_RE = re.compile(
-        r"^(?:Figure|Fig\.?|Table|Tab\.?)\s*\d+[A-Za-z]?\s*[:.\-–—)]",
-        re.IGNORECASE)
-    para_strs = [p for p in para_strs if p and not _CAPTION_RE.match(p)]
+    para_strs = [p for p in para_strs if p and not _ABS_CAPTION_RE.match(p)]
     abstract = "\n\n".join(para_strs)
     # Find which references the abstract actually cites, then look up
     # those entries in the References section and append them. Citations
@@ -914,6 +978,83 @@ def _load_abstracts() -> dict[str, str]:
     print(f"[process] book of abstracts : {n_unique} short abstract(s) "
           "extracted.", flush=True)
     return out
+
+
+def _attach_paper_pages(talks: list[dict]) -> None:
+    """Tag each matched talk with the source PDF + its page range, as
+        talk["paper"] = {"file": "<book filename>", "pages": [first, last]}
+    where the page numbers are 1-based and inclusive (relative to the
+    file, which lives in data/). The builder does the actual slicing and
+    embedding; the processor only records WHERE each paper is. Mutates
+    `talks` in place. No-op when the book file is missing or unreadable.
+
+    For this conference the abstract book and the "book of papers" are
+    the same file — short abstracts and full long-form contributions live
+    in the same pages — so we treat each talk's page range within the
+    book as that talk's paper. Paper-start pages are detected with the
+    same heuristic the abstract parser uses (title-font run + talk-page
+    signature); each paper spans [its-start, next-start - 1], and the
+    last paper runs to end of book."""
+    if not ABSTRACT_BOOK_IN.exists():
+        return
+    try:
+        import pdfplumber
+    except ImportError as e:
+        print(f"[process] book of papers   : skipping page detection "
+              f"({e}).", flush=True)
+        return
+    try:
+        with pdfplumber.open(ABSTRACT_BOOK_IN) as pdf:
+            page_count = len(pdf.pages)
+            page_lines = [_abs_page_lines(p) for p in pdf.pages]
+    except Exception as e:                                # noqa: BLE001
+        print(f"[process] book of papers   : could not read "
+              f"{ABSTRACT_BOOK_IN.name} ({e}).", flush=True)
+        return
+
+    # Pre-pass over every page: each one that passes the paper-start
+    # signature is a paper boundary. Collect (page_index, title).
+    boundaries: list[tuple[int, str]] = []
+    for pno, lines in enumerate(page_lines):
+        hit = _book_paper_start_title(lines)
+        if hit is None:
+            continue
+        boundaries.append((pno, hit[0]))
+    if not boundaries:
+        print("[process] book of papers   : no paper-start pages detected; "
+              "no papers attached.", flush=True)
+        return
+
+    # Derive page ranges and index them by the same three title keys the
+    # abstract lookup uses, so the talk-side match below is identical.
+    title_to_range: dict[str, tuple[int, int]] = {}
+    for idx, (pno, title) in enumerate(boundaries):
+        end = (boundaries[idx + 1][0] - 1
+               if idx + 1 < len(boundaries) else page_count - 1)
+        for key in (_norm_title_for_match(title),
+                    _alt_title_fingerprint(title),
+                    _title_prefix_key(title)):
+            if key and key not in title_to_range:
+                title_to_range[key] = (pno, end)
+
+    n_tagged = 0
+    for talk in talks:
+        title = (talk.get("title") or "").strip()
+        if not title:
+            continue
+        rng = (title_to_range.get(_norm_title_for_match(title))
+               or title_to_range.get(_alt_title_fingerprint(title))
+               or title_to_range.get(_title_prefix_key(title)))
+        if rng is None:
+            continue
+        start, end = rng                       # 0-based, inclusive
+        talk["paper"] = {
+            "file": ABSTRACT_BOOK_IN.name,
+            "pages": [start + 1, end + 1],     # 1-based, inclusive
+        }
+        n_tagged += 1
+    print(f"[process] book of papers   : tagged {n_tagged} talk(s) with "
+          f"source pages in {ABSTRACT_BOOK_IN.name}.", flush=True)
 
 
 # -----------------------------------------------------------------------------
@@ -2605,6 +2746,11 @@ def main() -> None:
         _s.pop("type", None)
         _s.pop("topic", None)
         _s.pop("tags", None)
+    # Tag each matched talk with its source PDF + page range
+    # (`paper: {file, pages}`); the builder slices and embeds it. No-op
+    # when the book is missing, pdfplumber isn't installed, or no
+    # paper-start pages are detected — talks then emit without `paper`.
+    _attach_paper_pages(data["talks"])
     JSON_OUT.write_text(
         json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
     n_t = len(data["talks"])

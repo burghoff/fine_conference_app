@@ -171,6 +171,7 @@ app distinguishes a talk from a session). Fields:
 | `institutions` | Recommended | Numbered institution list (see below). |
 | `institutions_may_dedup` | Optional | `true` lets the builder collapse duplicate institutions by short name and renumber. Only set this when authors carry no `insts` references to protect. |
 | `abstract` | Optional | Abstract text. Literal `<sup> <sub> <i> <b> <em> <strong>` tags are rendered; everything else is escaped. |
+| `paper` | Optional | The talk's full paper, given as a reference into a source PDF: `{ "file": "book.pdf", "pages": [first, last] }`. `file` is **relative to the conference's `data/` directory**; `pages` is a 1-based, inclusive page range. The builder slices those pages out at build time. See [Full paper attachments](#full-paper-attachments). |
 | `status` | Optional | Shown as "Status: ..." unless it is `"sessioned"`. |
 | `withdrawn` | Optional | `true` hides the talk by default (revealed by "Show concluded"). |
 
@@ -344,6 +345,50 @@ so each entry is a single affiliation string.
 The list is optional; supply whatever raw forms you have. Without it (or without
 `build_affiliation_map.py`), the builder still works using a keyword heuristic
 to shorten affiliations.
+
+---
+
+## Full paper attachments
+
+A talk's `paper` field references its full paper as a page range inside a source
+PDF:
+
+```json
+"paper": { "file": "iqclsw2026-book-of-abstracts.pdf", "pages": [9, 11] }
+```
+
+- `file` — the source PDF, *relative to the conference's `data/` directory*
+  (here, `conferences/<slug>/data/iqclsw2026-book-of-abstracts.pdf`). Usually
+  one big book of papers shared by every talk; abstracts long enough to serve
+  as papers count too — the app treats them interchangeably.
+- `pages` — `[first, last]`, 1-based and **inclusive**. A single-page paper is
+  `[n, n]`.
+
+The processor's job is only to find each talk's page range in the source book
+and record it (the layout differs per conference, the same way per-talk abstract
+extraction does). It does **not** cut the PDF. The shared builder does the
+slicing: it opens each distinct source PDF once, extracts each talk's page
+range, and embeds the result.
+
+When **any** talk's `paper.file` resolves to a file that exists on disk, the
+build emits a second HTML output alongside the normal one:
+
+- `<slug>_app.html` — the usual lightweight app (no embedded papers).
+- `<slug>_app_papers.html` — the same app with every talk's sliced paper
+  embedded as a base64 PDF blob. Each talk-detail page that has a paper shows a
+  small document-icon button next to **Back** in the top bar; tapping it opens
+  the paper (in a new tab on touch devices, same tab on desktop).
+
+The `_papers` variant is sized for the embedded papers — tens of megabytes is
+normal, hundreds for a large conference. Distribute the lightweight one to
+people who only need the program; distribute the `_papers` one to people who
+want the offline papers too.
+
+The builder needs `pypdf` to slice the pages; if it isn't installed, the build
+installs it automatically the first time a `_papers` build runs.
+
+If no talk has a usable `paper`, only the lightweight HTML is produced and the
+build behaves exactly as it did before this field existed.
 
 ---
 

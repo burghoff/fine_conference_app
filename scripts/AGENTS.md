@@ -326,6 +326,46 @@ or a non-technical event?" (→ session type).
 - **Workshop / Panel → split by content:** if it has named child talks, it is a
   `Technical` session; if it is pure discussion with no talks, it is an `Event`.
 
+## Optional: attaching full papers
+
+A conference that ships a complete book of full papers — or whose long-form
+abstracts read as papers in their own right — can attach each talk's paper to
+the app. The processor's job is small: find each paper's page range in the
+source book and record it. It does NOT cut the PDF — the builder does that.
+
+1. **Find each paper's page range in the source book.** The processor reads the
+   book (PDF, usually) and works out which pages belong to each talk — a
+   title-font run at the top of a page is the usual paper boundary, so a paper
+   spans `[its-start, next-start - 1]`. No file writing; you only need the page
+   numbers.
+
+2. **Record a reference on the talk.** Set
+   `talk["paper"] = {"file": "<book>.pdf", "pages": [first, last]}` on every
+   matched talk, where `file` is the source PDF's path *relative to `data/`* and
+   `pages` is a 1-based, inclusive range (`[n, n]` for a single page). Omit the
+   field on talks with no paper. See [Full paper attachments] in
+   `docs/CONFERENCE_JSON.md` for the field's contract.
+
+3. **`make_app.py` + the builder do the rest.** When at least one `paper.file`
+   resolves to a file on disk, the builder produces a second output
+   `<slug>_app_papers.html` alongside the normal `<slug>_app.html`. The
+   `_papers` build opens each source PDF once, slices every talk's recorded page
+   range (installing `pypdf` automatically if needed), base64-embeds the result,
+   and renders a document-icon button on each talk's detail page that opens the
+   paper (new tab on touch, same tab on desktop). No conference-specific code in
+   the builder; matching is purely the `paper` reference.
+
+The `_papers` HTML is the size of all the embedded papers combined — tens of MB
+for a small workshop, hundreds for a big conference. Distribute the lightweight
+HTML to people who only want the program; ship the `_papers` variant only to
+audiences that want offline papers. Both files live in `conferences/<slug>/`.
+
+Same content rules apply: don't paste any of the book's text into tracked
+source — the source PDF stays under `data/`, on the user's machine, and the
+processor records only filenames and page numbers.
+
+[Full paper attachments]: ../docs/CONFERENCE_JSON.md#full-paper-attachments
+
 ## Login-required sources
 
 If the program lives behind a login, the fetcher can use Playwright with the

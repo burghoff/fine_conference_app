@@ -96,7 +96,9 @@ from __future__ import annotations
 import base64
 import html
 import json
+import os
 import re
+import subprocess
 import sys
 import unicodedata
 import zlib
@@ -190,6 +192,26 @@ MINIFY = True
 # debugging. See __decodeData / the vendored block in the template.
 # -----------------------------------------------------------------------------
 COMPRESS_DATA = True
+
+
+# -----------------------------------------------------------------------------
+# Per-talk paper embedding (the "_papers" variant).
+#
+# When the FCA_PAPERS_MODE env var is set, the builder reads each talk's
+# `paper` field, resolves it under FCA_PAPERS_DATA_DIR (the conference's
+# data/ directory), base64-encodes the file bytes, and bakes them into the
+# HTML as `window.PAPERS = {"<talk_id>": {"mime": "…", "b64": "…"}, …}`.
+# The app's talk-detail view then renders a document-icon button in the top
+# bar that builds a Blob from the bytes and opens it in a new tab.
+#
+# Both env vars are set by make_app.py for the second of its two builds when
+# the conference ships any per-talk papers; the normal build leaves them
+# unset and PAPERS_MODE stays off (the standard single-output build).
+# -----------------------------------------------------------------------------
+PAPERS_MODE = bool(os.environ.get("FCA_PAPERS_MODE"))
+PAPERS_DATA_DIR = (
+    Path(os.environ["FCA_PAPERS_DATA_DIR"])
+    if os.environ.get("FCA_PAPERS_DATA_DIR") else None)
 
 
 # -----------------------------------------------------------------------------
@@ -4254,6 +4276,7 @@ body[data-empty-style="hatch"] .bubble.empty-session[data-kind="session"] {
  * SOFTWARE.
  */
 __DECODER_BLOCK__const DATA = __DATA_INIT__;
+__PAPERS_INIT__
 
 /* =============================================================== */
 /* state                                                            */
@@ -8232,11 +8255,81 @@ function chevronsSvg(dir) {
        + 'stroke-linejoin="round" aria-hidden="true">' + paths + '</svg>';
 }
 
+/* Lined "document with corner fold" icon shown next to Back on talk-detail
+   pages in the _papers build when the talk has an embedded paper to open.
+   Same stroke conventions as chevronsSvg above so the corner reads as one
+   visual family. */
+function docIconSvg() {
+  return '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" '
+       + 'stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+       + 'stroke-linejoin="round" aria-hidden="true">'
+       + '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/>'
+       + '<polyline points="14 3 14 9 20 9"/>'
+       + '<line x1="8" y1="13" x2="16" y2="13"/>'
+       + '<line x1="8" y1="17" x2="14" y2="17"/></svg>';
+}
+
+/* Return a Blob URL for the talk's embedded paper, building it on first
+   use and caching it on window.__paperUrls so middle-click and same-tab
+   navigation share the same URL (the browser would otherwise re-render
+   the same PDF under two different URLs). Returns null when the build is
+   the lightweight variant (no window.PAPERS) or when this talk has no
+   embedded paper. */
+function paperUrlFor(id) {
+  if (typeof window === "undefined") return null;
+  if (!window.PAPERS || !window.PAPERS[id]) return null;
+  if (!window.__paperUrls) window.__paperUrls = {};
+  if (window.__paperUrls[id]) return window.__paperUrls[id];
+  const entry = window.PAPERS[id];
+  // atob -> binary string -> Uint8Array (the only byte-array shape Blob
+  // accepts in older mobile browsers without ArrayBuffer transfer).
+  const bin = atob(entry.b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const blob = new Blob([bytes], { type: entry.mime || "application/pdf" });
+  const url = URL.createObjectURL(blob);
+  window.__paperUrls[id] = url;
+  return url;
+}
+
 function renderTopbarExtras(tab, top) {
   const slot = $("#topbar-extra");
   slot.innerHTML = "";
   const left = $("#topbar-left");
   if (left) left.innerHTML = "";
+  // Talk detail in the _papers build: surface the embedded paper via a
+  // doc-icon anchor next to Back. Skipped silently when no paper exists
+  // for this talk, or in the lightweight build (no window.PAPERS).
+  //
+  // Desktop (fine pointer): a plain <a href> opens the PDF in the SAME
+  // tab, and the browser's native middle-click / ctrl/cmd-click open it
+  // in a NEW tab — all for free, no JS.
+  //
+  // Touch devices (coarse pointer, no hover): open in a NEW tab instead
+  // (target="_blank"). Same-tab navigation to the blob: URL would leave
+  // the SPA; on mobile the app page is usually too large to bfcache, so
+  // returning from the PDF RELOADS it. A back gesture that lands by
+  // reloading the document never fires popstate, so our back-button trap
+  // can't run and the next back can step off the app entirely. Opening
+  // the paper in its own tab keeps the app's tab and history untouched —
+  // closing/​backing out of the PDF tab returns to the app intact.
+  if (top.view && top.view.startsWith("talk:")) {
+    const id = top.view.slice(5);
+    const url = paperUrlFor(id);
+    if (url) {
+      const aProps = {
+        class: "icon-btn",
+        href: url,
+        title: "Open paper",
+        "aria-label": "Open paper",
+        html: docIconSvg(),
+      };
+      const touch = typeof window !== "undefined" && window.matchMedia
+        && window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+      if (touch) { aProps.target = "_blank"; aProps.rel = "noopener"; }
+      slot.appendChild(el("a", aProps));
+    }
+  }
   if (tab === "me" && top.view === "list") {
     // "Last sync" sits just left of the Export/Import controls, mirroring the
     // wide Me pane's header so the one-pane and two-pane Me views read the
@@ -9809,11 +9902,18 @@ function canGoBack() {
 
 window.addEventListener("popstate", (e) => {
   const st = e.state;
-  if (st && st.fcaGuard) {
-    // Device/browser Back at the app ROOT landed on the guard sentinel (the app
-    // is still loaded — see seedBackHistory). If a "Leave" is in progress, let it
-    // continue off the app; otherwise re-pin the base (so we sit on a real entry)
-    // and ask for confirmation first.
+  // "Next stop is off the app" — either the guard sentinel we planted at
+  // startup (the normal case), OR an entry whose state doesn't look like
+  // one of ours at all (no fcaIdx and not fcaGuard). The second case is
+  // a safety net for browsers that drop our state under some conditions
+  // — observed on mobile Chrome when the tab navigates to a blob: URL
+  // (the PDF) and then back: depending on bfcache eligibility, the entry
+  // we land on may not carry the state seedBackHistory tried to stamp.
+  // Without this branch, the next back would step straight off the app
+  // (no confirmation). Treating it like the guard re-pins and prompts.
+  const isGuard = st && st.fcaGuard;
+  const isUnknown = !st || (typeof st.fcaIdx !== "number" && !st.fcaGuard);
+  if (isGuard || isUnknown) {
     if (_exiting) { _exiting = false; history.back(); return; }
     snapshotScroll();
     _navIdx = 0;
@@ -9821,8 +9921,8 @@ window.addEventListener("popstate", (e) => {
     showExitConfirm();
     return;
   }
-  _navIdx = (st && typeof st.fcaIdx === "number") ? st.fcaIdx : 0;
-  _applyNavSnapshot(st && st.fcaSnap);
+  _navIdx = st.fcaIdx;
+  _applyNavSnapshot(st.fcaSnap);
 });
 
 /* Confirmation shown when a device/browser Back would leave the app (we've landed
@@ -11406,6 +11506,144 @@ def minify_html(template: str) -> str:
     return template
 
 
+def _ensure_pypdf():
+    """Import and return the `pypdf` module, installing it on the fly if
+    it isn't already available. Paper embedding (the _papers build) slices
+    page ranges out of source PDFs, which needs pypdf; rather than make
+    that a hard prerequisite, we pip-install it the first time it's
+    needed. Returns None if the import still fails after attempting an
+    install (the caller then skips embedding rather than crashing)."""
+    try:
+        import pypdf
+        return pypdf
+    except ImportError:
+        pass
+    print("[papers] pypdf not installed — installing it now "
+          "(needed to slice paper page ranges) …")
+    try:
+        subprocess.check_call(
+            [sys.executable, "-m", "pip", "install", "--quiet", "pypdf"])
+    except Exception as e:                                # noqa: BLE001
+        print(f"[papers] could not install pypdf ({e}); "
+              "skipping paper embedding.")
+        return None
+    try:
+        import pypdf
+        return pypdf
+    except ImportError as e:
+        print(f"[papers] pypdf still unimportable after install ({e}); "
+              "skipping paper embedding.")
+        return None
+
+
+def _slice_pdf_pages(pypdf, reader, first_1based: int,
+                     last_1based: int) -> bytes:
+    """Return the bytes of a new PDF containing pages
+    [first_1based, last_1based] (inclusive, 1-based) of `reader`. Page
+    numbers are clamped to the document's real range."""
+    import io as _io
+
+    n = len(reader.pages)
+    first = max(1, int(first_1based))
+    last = min(n, int(last_1based))
+    writer = pypdf.PdfWriter()
+    for p in range(first - 1, last):            # to 0-based half-open
+        writer.add_page(reader.pages[p])
+    buf = _io.BytesIO()
+    writer.write(buf)
+    return buf.getvalue()
+
+
+def _build_papers_init(data: dict) -> str:
+    """Return a JS initializer that defines `window.PAPERS = {…}` by
+    slicing each talk's recorded page range out of its source PDF. Used
+    only in the _papers build; returns an empty string when there is
+    nothing to embed.
+
+    Each talk's `paper` is an object
+        {"file": "<name>", "pages": [first, last]}   # 1-based, inclusive
+    where `file` is relative to the conference's data/ directory. The
+    builder opens each distinct source PDF once (caching the reader),
+    slices the page range, and emits an entry
+        "<talk_id>": {"mime": "application/pdf", "b64": "<base64>"}
+    keyed by the talk's id. Talks with no `paper`, an unreadable source,
+    or a bad page range are skipped (the doc-icon button is gated on
+    per-talk presence in the JS, so a skip just means no button)."""
+    if PAPERS_DATA_DIR is None:
+        print("[papers] PAPERS_MODE is set but FCA_PAPERS_DATA_DIR is not — "
+              "skipping paper embedding.")
+        return ""
+    if not PAPERS_DATA_DIR.is_dir():
+        print(f"[papers] data dir {PAPERS_DATA_DIR} does not exist — "
+              "skipping paper embedding.")
+        return ""
+    # Only pay the pypdf import/install cost if at least one talk actually
+    # carries a paper reference.
+    if not any(isinstance(t.get("paper"), dict) for t in data.get("talks") or []):
+        return ""
+    pypdf = _ensure_pypdf()
+    if pypdf is None:
+        return ""
+
+    # Cache one PdfReader per distinct source file (the whole book is read
+    # once, not once per talk).
+    readers: dict[str, object] = {}
+
+    def _reader_for(name: str):
+        if name in readers:
+            return readers[name]
+        src = PAPERS_DATA_DIR / name
+        if not src.is_file():
+            print(f"[papers]   source PDF not found: {src}")
+            readers[name] = None
+            return None
+        try:
+            readers[name] = pypdf.PdfReader(str(src))
+        except Exception as e:                            # noqa: BLE001
+            print(f"[papers]   could not open {src} ({e})")
+            readers[name] = None
+        return readers[name]
+
+    entries: dict[str, dict[str, str]] = {}
+    total_raw = 0
+    for t in data.get("talks") or []:
+        ref = t.get("paper")
+        tid = t.get("id")
+        if not isinstance(ref, dict) or not tid:
+            continue
+        name = ref.get("file")
+        pages = ref.get("pages")
+        if not name or not isinstance(pages, (list, tuple)) or len(pages) != 2:
+            print(f"[papers]   talk {tid}: malformed paper ref {ref!r}; "
+                  "skipping.")
+            continue
+        reader = _reader_for(name)
+        if reader is None:
+            continue
+        try:
+            raw = _slice_pdf_pages(pypdf, reader, pages[0], pages[1])
+        except Exception as e:                            # noqa: BLE001
+            print(f"[papers]   talk {tid}: could not slice "
+                  f"{name} pages {pages} ({e}); skipping.")
+            continue
+        entries[tid] = {
+            "mime": "application/pdf",
+            "b64": base64.b64encode(raw).decode("ascii"),
+        }
+        total_raw += len(raw)
+    if not entries:
+        print("[papers] no papers resolved — embedding nothing.")
+        return ""
+    blob = json.dumps(entries, separators=(",", ":"))
+    # Escape "</" so an embedded "</script>" can't terminate the script
+    # element. Same precaution as the data literal.
+    blob = blob.replace("</", r"<\/")
+    print(f"[papers] embedded {len(entries):,} paper(s), "
+          f"{total_raw / (1024 * 1024):.1f} MB raw "
+          f"-> {len(blob) / (1024 * 1024):.1f} MB of base64 JS literal.")
+    return f"window.PAPERS = {blob};"
+
+
 def main() -> None:
     conference_name = (_DATA.get("conference_name") or "").strip() or "Conference"
     print(f"[title] conference name: {conference_name!r}")
@@ -11465,6 +11703,12 @@ def main() -> None:
         data_init = json_blob.replace("</", r"<\/")
         decoder_block = ""
 
+    # Build the embedded-papers initializer for the _papers variant of the
+    # build. In the normal build PAPERS_MODE is off and the placeholder
+    # collapses to an empty string, so the template line vanishes after
+    # substitution — no PAPERS object, no behavioral change in the app.
+    papers_init = _build_papers_init(data) if PAPERS_MODE else ""
+
     template = HTML_TEMPLATE.replace("__DECODER_BLOCK__", decoder_block)
 
     # Minify the TEMPLATE (comments only), before the DATA payload is spliced
@@ -11484,6 +11728,7 @@ def main() -> None:
         "__BODY_DATA__",
         ' data-empty-style="hatch"' if SESSIONS_EMPTY_HATCHING else "")
     html = html.replace("__DATA_INIT__", data_init)
+    html = html.replace("__PAPERS_INIT__", papers_init)
     safe_name = (conference_name.replace("&", "&amp;")
                                  .replace("<", "&lt;")
                                  .replace(">", "&gt;"))
