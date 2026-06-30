@@ -4276,7 +4276,6 @@ body[data-empty-style="hatch"] .bubble.empty-session[data-kind="session"] {
  * SOFTWARE.
  */
 __DECODER_BLOCK__const DATA = __DATA_INIT__;
-__PAPERS_INIT__
 
 /* =============================================================== */
 /* state                                                            */
@@ -8285,21 +8284,25 @@ function docIconSvg() {
 /* Return a Blob URL for the talk's embedded paper, building it on first
    use and caching it on window.__paperUrls so middle-click and same-tab
    navigation share the same URL (the browser would otherwise re-render
-   the same PDF under two different URLs). Returns null when the build is
-   the lightweight variant (no window.PAPERS) or when this talk has no
-   embedded paper. */
+   the same PDF under two different URLs). The paper bytes live in an inert
+   <script type="text/fca-paper" id="fca-paper-<id>"> element at the end of the
+   body (so they don't block first paint and are never parsed as one giant JS
+   literal); we read and decode just this talk's element on demand. Returns null
+   in the lightweight build (no such element) or when this talk has no paper. */
 function paperUrlFor(id) {
-  if (typeof window === "undefined") return null;
-  if (!window.PAPERS || !window.PAPERS[id]) return null;
+  if (typeof document === "undefined") return null;
+  const el = document.getElementById("fca-paper-" + id);
+  if (!el) return null;
   if (!window.__paperUrls) window.__paperUrls = {};
   if (window.__paperUrls[id]) return window.__paperUrls[id];
-  const entry = window.PAPERS[id];
+  const b64 = (el.textContent || "").trim();
+  if (!b64) return null;
   // atob -> binary string -> Uint8Array (the only byte-array shape Blob
   // accepts in older mobile browsers without ArrayBuffer transfer).
-  const bin = atob(entry.b64);
+  const bin = atob(b64);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  const blob = new Blob([bytes], { type: entry.mime || "application/pdf" });
+  const blob = new Blob([bytes], { type: el.getAttribute("data-mime") || "application/pdf" });
   const url = URL.createObjectURL(blob);
   window.__paperUrls[id] = url;
   return url;
@@ -11423,7 +11426,12 @@ window.addEventListener("focus", rearmOnWake);
 
 scheduleNextTick();
 </script>
-
+<!-- Embedded papers (the _papers build only): one inert element per paper,
+     placed AFTER the app script so the page renders before the (large) PDF
+     bytes are read. They are NOT executed (non-JS type) and never parsed as a
+     giant JS literal — paperUrlFor() reads a single element's base64 on demand.
+     Collapses to nothing in the normal build. -->
+__PAPERS_BLOBS__
 </body>
 </html>
 """
@@ -11601,21 +11609,28 @@ def _slice_pdf_pages(pypdf, reader, first_1based: int,
     return buf.getvalue()
 
 
-def _build_papers_init(data: dict) -> str:
-    """Return a JS initializer that defines `window.PAPERS = {…}` by
-    slicing each talk's recorded page range out of its source PDF. Used
-    only in the _papers build; returns an empty string when there is
-    nothing to embed.
+def _build_papers_blobs(data: dict) -> str:
+    """Return the HTML for the embedded papers — ONE inert element per paper —
+    by slicing each talk's recorded page range out of its source PDF. Used only
+    in the _papers build; returns an empty string when there is nothing to embed.
 
     Each talk's `paper` is an object
         {"file": "<name>", "pages": [first, last]}   # 1-based, inclusive
-    where `file` is relative to the conference's data/ directory. The
-    builder opens each distinct source PDF once (caching the reader),
-    slices the page range, and emits an entry
-        "<talk_id>": {"mime": "application/pdf", "b64": "<base64>"}
-    keyed by the talk's id. Talks with no `paper`, an unreadable source,
-    or a bad page range are skipped (the doc-icon button is gated on
-    per-talk presence in the JS, so a skip just means no button)."""
+    where `file` is relative to the conference's data/ directory. The builder
+    opens each distinct source PDF once (caching the reader), slices the page
+    range, and emits an element
+
+        <script type="text/fca-paper" id="fca-paper-<talk_id>"
+                data-mime="application/pdf">BASE64</script>
+
+    keyed by the talk's id. The `text/fca-paper` type is non-executable, so the
+    browser stores each element's base64 as inert text WITHOUT the JS engine
+    parsing it — that is what lets the page render before the (potentially huge)
+    paper bytes are read; paperUrlFor() decodes a single element on demand. These
+    elements are placed at the very end of <body> (after the app script). Talks
+    with no `paper`, an unreadable source, or a bad page range are skipped (the
+    doc-icon button is gated on per-talk presence in the JS, so a skip just means
+    no button)."""
     if PAPERS_DATA_DIR is None:
         print("[papers] PAPERS_MODE is set but FCA_PAPERS_DATA_DIR is not — "
               "skipping paper embedding.")
@@ -11681,14 +11696,18 @@ def _build_papers_init(data: dict) -> str:
     if not entries:
         print("[papers] no papers resolved — embedding nothing.")
         return ""
-    blob = json.dumps(entries, separators=(",", ":"))
-    # Escape "</" so an embedded "</script>" can't terminate the script
-    # element. Same precaution as the data literal.
-    blob = blob.replace("</", r"<\/")
+    # One inert element per paper. base64 is [A-Za-z0-9+/=] only, so it can never
+    # contain "</script>" — no escaping needed, and nothing here is executed.
+    parts = [
+        f'<script type="text/fca-paper" id="fca-paper-{tid}" '
+        f'data-mime="{e["mime"]}">{e["b64"]}</script>'
+        for tid, e in entries.items()
+    ]
+    html = "\n".join(parts)
     print(f"[papers] embedded {len(entries):,} paper(s), "
           f"{total_raw / (1024 * 1024):.1f} MB raw "
-          f"-> {len(blob) / (1024 * 1024):.1f} MB of base64 JS literal.")
-    return f"window.PAPERS = {blob};"
+          f"-> {len(html) / (1024 * 1024):.1f} MB of inert base64 elements.")
+    return html
 
 
 # =============================================================================
@@ -11936,11 +11955,11 @@ def main() -> None:
         data_init = json_blob.replace("</", r"<\/")
         decoder_block = ""
 
-    # Build the embedded-papers initializer for the _papers variant of the
-    # build. In the normal build PAPERS_MODE is off and the placeholder
-    # collapses to an empty string, so the template line vanishes after
-    # substitution — no PAPERS object, no behavioral change in the app.
-    papers_init = _build_papers_init(data) if PAPERS_MODE else ""
+    # Build the embedded-papers markup for the _papers variant of the build (one
+    # inert element per paper, placed at the end of <body> so the page renders
+    # before the bytes are read). In the normal build PAPERS_MODE is off and the
+    # placeholder collapses to an empty string — no elements, no app change.
+    papers_blobs = _build_papers_blobs(data) if PAPERS_MODE else ""
 
     template = HTML_TEMPLATE.replace("__DECODER_BLOCK__", decoder_block)
 
@@ -11961,7 +11980,7 @@ def main() -> None:
         "__BODY_DATA__",
         ' data-empty-style="hatch"' if SESSIONS_EMPTY_HATCHING else "")
     html = html.replace("__DATA_INIT__", data_init)
-    html = html.replace("__PAPERS_INIT__", papers_init)
+    html = html.replace("__PAPERS_BLOBS__", papers_blobs)
     safe_name = (conference_name.replace("&", "&amp;")
                                  .replace("<", "&lt;")
                                  .replace(">", "&gt;"))
