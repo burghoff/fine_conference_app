@@ -1422,16 +1422,19 @@ def _restructure_sessions_from_book(
                 for tid in tids:
                     talk = next(t for t in talks if t["id"] == tid)
                     talk["session_id"] = sess_id
-                # The session's COLOR follows its talks' dominant color
-                # (preserves the existing classifier's School/Workshop split).
-                colors = [next(t for t in talks if t["id"] == tid)["color"]
-                          for tid in tids]
-                color = max(set(colors), key=colors.count) if colors else "blue"
+                # The session COLOR is a SESSION-type token picked by PHASE,
+                # NOT the dominant talk color: talk-type tokens (indigo
+                # "Invited", sky "Contributed") must not leak up to the session
+                # level — those aren't session types. A School session is
+                # Tutorial (fuchsia); a Workshop session is Technical (blue),
+                # matching _flush_tech() and the SESSION_TYPES registry. The
+                # talks inside keep their own Invited/Contributed coloring.
+                is_school = "School" in item["name"]
+                color = "fuchsia" if is_school else "blue"
                 sessions.append({
                     "id": sess_id,
                     "title": item["name"],
-                    "type": ("School" if "School" in item["name"]
-                             else "Workshop"),
+                    "type": "School" if is_school else "Workshop",
                     "topic": "",
                     "date": date_label,
                     "location": "",
@@ -1538,10 +1541,12 @@ def _restructure_sessions_from_book(
 # `id` is the color token the app filters and groups on, AND the token each
 # session/talk's `color` field must use. The conference's color caption is a
 # three-way split — invited-for-school / invited-for-workshop / contributed &
-# posters — which we model as the talk types below. Sessions are colored by
-# their dominant talk type, so the session registry mirrors the same tokens
-# (the app's Sessions tab then groups/filters by talk character, which is the
-# only meaningful axis on a single-track program).
+# posters — which we model as the TALK types below. SESSIONS use their own
+# coarser taxonomy (Technical / Tutorial / Poster / Event), colored by program
+# PHASE — never by their talks' type. Talk-type tokens (indigo "Invited", sky
+# "Contributed") deliberately do NOT appear in SESSION_TYPES, so a session can
+# never be labelled "Invited"; the per-talk Invited/Contributed split still
+# shows on the talks themselves.
 # -----------------------------------------------------------------------------
 # Standard session/talk type taxonomy. The shared types; a conference only
 # surfaces the ones its program actually uses (the app hides count-0 types).
