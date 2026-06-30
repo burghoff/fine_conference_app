@@ -7221,13 +7221,13 @@ function _textHitPredicates(q) {
   const talkHit = t =>
        inText(t.title) || inAuthors(t) || inArr(t.author_aliases)
     || inInsts(t)
-    || inText(t.id)
+    || inText(t.code)
     || inText(t.speaker) || inText(t.first_author) || inText(t.last_author)
     || inText(t.speaker_aff) || inText(t.last_aff)
     || inArr(t.inst_shorts)
     || inText(t.abstract);   // abstracts are always searched
   const sessHit = s =>
-       inText(s.title) || inText(s.id)
+       inText(s.title) || inText(s.code)
     || (Array.isArray(s.tags) && s.tags.some(t => t && (inText(t.value) || inText(t.key))))
     || inText(s.presider) || inText(s.presider_aff)
     || inText(s.presider_aff_short)
@@ -7373,8 +7373,9 @@ function renderMe(c) {
 
   // General conference notes — not tied to any session/talk. Stored under the
   // reserved CONFERENCE_NOTES_KEY in state.notes. The "Copy all" control in
-  // this section's header exports these PLUS every scheduled session/talk's
-  // notes (see doCopyNotes); the post-copy toast confirms the scope.
+  // this section's header exports these PLUS every talk the user has a note on
+  // — scheduled or not — and every scheduled session's talks (see
+  // doCopyNotes); the post-copy toast confirms the scope.
   appendNotesBox(c, CONFERENCE_NOTES_KEY, {
     title: "Notes",
     placeholder: "General conference notes…",
@@ -7448,11 +7449,12 @@ function renderMe(c) {
   c.appendChild(about);
 }
 
-/* Plain-text export of the user's notes. Walks every scheduled talk
-   (including talks inside scheduled sessions) in chronological order
-   and emits a single-line reference — "<number>, <title>, <authors>" —
-   followed by the user's notes underneath. The result is plain text
-   with no Markdown, so it pastes cleanly into anything.
+/* Plain-text export of the user's notes. Walks every talk the user has a
+   note on — PLUS every scheduled talk (including talks inside scheduled
+   sessions) — in chronological order and emits a single-line reference —
+   "<number>, <title>, <authors>" — followed by the user's notes underneath.
+   The result is plain text with no Markdown, so it pastes cleanly into
+   anything.
 
    Session-level notes are not part of this export — only talk notes
    are. */
@@ -7473,6 +7475,16 @@ function buildNotesText(stats) {
       const t = talkMap[tid];
       if (t && !talkSet.has(t.id)) talkSet.set(t.id, t);
     }
+  }
+  // Also include any talk the user has actually taken a note on, even if it
+  // isn't scheduled — "Copy all" means every talk note, not just the ones in
+  // the schedule. (Notes are keyed by talk OR the reserved general-notes key;
+  // talkMap lookups naturally skip the latter and any session-keyed leftovers.)
+  for (const id in notes) {
+    if (id === CONFERENCE_NOTES_KEY) continue;
+    if (!(notes[id] || "").trim()) continue;
+    const t = talkMap[id];
+    if (t && !talkSet.has(t.id)) talkSet.set(t.id, t);
   }
   const talks = [...talkSet.values()]
     .sort((a, b) => cmpTs(a.start_ts, b.start_ts));
@@ -7510,12 +7522,13 @@ function buildNotesText(stats) {
   return out.join("\n");
 }
 
-/* Build the one-line citation for a talk: "<id>, <title>, <authors>".
+/* Build the one-line citation for a talk: "<code>, <title>, <authors>".
+   Uses the human-facing `code` (real or synthesized) — not the opaque id.
    Authors are joined with semicolons; the speaker is marked with a
    trailing asterisk when known. Prefers the full names from the structured
    `authors` list; falls back to the loose `author_aliases` form. */
 function formatTalkReference(t) {
-  const parts = [t.id || "", displayTitle(t) || "(untitled)"];
+  const parts = [t.code || t.id || "", displayTitle(t) || "(untitled)"];
 
   let authorsStr = "";
   const names = (Array.isArray(t.authors) ? t.authors : [])
@@ -9599,8 +9612,14 @@ function scheduleMeConnectorSettle(pane, prevScroll) {
 }
 
 function pageTitleFor(tab, top) {
-  if (top.view.startsWith("talk:"))    return talkMap[top.view.slice(5)]?.id || "Talk";
-  if (top.view.startsWith("session:")) return sessionMap[top.view.slice(8)]?.id || "Session";
+  if (top.view.startsWith("talk:")) {
+    const t = talkMap[top.view.slice(5)];
+    return (t && (t.code || t.id)) || "Talk";
+  }
+  if (top.view.startsWith("session:")) {
+    const s = sessionMap[top.view.slice(8)];
+    return (s && (s.code || s.id)) || "Session";
+  }
   if (top.view.startsWith("searchresults:")) {
     // "searchresults:<mode>:<query>"
     const rest = top.view.slice("searchresults:".length);
@@ -10398,13 +10417,41 @@ document.addEventListener("keydown", (e) => {
   else switchTab(tab);
 });
 
-/* Esc inside a text field (the Find box, a notes textarea, any input/
-   contenteditable) just drops focus out of it — without the native type=search
-   "clear" — instead of doing nothing. Runs in both layouts. */
+/* Esc behavior. Two jobs, in priority order:
+
+   1. In the SEARCH view, Esc returns you to wherever you were before you opened
+      Search (the previous tab/view) — in BOTH layouts, in a single press, even
+      straight from the focused Find box. "Before" is the prior browser-history
+      entry (_navIdx) or, if you've drilled into a Search sub-view, that stack
+      step. We stopImmediatePropagation so the wide-layout bubble-nav Esc handler
+      below doesn't ALSO fire a Back and double-step. Skipped when: focus is in a
+      NON-search field (e.g. a note inside a Search sub-view — Esc should just
+      drop focus there); an engaged keyboard selection or suggestion pill is up
+      (let the wide handler clear that first); a modal sheet owns the keys; or
+      there's simply nowhere to go back to (Search was the entry point).
+
+   2. Otherwise, Esc inside any text field (a notes textarea, etc.) just drops
+      focus out of it — without the native type=search "clear". Both layouts. */
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   const el = e.target;
-  if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) {
+  const inField = !!(el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA"
+                            || el.isContentEditable));
+  const inSearchInput = !!(el && el.id === "search-input");
+
+  if (state.activeTab === "search"
+      && (inSearchInput || !inField)
+      && !_selActive && _selPillIdx < 0
+      && !document.querySelector(".sheet-overlay")
+      && (_navIdx > 0 || canGoBack())) {
+    e.preventDefault();
+    e.stopImmediatePropagation();        // we own this Esc — no double-Back
+    if (inSearchInput) el.blur();         // drop focus before the view rebuilds
+    triggerBack(false);
+    return;
+  }
+
+  if (inField) {
     e.preventDefault();
     el.blur();
   }
@@ -11644,6 +11691,180 @@ def _build_papers_init(data: dict) -> str:
     return f"window.PAPERS = {blob};"
 
 
+# =============================================================================
+# Display-code synthesis + surrogate-id assignment (build time)
+#
+# The app shows a human-facing "conference code" for each session/talk (e.g.
+# "AM1C", "AM1C.3") but uses an opaque internal `id` purely as a key. The
+# processor emits, per item:
+#   * id   — a unique key (its own surrogate; historically, sometimes the code)
+#   * code — the REAL conference-assigned code, or "" when the conference
+#            assigns none (so one is SYNTHESIZED here), or ABSENT entirely for
+#            conferences whose processor predates this split (legacy: fall back
+#            to displaying the id, and never synthesize).
+# This pass resolves each item's DISPLAY code into `code` (synthesizing where
+# asked), then reassigns clean surrogate ids (S001…/T001…) and rewrites the
+# talk_ids/session_id cross-references — so the persistence/lookup key is fully
+# decoupled from the (possibly synthesized, drift-prone) display code. The synth
+# heuristic is the one that used to live in the cleo processor; centralizing it
+# here means every conference shares one implementation.
+# =============================================================================
+_CODE_SLUG_STOPWORDS = {"the", "of", "and", "a", "an", "in", "on", "for",
+                        "to", "with", "at"}
+
+# A standalone Roman numeral (I, II, …, IV, IX, XII, …). Used to keep a trailing
+# session-number whole in the acronym: "Summer Session IV" -> "SSIV".
+_ROMAN_RE = re.compile(
+    r"(?=[MDCLXVI])M{0,3}(?:C[MD]|D?C{0,3})(?:X[CL]|L?X{0,3})(?:I[XV]|V?I{0,3})",
+    re.I)
+
+# Titles that are really a break, not a talk (the program sometimes lists these
+# as talks). Skipped when NUMBERING synthesized talk codes so they don't consume
+# a "<session>.<n>" slot. One optional qualifier + "break".
+_BREAK_RE = re.compile(
+    r"(?:coffee|tea|lunch|morning|afternoon|evening|networking|refreshment|refreshments)?"
+    r"\s*break", re.I)
+
+
+def _is_roman(word: str) -> bool:
+    return bool(word) and _ROMAN_RE.fullmatch(word) is not None
+
+
+def _is_break_title(title: str) -> bool:
+    return bool(_BREAK_RE.fullmatch((title or "").strip()))
+
+
+def _slugify_for_code(title: str) -> str:
+    """Acronym from a title: the first letter of each significant word (filler
+    words like "of"/"the" dropped). If the title ends in a Roman numeral, that
+    word is kept WHOLE — "Summer Session IV" -> "SSIV". A lone significant word
+    contributes its first few letters ("Microscopy" -> "MICR") so it isn't a
+    single initial — UNLESS a Roman numeral follows, which already makes it
+    distinctive ("Workshop I" -> "WI", not "WORKI"). "" when there are no usable
+    words (caller falls back to EVENTn)."""
+    words = re.findall(r"[A-Za-z0-9]+", title or "")
+    if not words:
+        return ""
+    # A trailing Roman numeral is appended whole rather than abbreviated.
+    trailing_roman = words[-1].upper() if _is_roman(words[-1]) else None
+    body = words[:-1] if trailing_roman else words
+    sig = [w for w in body
+           if len(w) > 1 and w.lower() not in _CODE_SLUG_STOPWORDS]
+    if len(sig) >= 2:
+        acr = "".join(w[0].upper() for w in sig)
+    elif len(sig) == 1:
+        # Lone word: expand to its first letters so it isn't a single initial,
+        # but a following Roman numeral already disambiguates, so just take the
+        # initial there ("Workshop I" -> "WI").
+        acr = sig[0][0].upper() if trailing_roman else sig[0][:4].upper()
+    else:
+        acr = ""
+    code = acr + (trailing_roman or "")
+    return code
+
+
+def _resolve_display_codes_and_ids(data: dict) -> None:
+    """Resolve every session/talk's display `code` (synthesizing where the
+    conference assigns none), then reassign opaque surrogate ids and rewrite
+    the cross-references. Mutates `data` in place. See section header above."""
+    sessions = data.get("sessions") or []
+    talks = data.get("talks") or []
+
+    def _disp_and_flag(item):
+        # (display, needs_synth). "code" absent => legacy conference: show the
+        # id and never synthesize. "code" == "" => synthesize. Else: real code.
+        if "code" in item:
+            c = (item.get("code") or "").strip()
+            return c, (c == "")
+        return (item.get("id") or "").strip(), False
+
+    n_synth_sessions = 0
+    n_synth_talks = 0
+
+    # ---- 1. Sessions: resolve, then synthesize the code-less ones ----------
+    for s in sessions:
+        s["_disp"], s["_needs"] = _disp_and_flag(s)
+
+    # Seed the dedup set with the REAL codes too, so a synthesized code can
+    # never collide with — and visually masquerade as — a real one.
+    used = {s["_disp"] for s in sessions if not s["_needs"] and s["_disp"]}
+    other = 0
+    for s in sorted((x for x in sessions if x["_needs"]),
+                    key=lambda x: (x.get("start_ts") or "", x.get("id") or "")):
+        slug = _slugify_for_code(s.get("title") or "")
+        if slug:
+            code = slug
+            if code in used:
+                k = 2
+                while f"{slug}{k}" in used:
+                    k += 1
+                code = f"{slug}{k}"
+        else:
+            other += 1
+            code = f"EVENT{other}"
+            while code in used:
+                other += 1
+                code = f"EVENT{other}"
+        used.add(code)
+        s["_disp"] = code
+        n_synth_sessions += 1
+
+    # ---- 2. Talks: resolve, then synthesize code-less ones as "<sess>.<n>" -
+    sess_disp = {s.get("id"): s["_disp"] for s in sessions}
+    for t in talks:
+        t["_disp"], t["_needs"] = _disp_and_flag(t)
+    # Group by session and number by chronological position WITHIN the session
+    # (so a talk that's 3rd in its session reads "<sesscode>.3"), assigning only
+    # to the ones that need it; real-coded talks keep their own code. Breaks
+    # ("Coffee Break"/"Break") are sometimes listed as talks — they don't consume
+    # a number slot, so the real talks around them stay correctly numbered; a
+    # break that still needs a code gets a small title acronym instead.
+    by_sess: dict = {}
+    for t in talks:
+        by_sess.setdefault(t.get("session_id"), []).append(t)
+    for sid, group in by_sess.items():
+        group.sort(key=lambda t: (t.get("start_ts") or "", t.get("id") or ""))
+        base = sess_disp.get(sid) or sid or "?"
+        n = 0
+        for t in group:
+            if _is_break_title(t.get("title")):
+                if t["_needs"]:
+                    t["_disp"] = _slugify_for_code(t.get("title") or "") or "BREAK"
+                    n_synth_talks += 1
+                continue                       # breaks don't take a number slot
+            n += 1
+            if t["_needs"]:
+                t["_disp"] = f"{base}.{n}"
+                n_synth_talks += 1
+
+    # ---- 3. Reassign opaque surrogate ids; rewrite cross-references --------
+    # Chronological order so S001/T001 are the earliest — purely cosmetic for an
+    # opaque key, but deterministic across rebuilds.
+    smap = {}
+    for i, s in enumerate(sorted(
+            sessions, key=lambda x: (x.get("start_ts") or "", x.get("id") or "")), 1):
+        smap[s.get("id")] = f"S{i:03d}"
+    tmap = {}
+    for i, t in enumerate(sorted(
+            talks, key=lambda x: (x.get("start_ts") or "", x.get("id") or "")), 1):
+        tmap[t.get("id")] = f"T{i:03d}"
+    for s in sessions:
+        s["id"] = smap.get(s.get("id"), s.get("id"))
+        s["talk_ids"] = [tmap[x] for x in (s.get("talk_ids") or []) if x in tmap]
+        s["code"] = s.pop("_disp", s.get("code", ""))
+        s.pop("_needs", None)
+    for t in talks:
+        t["id"] = tmap.get(t.get("id"), t.get("id"))
+        if t.get("session_id") in smap:
+            t["session_id"] = smap[t["session_id"]]
+        t["code"] = t.pop("_disp", t.get("code", ""))
+        t.pop("_needs", None)
+
+    print(f"[codes] synthesized {n_synth_sessions} session + {n_synth_talks} "
+          f"talk code(s); reassigned {len(smap)} session + {len(tmap)} "
+          f"surrogate ids.")
+
+
 def main() -> None:
     conference_name = (_DATA.get("conference_name") or "").strip() or "Conference"
     print(f"[title] conference name: {conference_name!r}")
@@ -11651,6 +11872,11 @@ def main() -> None:
           f"{len(_DATA.get('talks', []))} talks from data JSON.")
 
     data = enrich_affiliations(_DATA)
+
+    # Resolve each item's human-facing `code` (synthesizing where the conference
+    # assigns none) and reassign opaque surrogate ids. The app DISPLAYS `code`
+    # and KEYS off `id`; this pass is what decouples the two. See the function.
+    _resolve_display_codes_and_ids(data)
 
     # Drop fields the frontend never reads before serializing into the HTML.
     # These are carried through the input JSON (and used by the Python side
@@ -11663,8 +11889,9 @@ def main() -> None:
     #   - talks[].presenter: normalized by normalize_names_in_data for
     #     cleanliness but the app renders "speaker" (and authors), never
     #     "presenter". Verified: no JS path reads t.presenter.
-    #   - talks[].number: not referenced from JS anywhere (the visible "talk
-    #     number" in the top bar comes from item.id via pageTitleFor).
+    #   - talks[].number: not referenced from JS anymore. The visible "talk
+    #     code" in the top bar now comes from item.code (resolved/synthesized in
+    #     _resolve_display_codes_and_ids), not item.id or item.number.
     #   - talks[].institutions_may_dedup: a build-time hint consumed once by
     #     enrich_affiliations to decide whether to collapse duplicate
     #     institutions. It has done its job by this point.

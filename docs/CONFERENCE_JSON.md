@@ -82,7 +82,8 @@ A session is the structurally larger unit (it owns talks). Fields:
 
 | Field | Required | Notes |
 |-------|----------|-------|
-| `id` | **Yes** | Unique string. Talks reference it via `session_id`; sessions list their children via `talk_ids`. |
+| `id` | **Yes** | Unique **internal key** — talks reference it via `session_id`; sessions list their children via `talk_ids`. Treated as opaque: the builder reassigns clean surrogate ids (`S001`…) at build time, so this need only be unique, not human-facing. Do **not** put the conference code here — use `code`. |
+| `code` | Optional | The **human-facing conference code** shown to users (e.g. `"AM1C"`). Set it when the program assigns one; set it to `""` when it doesn't and you want the builder to **synthesize** a friendly code from the title (acronym, e.g. `"Quantum Information"` → `"QUIN"`). If the field is **absent** entirely, the builder falls back to displaying `id` and never synthesizes. |
 | `title` | **Yes** | Display title. A single trailing period is stripped automatically (an ellipsis `...` is kept). |
 | `color` | **Yes** | Type/color token (see above). Drives accent and Types-panel filtering. |
 | `tags` | Optional | Ordered list of labelled facts about the session — `{ "key", "value" }` pairs (see **Tags** below). Rendered in the detail header (as `Key: Value · …`) and searchable. |
@@ -154,12 +155,13 @@ app distinguishes a talk from a session). Fields:
 
 | Field | Required | Notes |
 |-------|----------|-------|
-| `id` | **Yes** | Unique string. |
+| `id` | **Yes** | Unique **internal key** (opaque; the builder reassigns surrogate ids `T001`… at build time). Put the conference paper code in `code`, not here. |
+| `code` | Optional | The **human-facing paper code** shown to users (e.g. `"AM1C.3"`, `"13292-1"`). Set it when the program assigns one; `""` to have the builder synthesize `"<session code>.<position>"`; **absent** to fall back to displaying `id`. |
 | `session_id` | **Yes** | The parent session's `id`. Its presence marks this item as a talk. |
 | `title` | **Yes** | Display title; trailing period stripped (ellipsis kept). |
 | `color` | **Yes** | Type/color token. |
 | `start_ts` / `end_ts` | Recommended | ISO times (same role as sessions; `end_ts` also drives "past"). |
-| `number` | Optional | Talk/paper number. |
+| `number` | Optional | Talk/paper number. Build-time-only hint (the app no longer reads it; `code` carries the displayed code). |
 | `location` | Optional | Room, if different from the session (full form). |
 | `short_location` | Optional | Compact room for the bubble chip (see `short_location` under sessions). Usually omitted on talks so they inherit the session's. |
 | `speaker` | Recommended | Presenting author's name; bolded in bylines and the author list. |
