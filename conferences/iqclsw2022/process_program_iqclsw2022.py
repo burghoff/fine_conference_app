@@ -1119,15 +1119,16 @@ def build_conference_data() -> dict:
             if p:
                 affiliation_pool.add(p)
 
-    # Conference-code split: this conference assigns no human-facing session
-    # codes, so leave each session `code` empty — the builder synthesizes a
-    # friendly display code (_resolve_display_codes_and_ids). Talks carry any
-    # real per-talk code through from `number` (empty -> builder synthesizes
-    # "<sessioncode>.<n>").
+    # Conference-code split: this conference assigns no human-facing codes of its
+    # own. The poster `number` ("P1", "P2", …) is fabricated HERE, not a real
+    # program code, so we deliberately do NOT promote it to `code`; like every
+    # other talk, posters get `code = ""` and the builder synthesizes a display
+    # code ("<sessioncode>.<n>") in _resolve_display_codes_and_ids. Sessions are
+    # likewise left empty for the builder to synthesize.
     for _s in sessions:
         _s["code"] = ""
     for _t in talks:
-        _t["code"] = (_t.get("number") or "").strip()
+        _t["code"] = ""
 
     data = {
         "conference_name": CONFERENCE_NAME,

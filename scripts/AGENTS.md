@@ -45,6 +45,15 @@ What IS fine in source code:
   not content.
 - Generic type labels in a registry ("Invited", "Contributed", "Poster",
   "Plenary"). These are universal genre labels, not copyrighted content.
+- **Hashed** identifiers of talks/sessions, when a one-off needs program facts
+  that no source file carries — e.g. a poster day/board order that exists only on
+  the printed program. A cryptographic hash of a title is opaque (it reveals no
+  program text), so storing a *hashed* order in the tracked processor is fine and
+  is preferable to a hand-authored `data/` file the user must supply and keep in
+  sync. Store only the hashes (never the titles), the processor re-hashes parsed
+  titles at runtime to look them up, and it should fall back gracefully when the
+  table no longer matches. See `process_program_iqclsw2026.py`
+  (`POSTER_BOARD_ORDER` / `_poster_title_hash`) for the pattern.
 - The conference's display name — but PREFER deriving it at runtime from a
   source file (page title, PDF header, etc.) over hard-coding it. If a clean
   runtime source isn't available, a single obvious top-level constant near the

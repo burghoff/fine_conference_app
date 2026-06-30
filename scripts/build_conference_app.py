@@ -11736,31 +11736,37 @@ def _is_break_title(title: str) -> bool:
 
 def _slugify_for_code(title: str) -> str:
     """Acronym from a title: the first letter of each significant word (filler
-    words like "of"/"the" dropped). If the title ends in a Roman numeral, that
-    word is kept WHOLE — "Summer Session IV" -> "SSIV". A lone significant word
+    words like "of"/"the" dropped). A trailing session NUMBER — a Roman numeral
+    ("Summer Session IV" -> "SSIV") or a short Arabic number ("Poster Session 2"
+    -> "PS2") — is kept WHOLE so sibling sessions stay distinct; long digit runs
+    (e.g. a year) are treated as ordinary words. A lone significant word
     contributes its first few letters ("Microscopy" -> "MICR") so it isn't a
-    single initial — UNLESS a Roman numeral follows, which already makes it
-    distinctive ("Workshop I" -> "WI", not "WORKI"). "" when there are no usable
-    words (caller falls back to EVENTn)."""
+    single initial — UNLESS a number follows, which already disambiguates
+    ("Workshop I" -> "WI", not "WORKI"). "" when there are no usable words
+    (caller falls back to EVENTn)."""
     words = re.findall(r"[A-Za-z0-9]+", title or "")
     if not words:
         return ""
-    # A trailing Roman numeral is appended whole rather than abbreviated.
-    trailing_roman = words[-1].upper() if _is_roman(words[-1]) else None
-    body = words[:-1] if trailing_roman else words
+    last = words[-1]
+    if _is_roman(last):
+        trailing = last.upper()
+    elif re.fullmatch(r"\d{1,2}", last):     # 1–99: a session number, not a year
+        trailing = last
+    else:
+        trailing = None
+    body = words[:-1] if trailing else words
     sig = [w for w in body
            if len(w) > 1 and w.lower() not in _CODE_SLUG_STOPWORDS]
     if len(sig) >= 2:
         acr = "".join(w[0].upper() for w in sig)
     elif len(sig) == 1:
         # Lone word: expand to its first letters so it isn't a single initial,
-        # but a following Roman numeral already disambiguates, so just take the
-        # initial there ("Workshop I" -> "WI").
-        acr = sig[0][0].upper() if trailing_roman else sig[0][:4].upper()
+        # but a trailing number already disambiguates, so just take the initial
+        # there ("Workshop I" -> "WI", "Workshop 1" -> "W1").
+        acr = sig[0][0].upper() if trailing else sig[0][:4].upper()
     else:
         acr = ""
-    code = acr + (trailing_roman or "")
-    return code
+    return acr + (trailing or "")
 
 
 def _resolve_display_codes_and_ids(data: dict) -> None:

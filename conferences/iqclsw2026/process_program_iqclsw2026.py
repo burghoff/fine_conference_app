@@ -85,6 +85,7 @@ Run directly:  python process_program_iqclsw2026.py
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -103,6 +104,29 @@ OVERVIEW_IN = DATA_DIR / "program_overview.txt"
 # them by title; when absent, talks are emitted without abstracts.
 ABSTRACT_BOOK_IN = DATA_DIR / "iqclsw2026-book-of-abstracts.pdf"
 JSON_OUT = SCRIPT_DIR / "conference_data.json"
+
+# Poster day + board order from the PRINTED program. The book of abstracts lists
+# every poster in one alphabetical catalog and records neither which evening a
+# poster is shown nor its board number — that is only on the printed sheet handed
+# out on site, and no online/digital source carries it. We therefore pin the
+# order here, but store only a HASH of each title (not the title text), so no
+# program content lives in this source — see AGENTS.md ("Hashed ordering for
+# one-offs"). Each inner list is one evening session in printed BOARD order; the
+# sessions are in chronological order (earliest evening first). A hash is
+# _poster_title_hash(title). When the parsed catalog doesn't match this table
+# one-to-one, the processor falls back to splitting the list in half.
+POSTER_BOARD_ORDER = [
+    # Poster Session I — Tuesday 30 June 2026
+    ["a2118ff964", "e2f871a695", "438a71ae79", "8b7ef8f97f", "d2f27abb3c", "7c019424b7",
+     "80c21191bf", "02a2caabc6", "190fee77b1", "c7868ba2c0", "8881c802c6", "51f041aebf",
+     "c00a485e41", "5d4ea4a13c", "9a5a09b9cf", "b327d293c7", "f136e7286b", "272b68e2d8",
+     "e766fab62d", "0f6c7d5d59", "58ff5f9edd", "795eeb6cbe", "23e8478ad5", "0d534322d0"],
+    # Poster Session II — Thursday 2 July 2026
+    ["3a97b6c6ac", "350959498e", "c1f3e26be6", "25bd4b977f", "01c1a0f7c4", "ccb85b35b3",
+     "022730f33b", "1e53ff180b", "2df555b7c5", "641a5110af", "347a27011e", "f9867065bc",
+     "f5669905c3", "56bfe0b662", "0e2807c43d", "cbd9381605", "3aa890143f", "6f85223f1b",
+     "4f6680fffc", "6c7c2b6ce7", "fcf115ecf8", "3f7e718036", "38ae527a08", "4335ae9427"],
+]
 
 PROGRAM_MARKER = "DETAILED PROGRAM"
 POSTER_MARKER = "LIST OF POSTERS"
@@ -2060,6 +2084,16 @@ def _segment(text: str) -> tuple[list[dict], list[list[str]]]:
     return timed, posters
 
 
+def _poster_title_hash(title: str) -> str:
+    """Stable 10-hex-char hash of a poster title, folded first to lowercase
+    letters/digits only (so punctuation, spacing, accents and subscripts don't
+    perturb it). Used to pin the printed-program board order in POSTER_BOARD_ORDER
+    without storing any title text. Must stay in sync with how that table was
+    generated; if the abstract titles change, regenerate the table."""
+    key = re.sub(r"[^a-z0-9]+", "", (title or "").lower())
+    return hashlib.sha1(key.encode("utf-8")).hexdigest()[:10]
+
+
 def _block_to_talk(block_lines: list[str]) -> dict | None:
     """Turn a block's content lines into a parsed talk dict, or None if the
     block is a non-academic agenda item (lunch, break, poster session, …).
@@ -2608,32 +2642,68 @@ def build_conference_data() -> dict:
             if parsed and parsed["title"]:
                 parsed_posters.append((idx, parsed))
 
-        # Partition into one group per slot. With two slots we split in half
-        # (first half -> slot 1, remainder -> slot 2); generalizes to N slots.
+        # Partition the catalog into one group per evening slot, in slot
+        # (chronological) order. POSTER_BOARD_ORDER pins the printed program's
+        # day + board order by title hash — authoritative because no online
+        # source records it. We pair each pinned session with a slot by position
+        # (both chronological: first pinned session -> earliest slot) and bucket
+        # each poster by its title hash. If the pinned table doesn't cover the
+        # parsed catalog one-to-one, fall back to splitting the alphabetical list
+        # in half so the build still succeeds.
         n_slots = len(slots)
-        per = -(-len(parsed_posters) // n_slots)   # ceil division
-        groups = [parsed_posters[i:i + per]
-                  for i in range(0, len(parsed_posters), per)] or [[]]
-        # Guard: never produce more groups than slots (rounding safety).
-        while len(groups) > n_slots:
-            groups[-2].extend(groups[-1])
-            groups.pop()
+        groups = None
+        pinned_total = sum(len(b) for b in POSTER_BOARD_ORDER)
+        if len(POSTER_BOARD_ORDER) == n_slots and pinned_total == len(parsed_posters):
+            pos_by_hash = {h: (si, pos)
+                           for si, board in enumerate(POSTER_BOARD_ORDER)
+                           for pos, h in enumerate(board)}
+            buckets: list[list] = [[] for _ in slots]   # (pos, idx, parsed)
+            ok = True
+            seen: set[str] = set()
+            for idx, parsed in parsed_posters:
+                h = _poster_title_hash(parsed["title"])
+                loc = pos_by_hash.get(h)
+                if loc is None or h in seen:
+                    ok = False
+                    break
+                seen.add(h)
+                si, pos = loc
+                buckets[si].append((pos, idx, parsed))
+            if ok and len(seen) == len(parsed_posters):
+                groups = [[(idx, parsed) for _pos, idx, parsed in sorted(b)]
+                          for b in buckets]
+            else:
+                print("[process] poster hash table did not match the poster "
+                      "catalog one-to-one; falling back to the half-split.",
+                      flush=True)
+        if groups is None:
+            per = -(-len(parsed_posters) // n_slots)   # ceil division
+            groups = [parsed_posters[i:i + per]
+                      for i in range(0, len(parsed_posters), per)] or [[]]
+            # Guard: never produce more groups than slots (rounding safety).
+            while len(groups) > n_slots:
+                groups[-2].extend(groups[-1])
+                groups.pop()
 
+        board_no = 0   # 1-based board number, running across sessions in order
         for gi, group in enumerate(groups):
             if not group:
                 continue
             base_start, base_end = slots[gi] if gi < n_slots else slots[-1]
             sess_id = f"POSTERS{gi + 1}"
             tids: list[str] = []
-            for idx, parsed in group:
-                tid = f"P{idx:03d}"
+            for _idx, parsed in group:
+                board_no += 1
+                # The id encodes board order so it sorts correctly within its
+                # session (the builder orders same-time talks by id).
+                tid = f"P{board_no:03d}"
                 tids.append(tid)
                 _record_affs(parsed["institutions"])
                 talks.append({
                     "id": tid,
                     "session_id": sess_id,
                     "title": parsed["title"],
-                    "number": f"P{idx}",
+                    "number": f"P{board_no}",
                     "start_ts": base_start,
                     "end_ts": base_end,
                     "presenter": parsed["presenter"],
@@ -2702,15 +2772,16 @@ def build_conference_data() -> dict:
             if _p:
                 affiliation_pool.add(_p)
 
-    # Conference-code split: this conference assigns no human-facing session
-    # codes, so leave each session `code` empty — the builder synthesizes a
-    # friendly display code (_resolve_display_codes_and_ids). Talks carry any
-    # real per-talk code through from `number` (empty -> builder synthesizes
-    # "<sessioncode>.<n>").
+    # Conference-code split: this conference assigns no human-facing codes of its
+    # own. The poster `number` ("P1", "P2", …) is fabricated HERE, not a real
+    # program code, so we deliberately do NOT promote it to `code`; like every
+    # other talk, posters get `code = ""` and the builder synthesizes a display
+    # code ("<sessioncode>.<n>") in _resolve_display_codes_and_ids. Sessions are
+    # likewise left empty for the builder to synthesize.
     for _s in sessions:
         _s["code"] = ""
     for _t in talks:
-        _t["code"] = (_t.get("number") or "").strip()
+        _t["code"] = ""
 
     data = {
         "conference_name": CONFERENCE_NAME,
