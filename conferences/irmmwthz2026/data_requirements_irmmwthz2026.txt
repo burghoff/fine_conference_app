@@ -1,0 +1,62 @@
+# data_requirements_irmmwthz2026.txt
+#
+# Manifest of the input files the scripts in this directory need in data/.
+# Read by make_app.py to decide whether the downloader must run and to print
+# manual-download instructions if anything required is missing.
+#
+# Format (line-oriented; see make_app.py::_parse_requirements):
+#   manual_steps_written: <date>           # top-level metadata (optional)
+#   [file: <glob pattern>]                 # one block per input
+#   required:    yes | no                  # default yes
+#   produced_by: <script that creates it>
+#   description: <what it is>              # may wrap onto indented lines
+#   manual:      <how to fetch by hand>    # may wrap onto indented lines
+#   Key lines start at column 0; only continuation lines are indented.
+#   Lines starting with '#' are comments; blank lines end a wrapped value.
+
+manual_steps_written: 06-Oct-2026
+
+[file: overview_by_days_and_halls.html]
+required: yes
+produced_by: fetch_program_irmmwthz2026.py
+description: The conference's "Overview By Days And Halls" program page,
+  saved as HTML. This is the SOURCE OF RECORD: one tab per weekday, each
+  holding the time slots, the parallel sessions per hall (session number
+  and title, session chair, keynote and oral talks with speaker and
+  affiliation), and the evening poster sessions with their board lists. The
+  processor parses it offline (with lxml).
+manual: Open https://www.irmmw-thz.org/overview-by-days-and-halls/ in
+  a browser and save the page as HTML (e.g. "Save Page As… > Web Page,
+  HTML only") to data/overview_by_days_and_halls.html .
+
+[file: social_program.html]
+required: no
+produced_by: fetch_program_irmmwthz2026.py
+description: The "Social Program" page, saved as HTML. Supplies the social
+  events (welcome reception, dinner, banquet) with their day, start time,
+  venue, and address. OPTIONAL: if absent, the app simply has no social
+  events.
+manual: Open https://www.irmmw-thz.org/social-program/ in a browser
+  and save the page as HTML to data/social_program.html .
+
+[file: student_workshop.html]
+required: no
+produced_by: fetch_program_irmmwthz2026.py
+description: The "Student Workshop" page, saved as HTML. Supplies the
+  pre-conference workshop day: its venue and the hour-by-hour lectures
+  (speaker, affiliation, title) plus the lunch break. OPTIONAL: if absent,
+  the workshop is simply not included.
+manual: Open https://www.irmmw-thz.org/student-workshop/ in a browser
+  and save the page as HTML to data/student_workshop.html .
+
+[file: reviewers_reception.html]
+required: no
+produced_by: fetch_program_irmmwthz2026.py
+description: The journal reviewers' reception page (under the social
+  program menu), saved as HTML. Supplies that reception's date, time, hall,
+  and admission note. OPTIONAL: if absent, the reception is simply not
+  included.
+manual: Open the "IEEE Reviewer Reception" entry under Social Program
+  on https://www.irmmw-thz.org/ (currently
+  https://www.irmmw-thz.org/social-program/ieee-transactions-on-terahertz-science-and-technology-reviewers-reception/ )
+  in a browser and save the page as HTML to data/reviewers_reception.html .

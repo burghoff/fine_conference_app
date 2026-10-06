@@ -1,0 +1,216 @@
+3M Company	3M
+Adelaide University	Adelaide
+Ames National Laboratory	Ames National Laboratory
+Arizona State University	ASU
+Arizona State University (ASU)	ASU
+Asahi Kasei Corporation	Asahi Kasei
+Bar Ilan Univesity	Bar-Ilan
+Bar Ilan univesity	Bar-Ilan
+Beijing Institute of Technology	BIT
+Bergische Universität Wuppertal	Bergische
+Boulder Research Lab, IMRA America	IMRA
+Brigham Young University	BYU
+Brookhaven National Laboratory	Brookhaven
+Brown University	Brown
+CENTERA Labs, Institute of High Pressure Physics, PAS	CENTERA Labs
+CNR	CNR Italy
+CNR-National Institute of Optics	CNR-National Institute of Optics
+CNRS IMS	CNRS
+CROMA Laboratory, University of Savoie	Savoie
+Center for Physical Sciences and Technology	FTMC Vilnius
+Center for Physical Sciences and Technology (FTMC), Vilnius University	FTMC Vilnius
+Chalmers University of Technology	Chalmers
+Chalmers University of Technology, Sweden	Chalmers
+Chiba University	Chiba
+China Jiliang University	China Jiliang
+Chung-Ang University	Chung-Ang
+Chungnam National University	Chungnam National
+College of Semiconductor Research, National Tsing Hua University, Hsinchu, 30013, Taiwan	NTHU
+Consiglio Nazionale delle Ricerche	CNR Italy
+Council for Scientific and Industrial Research (CSIR)	CSIR
+Dankook University	Dankook
+Delft University of Technology	TU Delft
+Department of Basic and Applied Sciences for Engineering (SBAI), Sapienza, University of Rome	Sapienza
+Department of Biomedical Engineering, Stony Brook University	SUNY Stony Brook
+Department of Physics, Dankook University	Dankook
+Department of Physics, Indian Institute of Technology Kharagpur	IIT Kharagpur
+Department of Physics, Regensburg University, Regensburg, Germany	Regensburg
+Deutsches Elektronen-Synchrotron DESY	DESY
+ENEA Frascati (Italy)	ENEA Frascati
+ENSEMBLE3 Center of Excellence Ltd.	ENSEMBLE3 Center of Excellence
+EPFL	EPFL
+ETH Zürich	ETH Zürich
+ETH Zürich, Switzerland	ETH Zürich
+Ecole Polytechnique Fédérale de Lausanne (EPFL), Swiss Plasma Center (SPC), Lausanne, Switzerland	EPFL
+Electronic Navigation Research Institute	Electronic Navigation Research Institute
+Electronics and Telecommunications Research Institute	ETRI
+Elettra Sincrotrone Trieste	Elettra Sincrotrone Trieste
+Fraunhofer HHI	Fraunhofer HHI
+Fraunhofer Heinrich Hertz Institute	Fraunhofer
+Fraunhofer Heinrich-Hertz-Institute (HHI)	Fraunhofer
+Fraunhofer Institute for Telecommunications, Heinrich Hertz Institute	Fraunhofer
+Fraunhofer Institute for Telecommunications, Heinrich Hertz Institute, HHI	Fraunhofer
+Fraunhofer Institute for Telecommunications, Heinrich-Hertz-Institut	Fraunhofer
+Fraunhofer Institute for Telecommunications, Heinrich-Hertz-Institute	Fraunhofer
+GEORGIA INSTITUTE OF TECHNOLOGY	Georgia Tech
+Georgia Institute of Technology	Georgia Tech
+Georgia Tech-CNRS IRL 2958	Georgia Tech
+Georgia Tech-CNRS IRL2958	Georgia Tech
+Goethe University Frankfurt	Goethe
+Goethe University Frankfurt am Main	Goethe
+Goethe University Frankfurt, Germany	Goethe
+Goethe-University Frankfurt am Main	Goethe
+Graduate School of Information, Production and Systems, Waseda University	Waseda
+HAMAMATSU PHOTONICS K.K.	Hamamatsu
+Hamamatsu Photonics K.K.	Hamamatsu
+Hamamatsu photonics K.K., Tokyo University of Agriculture and Technology	Hamamatsu
+ICFO	ICFO
+IMS Laboratory, University of Bordeaux, UMR CNRS 5218	CNRS
+INRS	INRS
+IOWA STATE UNIVERSITY and Ames National Laboratory	Iowa State
+Imra America, Inc.	IMRA
+Indian Institute of Science Education and Research Bhopal	IISc Bangalore
+Institut National de la Recherche Scientifique (INRS)	INRS
+Institute of High Pressure Physics, Polish Academy of Sciences	Polish Academy
+Institute of Physics – Pontifical Catholic University of CHILE	Institute of Physics – Pontifical Catholic
+Institute of PostLED Photonics, Tokushima University	Tokushima
+Institute of Science Tokyo	Tokyo Tech
+Ioffe Institute	Ioffe
+JPL	JPL
+Jet Propulsion Laboratory	JPL
+KAIST	KAIST
+KRISS	KRISS
+KTH Royal Institute of Technology	KTH
+Karlsruhe Institute of Technology (KIT)	KIT
+Korea Advanced Institute of Science and Technology	KAIST
+Kyoto University	Kyoto
+Lookin, Inc.	Lookin
+Los Alamos National Laboratory	LANL
+MIT, USA	MIT
+Massachusetts Institute of Technology	MIT
+Max Planck Institute for Plasma Physics	Max Planck
+Max Planck Institute for the Structure and Dynamics of Matter	Max Planck
+McGill University	McGill
+Menlo Systems GmbH	Menlo Systems
+Michigan State University	Michigan State
+Microwave Power Products, Inc.	Microwave Power Products
+Military University of Technology	Military
+Nagoya University	Nagoya
+Nanjing University of Aeronautics and Astronautics	Nanjing Aeronautics & Astronautics
+National High Magnetic Field Laboratory	National High Magnetic Field Laboratory
+National Institute of Information and Communications Technology	NICT
+National Key Laboratory of Science and Technology on Vacuum Electronics, School of Electronic Science	National Key Laboratory of Science and Technology on Vacuum Electronics
+National Korea Maritime & Ocean University	Maritime Port Authority
+National Physical Laboratory, London, United Kingdom	NPL UK
+National Sun Yat-sen University	Sun Yat-sen
+National Taiwan University	NTU Taiwan
+National Tsing Hua University	NTHU
+National Tsing Hua University, Hsinchu City	NTHU
+New York University	NYU
+Nielson Scientific LLC	Nielson Scientific
+Nihon University	Nihon
+Northeastern University, USA	Northeastern
+Okayama University	Okayama
+Okayama University, Japan	Okayama
+Onera	Onera
+Osaka Metropolitan University	Osaka Metropolitan
+Osaka University	Osaka
+Osaka university	Osaka
+Otemon Gakuin University	Otemon Gakuin
+Philipps-University Marburg	Philipps
+Physikalisch Techniche Bundesanstalt	Physikalisch Techniche Bundesanstalt
+Physikalisch Technische Bundesanstalt, Germany	Physikalisch Technische Bundesanstalt
+Physikalisch-Technische Bundesanstalt	PTB
+Physikalisch-Technische Bundesanstalt Berlin	PTB
+Princeton University	Princeton
+Queen Mary University Lond	Queen Mary
+RIKEN	RIKEN
+RPTU Kaiserslautern-Landau	RPTU Kaiserslautern-Landau
+Rensselaer Polytechnic Institute	RPI
+Research School of Physics, The Australian National University	ANU
+Rice University	Rice
+Riken	RIKEN
+Ritsumeikan University	Ritsumeikan
+Rohm Co., Ltd.	Rohm
+Ruhr University Bochum	RUB
+SRON Space Research Organisation Netherlands	SRON Space Research Organisation Netherlands
+STFC – RAL Space	STFC
+Sahmyook University	Sahmyook
+Sandia National Laboratories	Sandia
+Sapienza University of Rome	Sapienza
+Sapienza Universty of Rome	Sapienza
+School of EME, Adelaide University, Adelaide, SA 5005, Australia	Adelaide
+Shanghai Institute of Optics and Fine Mechanics, Chinese Academy of Sciences	SIOM
+Shanghai Jiao Tong University	SJTU
+Shanghai Normal University	Shanghai Normal
+Shenzhen University	Shenzhen
+Shenzhen university	Shenzhen
+Sorbonne University	Sorbonne
+Stanford University, SLAC	SLAC
+Stony Brook University	SUNY Stony Brook
+TU Darmstadt	TU Darmstadt
+TYDEX, LLC	TYDEX
+Tata Institute of Fundamental Research, Hyderabad	TIFR
+Technical University of Denmark	DTU
+Technische Universität Braunschweig	TU Braunschweig
+Tera-Photonics Research Team, RIKEN Center for Advanced Photonics	RIKEN
+The University of Osaka	Osaka
+The University of Tokyo	Tokyo
+The University of Utah	Utah
+Tohoku University	Tohoku
+Tokushima University, Japan	Tokushima
+Tokyo University of Agriculture and Technology	TUAT
+Tydex, LLC	Tydex
+UCLA	UCLA
+UCSD, USA	UCSD
+UMKC	UMKC
+Universitat Politècnica de Catalunya	UPC
+Universitat Politècnica de Catalunya (UPC)	UPC
+University at Buffalo	at Buffalo
+University at Buffalo, SUNY	at Buffalo
+University of Arkansas	Arkansas
+University of Bern	Bern
+University of California Los Angeles	UCLA
+University of California, Los Angeles	UCLA
+University of California, Los Angeles (UCLA)	UCLA
+University of Electronic Science and Technology of China	UESTC
+University of Electronic Science and Technology of China, Chengdu, 611731, China	UESTC
+University of Fukui	Fukui
+University of Konstanz	Konstanz
+University of Lorraine	Lorraine
+University of Minho/Aalto University	Aalto
+University of New South Wales	UNSW
+University of New South Wales, Australia	UNSW
+University of North Texas	North Texas
+University of Notre Dame	Notre Dame
+University of Notre Dame, USA	Notre Dame
+University of Oxford	Oxford
+University of Oxford, UK	Oxford
+University of Pécs	Pécs
+University of Regensburg	Regensburg
+University of Rochester	Rochester
+University of Salamanca	Salamanca
+University of Strathclyde	Strathclyde
+University of Stuttgart	Stuttgart
+University of Stuttgart, Institute of Robust Power Semiconductor Systems	Stuttgart
+University of São Paulo	São Paulo
+University of Texas at Austin	UT Austin
+University of Utah	Utah
+University of Victoria	Victoria
+University of Warwick	Warwick
+University of Wisconsin-Madison	Wisconsin
+University of Wollongong	Wollongong
+University of warwick	warwick
+Unversity of Elctronic Science and Technology of China	Unversity of Elctronic Science and Technology of China
+Utsunomiya University	Utsunomiya
+Vanderbilt University	Vanderbilt
+Vilnius University	Vilnius
+Virginia Diodes, Inc.	Virginia Diodes
+Warsaw University of Technology	Warsaw UT
+Warsaw University of Technology, Faculty of Physics, Warsaw, Poland	Warsaw UT
+Wesleyan University	Wesleyan
+Worcester Polytechnic Institute	Worcester Polytechnic Institute
+Yokohama National University	Yokohama National
+Yonsei University	Yonsei
+university of California Los Angeles	UCLA
+university of duisburg essen	duisburg essen

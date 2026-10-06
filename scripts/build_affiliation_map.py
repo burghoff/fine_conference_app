@@ -1771,6 +1771,7 @@ _ANCHORS_SRC: list = [
     (['byu,', 'brigham young'], 'BYU'),
     ('weber state', 'Weber State'),
     ('utah state', 'Utah State'),
+    ('iowa state', 'Iowa State'),
     # NOTE: there is intentionally no bare ('university park', ...) anchor here.
     # "University Park" is a campus town, not an institution: it's Penn State's
     # main campus (handled by the PA-/ZIP-qualified needles on the Penn State
